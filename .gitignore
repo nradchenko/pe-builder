@@ -1,0 +1,16 @@
+# --- local / private working files (never committed, not for public release) ---
+
+# Third-party freeware binaries used for reference (do not distribute)
+.cache/
+
+# Local, developer-specific instructions
+CLAUDE.local.md
+
+# Internal working documents
+docs/internal/
+
+# --- build / output artifacts ---
+/bin/
+/dist/
+*.iso
+*.img
