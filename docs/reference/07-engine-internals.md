@@ -7,7 +7,9 @@ one records what was learned from **static analysis of the binaries themselves**
 > **Provenance / confidence.** Most findings come from unpacking the UPX-compressed
 > binaries and examining their **imports, embedded strings, and resources**; a few
 > (noted inline) come from **targeted radare2 disassembly**, and **binwalk**
-> confirmed there is no embedded or appended data in either binary. Facts about
+> confirmed there is no embedded or appended data in either binary. A few findings
+> (noted inline) are **measurements against a real Windows XP SP3 x86 source** rather
+> than from the binaries. Facts about
 > *which* Windows APIs are used and *what* literal strings/commands exist are
 > high-confidence. Control-flow details traced by hand are flagged as such. Items
 > still requiring deeper reverse engineering are listed at the end.
@@ -68,6 +70,33 @@ inferred.)
 
 On a non-Windows host the decompression is replaceable with an SZDD/MSZIP/LZX cab
 decompressor such as libmspack / `cabextract`.
+
+> **Measured (real Windows XP SP3 x86 source):** essentially every compressed file —
+> the loose single-file `.??_` cabinets *and* the multi-file `DRIVER.CAB` / `SP3.CAB`
+> — uses **LZX** (`LZX:21`); MSZIP and SZDD/KWAJ were not observed. A reimplementation
+> targeting XP SP3 needs LZX above all.
+
+## File selection (which files are copied)
+
+`pebuilder.inf` is **not** a full base file manifest — its `[SourceDisksFiles]`
+lists only ~58 files (kernel/HAL variants, a handful of utilities and apps, and a
+few BartPE-own files) alongside the registry and boot edits. The bulk of the OS
+base is selected from the Windows source itself:
+
+- **Boot drivers** — from `txtsetup.sif`'s driver *load* sections, which the engine
+  references (`[Hal.Load]`, `[DiskDrivers.Load]`, `[FileSystems.Load]`, `[SCSI.Load]`,
+  `[BootBusExtenders.Load]`, `[BusExtenders.Load]`, `[InputDevicesSupport.Load]`,
+  `[Keyboard.Load]`, `[Display.Load]`) — i.e. the drivers a minimal NT boot loads.
+- **File locations / compressed names / directory IDs** — resolved via the source's
+  `layout.inf` and `txtsetup.sif` (whose `[WinntDirectories]` carries the full
+  directory-ID → path table, 100+ entries).
+- **Core Win32 subsystem** — a fixed list built into `pebuilder.exe` (core Win32
+  filenames appear as embedded strings in the binary).
+
+The result is a **curated subset** of the source, not its full file set (a bare
+build is ~100 MB). *(The exact subset was not enumerated from static analysis; the
+mechanism is inferred from the `*.Load` / `layout.inf` references in the binary and
+from comparing `pebuilder.inf` against a real source's `txtsetup.sif`.)*
 
 ## Registry / hive building
 
@@ -201,9 +230,9 @@ substantially larger than the "most-used" subset the help documents.
 Not obtainable from strings/imports/resources alone; would need disassembly
 (e.g. radare2) or empirical extraction from a real build:
 
-1. The **complete directory-ID → path table** — *still open*. The predefined IDs
-   appear to be assembled in code (string concatenation) rather than held in one
-   flat table, so a clean dump wasn't found; IDs can be filled in empirically.
+1. ~~The complete directory-ID → path table~~ — **resolved**: the Windows source's
+   own `txtsetup.sif` carries the full table in its `[WinntDirectories]` section
+   (100+ entries), so it is read from the source rather than the binary.
 2. ~~The exact `mkisofs` argument order~~ — **resolved** (see the ISO section above).
 3. ~~`bootsect.bin` origin~~ — **resolved**: generated at build time from the source
    boot files; only the exact byte algorithm remains, best obtained from a built ISO.

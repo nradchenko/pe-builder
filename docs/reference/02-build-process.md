@@ -43,8 +43,15 @@ skipped — see Options/CLI):
    creating directories per `[WinntDirectories]`. Compressed source files
    (`*.??_`, e.g. `setupreg.hi_`, `ntdll.dl_`) are **decompressed** (via the
    Windows setupapi `SetupDecompressOrCopyFile` function) unless the file's
-   attribute says otherwise. The *Custom directory* contents are added
-   here. (Skippable — see *Don't build files* / `-skipfiles`.)
+   attribute says otherwise. The *Custom directory* contents are added here.
+   (Skippable — see *Don't build files* / `-skipfiles`.)
+
+   Note that `pebuilder.inf` does **not** enumerate the full OS file set — it lists
+   only a small supplement plus the registry. The bulk is selected from the Windows
+   source itself (boot drivers from `txtsetup.sif`, locations from `layout.inf`, and
+   a core Win32 list built into `pebuilder.exe`); see *File selection* in
+   [`07-engine-internals.md`](07-engine-internals.md). The result is a curated
+   subset of the source, not its full contents.
 
 3. **Build the registry.** Assemble the BartPE registry hives (SYSTEM, SOFTWARE,
    and the default user hive) from a base hive plus the merged
