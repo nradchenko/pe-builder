@@ -1,0 +1,19 @@
+# Copyright 2026 Nikita Radchenko
+# SPDX-License-Identifier: Apache-2.0
+
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - misspell
+    - revive
+    - unconvert
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
