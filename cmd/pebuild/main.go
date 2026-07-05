@@ -8,17 +8,11 @@ package main
 import (
 	"fmt"
 	"os"
-
-	"github.com/nradchenko/pe-builder/internal/buildinfo"
 )
 
 func main() {
-	// Minimal entrypoint; the full cobra command tree is wired in separately.
-	if len(os.Args) > 1 && os.Args[1] == "version" {
-		fmt.Println(buildinfo.String())
-		return
+	if err := Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, "pebuild:", err)
+		os.Exit(1)
 	}
-
-	fmt.Fprintln(os.Stderr, "usage: pebuild version")
-	os.Exit(2)
 }
