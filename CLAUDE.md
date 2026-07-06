@@ -12,13 +12,34 @@ clean-room, Linux-first reimplementation of the ideas behind the discontinued
 
 ## Repository layout
 
+The build **engine** is a set of importable Go packages; `cmd/pebuild` is a thin CLI
+over it.
+
+- `cmd/pebuild/` — the command-line frontend (cobra).
+- Engine packages, roughly in pipeline order:
+  - `manifest/` — the HCL build manifest (load + validate).
+  - `source/` — read a Windows installation source (directory or ISO) and probe its
+    identity (build number, architecture, flavor).
+  - `compress/` — decompress the source's MSCF cabinets (CAB-LZX `.??_` files,
+    `DRIVER.CAB`).
+  - `inf/` — a Windows setupapi-compatible `.inf` parser.
+  - `layout/` — resolve the source's `txtsetup.sif` / `layout.inf` (file → target
+    directory, on-disk name, boot-driver lists).
+  - `action/` — the build action IR (copy-file, mkdir, registry, text-edit) that the
+    base layer and plugins compile to.
+  - `plugin/` — plugin discovery, parsing, and evaluation into actions.
+  - `base/` — the clean-room base layer (`base.inf` + boot-driver derivation).
+  - `tree/` — assemble the output file tree (resolve → decompress → place).
+  - `hive/` — build the Windows registry hives (pure-Go `regf` read/write).
+  - `target/` — output targets (e.g. a bootable ISO).
+  - `build/` — the orchestrator that wires the pipeline together.
+- `internal/` — support packages: `golden` (golden-file test helper), `buildinfo`
+  (version metadata).
 - `docs/` — project documentation.
   - `docs/reference/` — a primary-source reference describing the **original**
     Bart's PE Builder: its build process, the plugin `.inf` format, conventions,
     and internals. Treat these as the authoritative model of how the original tool
     behaves, and consult them before implementing anything format-related.
-
-(Additional directories will be added as the implementation grows.)
 
 ## Ground rules
 
