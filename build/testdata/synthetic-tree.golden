@@ -1,0 +1,33 @@
+identity: winxp build 2600 (i386)
+written: 29
+skipped: [cabonly.sys]
+
+i386/system32/advapi32.dll
+i386/system32/atapi.sys
+i386/system32/autochk.exe
+i386/system32/basesrv.dll
+i386/system32/bootvid.dll
+i386/system32/c_1252.nls
+i386/system32/c_437.nls
+i386/system32/cmd.exe
+i386/system32/csrsrv.dll
+i386/system32/csrss.exe
+i386/system32/gdi32.dll
+i386/system32/kdcom.dll
+i386/system32/kernel32.dll
+i386/system32/l_intl.nls
+i386/system32/lsass.exe
+i386/system32/msvcrt.dll
+i386/system32/ntdll.dll
+i386/system32/ntfs.sys
+i386/system32/ntoskrnl.exe
+i386/system32/rpcrt4.dll
+i386/system32/secur32.dll
+i386/system32/services.exe
+i386/system32/sfcfiles.dll
+i386/system32/smss.exe
+i386/system32/user32.dll
+i386/system32/userenv.dll
+i386/system32/win32k.sys
+i386/system32/winlogon.exe
+i386/system32/winsrv.dll

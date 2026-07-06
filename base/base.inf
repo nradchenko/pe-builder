@@ -1,0 +1,94 @@
+; base.inf — the base layer pebuild lays down before any plugin.
+;
+; It is written in the same INF grammar as a plugin and is evaluated first, so a
+; build is "base layer + enabled plugins". It selects the core Win32 subsystem and
+; the command-shell files needed to reach a cmd.exe prompt, seeds the registry the
+; PE environment runs from, and switches the loader into PE mode.
+;
+; What it does NOT list: the boot drivers (HAL, disk, filesystem, bus, input,
+; keyboard, display), which are taken from the source's own txtsetup.sif *.Load
+; sections, and the file locations, which come from the source's layout metadata.
+; So the file entries below give only a name — the target directory is resolved
+; from the source, and a name that ships compressed (name.dl_) is decompressed on
+; copy automatically.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name   = "pebuild base"
+Enable = 1
+
+; ---------------------------------------------------------------------------
+; Core Win32 + shell file selection.
+;
+; Only the file name is given; its target directory is resolved from the source
+; layout. These are the user-mode and kernel-mode files a minimal boot to cmd.exe
+; needs that are not boot drivers. This is a deliberately small first set — a real
+; boot reveals what else is required, and this list grows to match.
+; ---------------------------------------------------------------------------
+[SourceDisksFiles]
+; Kernel and its loader-adjacent dependencies (HAL comes from the source *.Load).
+ntoskrnl.exe =
+ntdll.dll    =
+bootvid.dll  =
+kdcom.dll    =
+
+; Win32 subsystem.
+win32k.sys  =
+csrss.exe   =
+smss.exe    =
+csrsrv.dll  =
+basesrv.dll =
+winsrv.dll  =
+
+; Core user-mode DLLs.
+kernel32.dll =
+gdi32.dll    =
+user32.dll   =
+advapi32.dll =
+rpcrt4.dll   =
+msvcrt.dll   =
+secur32.dll  =
+userenv.dll  =
+sfcfiles.dll =
+
+; Session, logon, and service host — the chain that reaches the shell.
+services.exe =
+winlogon.exe =
+lsass.exe    =
+autochk.exe  =
+
+; Command shell.
+cmd.exe =
+
+; National-language tables the kernel loads for the ANSI/OEM code pages.
+c_1252.nls =
+c_437.nls  =
+l_intl.nls =
+
+; ---------------------------------------------------------------------------
+; Registry seed.
+;
+; The delta laid over the hives seeded from the source's own hive*.inf. The hives
+; are constructed by a later build stage; these directives are recorded now and
+; applied there.
+; ---------------------------------------------------------------------------
+[Software.AddReg]
+; Winlogon runs the command shell directly instead of Explorer.
+0x1,"Microsoft\Windows NT\CurrentVersion\Winlogon","Shell","cmd.exe"
+
+[SetupReg.AddReg]
+; The command interpreter used to expand %ComSpec%.
+0x2,"ControlSet001\Control\Session Manager\Environment","ComSpec","%SystemRoot%\system32\cmd.exe"
+
+; ---------------------------------------------------------------------------
+; Boot configuration.
+;
+; The single edit that makes the result a PE: /minint puts the loader and kernel
+; into the minimal, RAM-based preinstall mode, running from the boot media rather
+; than an installed disk. Applied to txtsetup.sif by a later build stage.
+; ---------------------------------------------------------------------------
+[SetValue]
+"txtsetup.sif","SetupData","osloadoptions","""/fastdetect /minint"""
+"txtsetup.sif","SetupData","loaderprompt","""Starting pebuild..."""

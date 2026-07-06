@@ -1,0 +1,187 @@
+// Copyright 2026 Nikita Radchenko
+// SPDX-License-Identifier: Apache-2.0
+
+package build
+
+import (
+	"context"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"testing"
+	"testing/fstest"
+
+	"github.com/nradchenko/pe-builder/base"
+	"github.com/nradchenko/pe-builder/internal/golden"
+	"github.com/nradchenko/pe-builder/layout"
+	"github.com/nradchenko/pe-builder/manifest"
+	"github.com/nradchenko/pe-builder/source"
+)
+
+const cacheISO = "../.cache/ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso"
+
+// syntheticMeta is minimal source metadata: a directory table and a couple of Load
+// classes, enough for layout.Parse to place files and derive drivers.
+const syntheticMeta = `[Version]
+Signature = "$Windows NT$"
+
+[WinntDirectories]
+1 = "\"
+2 = system32
+4 = system32\drivers
+
+[FileSystems.Load]
+ntfs = ntfs.sys
+
+[SCSI.Load]
+atapi = atapi.sys
+cabonly = cabonly.sys
+`
+
+// TestAssemblePipeline exercises the post-probe pipeline hermetically: it derives the
+// base action set from synthetic metadata, materializes every base file loosely in
+// the source, and asserts assemble places them all. It bypasses Probe (which gates on
+// a real ntdll version resource) via the internal assemble entry point.
+func TestAssemblePipeline(t *testing.T) {
+	id := source.Identity{Build: 2600, Arch: "i386", Flavor: "winxp"}
+
+	backing := fstest.MapFS{
+		"i386/txtsetup.sif": {Data: []byte(syntheticMeta)},
+		"i386/layout.inf":   {Data: []byte(syntheticMeta)},
+	}
+
+	// Populate every base copy file loosely, plus one of the two SCSI drivers so the
+	// optional-skip path (cabonly.sys, absent) is exercised too.
+	l, err := layout.Parse(backing, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	acts, err := base.Actions(l, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	present := map[string]bool{"cabonly.sys": false}
+	for _, a := range acts {
+		if _, decided := present[a.Src]; decided {
+			continue
+		}
+		backing["i386/"+a.Src] = &fstest.MapFile{Data: []byte("stub:" + a.Src)}
+	}
+
+	out := t.TempDir()
+	rep, err := assemble(context.Background(), backing, id, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Errors) != 0 {
+		t.Fatalf("unexpected per-file errors: %v", rep.Errors)
+	}
+
+	tree := walkTree(t, out)
+	summary := fmt.Sprintf("identity: %s\nwritten: %d\nskipped: %v\n\n%s",
+		rep.Identity, rep.Written, rep.Skipped, tree)
+	golden.Assert(t, "synthetic-tree", summary)
+}
+
+// TestBuildRealSource is the milestone end-to-end check: build the real XP SP3 source
+// and diff the assembled tree (sorted path + size) against a committed golden listing.
+// It skips when the source ISO is absent, keeping CI hermetic.
+func TestBuildRealSource(t *testing.T) {
+	if _, err := os.Stat(cacheISO); err != nil {
+		t.Skip("real source ISO not present under .cache; skipping")
+	}
+	out := t.TempDir()
+	m := &manifest.Manifest{
+		Source: manifest.Source{Path: cacheISO, Type: "auto"},
+		Build:  manifest.Build{WorkDir: out},
+	}
+
+	rep, err := Build(context.Background(), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Errors) != 0 {
+		t.Fatalf("build reported per-file errors: %v", rep.Errors)
+	}
+
+	summary := fmt.Sprintf("identity: %s\nwritten: %d\nskipped: %s\n\n%s",
+		rep.Identity, rep.Written, strings.Join(rep.Skipped, ","), walkTreeWithSizes(t, out))
+	golden.Assert(t, "real-tree", summary)
+}
+
+func TestBuildBadSource(t *testing.T) {
+	m := &manifest.Manifest{Source: manifest.Source{Path: filepath.Join(t.TempDir(), "nope")}}
+	if _, err := Build(context.Background(), m); err == nil {
+		t.Fatal("Build with a nonexistent source returned no error")
+	}
+}
+
+// TestAssembleCancelled checks that a cancelled context aborts the build fatally
+// rather than being demoted to a non-fatal report error (which would let a cancelled
+// build look successful).
+func TestAssembleCancelled(t *testing.T) {
+	id := source.Identity{Build: 2600, Arch: "i386", Flavor: "winxp"}
+	backing := fstest.MapFS{
+		"i386/txtsetup.sif": {Data: []byte(syntheticMeta)},
+		"i386/layout.inf":   {Data: []byte(syntheticMeta)},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	rep, err := assemble(ctx, backing, id, t.TempDir())
+	if err == nil {
+		t.Fatalf("assemble with a cancelled context returned no error (rep=%+v)", rep)
+	}
+}
+
+// walkTree returns the sorted output-relative paths of files under root.
+func walkTree(t *testing.T, root string) string {
+	t.Helper()
+	var paths []string
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, _ := filepath.Rel(root, p)
+		paths = append(paths, filepath.ToSlash(rel))
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(paths)
+	return strings.Join(paths, "\n") + "\n"
+}
+
+// walkTreeWithSizes returns sorted "path size" lines for every file under root — the
+// deterministic (decompressed) shape used for the golden tree diff.
+func walkTreeWithSizes(t *testing.T, root string) string {
+	t.Helper()
+	var lines []string
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(root, p)
+		lines = append(lines, fmt.Sprintf("%s %d", filepath.ToSlash(rel), info.Size()))
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(lines)
+	return strings.Join(lines, "\n") + "\n"
+}

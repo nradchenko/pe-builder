@@ -1,0 +1,36 @@
+copy ntoskrnl.exe dir="" rename="" flags=-
+copy ntdll.dll dir="" rename="" flags=-
+copy bootvid.dll dir="" rename="" flags=-
+copy kdcom.dll dir="" rename="" flags=-
+copy win32k.sys dir="" rename="" flags=-
+copy csrss.exe dir="" rename="" flags=-
+copy smss.exe dir="" rename="" flags=-
+copy csrsrv.dll dir="" rename="" flags=-
+copy basesrv.dll dir="" rename="" flags=-
+copy winsrv.dll dir="" rename="" flags=-
+copy kernel32.dll dir="" rename="" flags=-
+copy gdi32.dll dir="" rename="" flags=-
+copy user32.dll dir="" rename="" flags=-
+copy advapi32.dll dir="" rename="" flags=-
+copy rpcrt4.dll dir="" rename="" flags=-
+copy msvcrt.dll dir="" rename="" flags=-
+copy secur32.dll dir="" rename="" flags=-
+copy userenv.dll dir="" rename="" flags=-
+copy sfcfiles.dll dir="" rename="" flags=-
+copy services.exe dir="" rename="" flags=-
+copy winlogon.exe dir="" rename="" flags=-
+copy lsass.exe dir="" rename="" flags=-
+copy autochk.exe dir="" rename="" flags=-
+copy cmd.exe dir="" rename="" flags=-
+copy c_1252.nls dir="" rename="" flags=-
+copy c_437.nls dir="" rename="" flags=-
+copy l_intl.nls dir="" rename="" flags=-
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Winlogon" value="Shell" data="cmd.exe"
+addreg hive=system type=0x2 subkey="ControlSet001\\Control\\Session Manager\\Environment" value="ComSpec" data="%SystemRoot%\\system32\\cmd.exe"
+setvalue file="txtsetup.sif" section="SetupData" key="osloadoptions" data="\"/fastdetect /minint\""
+setvalue file="txtsetup.sif" section="SetupData" key="loaderprompt" data="\"Starting pebuild...\""
+copy hal.dll dir="" rename="" flags=optional
+copy halacpi.dll dir="" rename="" flags=optional
+copy ntfs.sys dir="" rename="" flags=optional
+copy fastfat.sys dir="" rename="" flags=optional
+copy atapi.sys dir="" rename="" flags=optional

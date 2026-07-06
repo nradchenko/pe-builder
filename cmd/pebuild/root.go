@@ -4,7 +4,6 @@
 package main
 
 import (
-	"errors"
 	"log/slog"
 	"os"
 
@@ -12,11 +11,6 @@ import (
 
 	"github.com/nradchenko/pe-builder/internal/buildinfo"
 )
-
-// errNotImplemented is the sentinel returned by commands whose behavior is
-// delivered by a later change. Wrap it with context, e.g.
-// fmt.Errorf("build: %w", errNotImplemented).
-var errNotImplemented = errors.New("not yet implemented")
 
 // newRootCmd builds the full command tree. It is a constructor so tests can
 // exercise an isolated command instance.

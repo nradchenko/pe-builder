@@ -1,0 +1,141 @@
+dirs: 113
+files: 10396
+
+# directory table
+1 = 
+2 = system32
+3 = system32/config
+4 = system32/drivers
+5 = system
+7 = system32/ras
+9 = system32/spool
+10 = system32/spool/drivers
+11 = system32/spool/drivers/w32x86/3
+12 = system32/spool/prtprocs
+13 = system32/spool/prtprocs/w32x86
+14 = system32/wins
+15 = system32/dhcp
+16 = repair
+17 = system32/drivers/etc
+18 = system32/spool/drivers/w32x86
+19 = system32/drivers/disdn
+20 = inf
+21 = Help
+22 = Fonts
+23 = Config
+24 = msagent/intl
+25 = Cursors
+26 = Media
+27 = java
+28 = java/classes
+29 = java/trustlib
+30 = system32/ShellExt
+31 = Web
+32 = system32/Setup
+33 = Web/printers
+34 = system32/spool/drivers/color
+35 = system32/wbem
+36 = system32/wbem/Repository
+37 = addins
+38 = Connection Wizard
+39 = Driver Cache/i386
+40 = security
+41 = security/templates
+42 = system32/npp
+43 = system32/ias
+44 = system32/dllcache
+45 = Temp
+46 = Web/printers/images
+47 = system32/export
+48 = system32/wbem/mof/good
+49 = system32/wbem/mof/bad
+50 = twain_32
+51 = msapps/msinfo
+52 = msagent
+53 = msagent/chars
+54 = security/logs
+55 = system32/icsxml
+57 = system32/mui
+58 = system32/mui/0019
+59 = system32/mui/dispspec
+60 = AppPatch
+61 = Debug
+62 = Debug/UserMode
+63 = system32/oobe
+67 = Help/Tours
+68 = Resources/Themes/Luna
+69 = Resources/Themes/Luna/Shell/NormalColor
+70 = system32/oobe/html/ispsgnup
+71 = system32/oobe/html/mouse
+72 = system32/oobe/html/oemcust
+73 = system32/oobe/html/oemhw
+74 = system32/oobe/html/oemreg
+75 = system32/oobe/images
+76 = system32/oobe/setup
+77 = system32/oobe/sample
+78 = Resources/Themes/Luna/Shell/Metallic
+79 = Resources/Themes/Luna/Shell/Homestead
+91 = Help/Tours/mmTour
+92 = Help/Tours/htmlTour
+93 = Provisioning/Schemas
+100 = system32/1025
+101 = system32/1028
+102 = system32/1031
+103 = system32/1033
+104 = system32/1037
+105 = system32/1041
+106 = system32/1042
+107 = system32/1054
+108 = system32/2052
+109 = system32/3076
+110 = system32/wbem/xml
+111 = system32/usmt
+112 = system32/inetsrv
+123 = mui
+124 = WinSxS
+125 = WinSxS/Manifests
+126 = WinSxS/InstallTemp
+127 = ime
+129 = Resources/Themes
+130 = ime
+132 = ime/imejp
+133 = System32/IME/PINTLGNT
+134 = System32/IME/CINTLGNT
+135 = System32/IME/TINTLGNT
+136 = IME/CHTIME/Applets
+137 = ime/imejp98
+138 = ime/imejp/applets
+139 = pchealth/helpctr/binaries
+164 = system32/1049
+180 = system32/3com_dmi
+181 = PeerNet
+239 = system32/wbem/Logs
+240 = ehome
+241 = Network Diagnostic
+242 = L2Schemas
+243 = system32/ru
+244 = system32/ru-ru
+
+# spot resolutions
+ntoskrnl.exe -> dir 2 (system32)
+hal.dll -> dir 2 (system32)
+ntdll.dll -> dir 2 (system32)
+kernel32.dll -> dir 2 (system32)
+cmd.exe -> dir 2 (system32)
+win32k.sys -> dir 2 (system32)
+csrss.exe -> dir 2 (system32)
+smss.exe -> dir 2 (system32)
+ntfs.sys -> dir 4 (system32/drivers)
+atapi.sys -> dir 4 (system32/drivers)
+
+# load classes
+Hal: 4
+DiskDrivers: 1
+FileSystems: 3
+SCSI: 32
+BootBusExtenders: 5
+BusExtenders: 15
+InputDevicesSupport: 9
+Keyboard: 2
+Display: 1
+boot drivers (union): 72
