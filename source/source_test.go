@@ -4,7 +4,6 @@
 package source
 
 import (
-	"errors"
 	"testing"
 )
 
@@ -17,12 +16,12 @@ func TestIdentityString(t *testing.T) {
 	}
 }
 
-func TestOpenNotImplemented(t *testing.T) {
-	src, err := Open("/some/source")
-	if src != nil {
-		t.Errorf("Open returned a non-nil source: %v", src)
+func TestOpenMissing(t *testing.T) {
+	src, err := Open(t.TempDir() + "/does-not-exist")
+	if err == nil {
+		t.Error("Open of a missing path returned no error")
 	}
-	if !errors.Is(err, ErrNotImplemented) {
-		t.Errorf("Open error = %v, want ErrNotImplemented", err)
+	if src != nil {
+		t.Errorf("Open returned a non-nil source on error: %v", src)
 	}
 }

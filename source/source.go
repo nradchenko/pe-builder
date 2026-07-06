@@ -4,19 +4,13 @@
 // Package source abstracts a Windows installation source. A source is backed by
 // either a directory or an .iso file, exposed uniformly as an fs.FS, and reports
 // its identity (build, architecture, flavor).
-//
-// The concrete directory and ISO readers arrive later; this package currently
-// defines the interfaces and a stub constructor.
 package source
 
 import (
-	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 )
-
-// ErrNotImplemented is returned by stubs whose behavior is delivered later.
-var ErrNotImplemented = errors.New("not yet implemented")
 
 // Backing is the read-only file store behind a source: a directory or an ISO,
 // presented uniformly so the engine never depends on which.
@@ -45,10 +39,28 @@ type Source interface {
 	Probe() (Identity, error)
 }
 
-// Open returns a Source backed by the directory or .iso at path.
-//
-// It is the constructor the CLI calls; the readers are not yet implemented, so it
-// currently returns ErrNotImplemented.
+// source is the concrete Source: a normalized backing plus the probe logic.
+type source struct {
+	backing Backing
+}
+
+func (s *source) Backing() Backing { return s.backing }
+
+// Open returns a Source backed by the directory or .iso at path. A directory path
+// is served from the filesystem; a regular file is opened as an ISO image.
 func Open(path string) (Source, error) {
-	return nil, fmt.Errorf("open source %q: %w", path, ErrNotImplemented)
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("open source %q: %w", path, err)
+	}
+	var backing Backing
+	if info.IsDir() {
+		backing, err = openDir(path)
+	} else {
+		backing, err = openISO(path)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("open source %q: %w", path, err)
+	}
+	return &source{backing: backing}, nil
 }
