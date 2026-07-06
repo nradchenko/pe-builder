@@ -1,0 +1,22 @@
+Name:    sample
+Display: Sample Plugin ("demo")
+Enabled: true
+Help:    sample.htm
+Config:  samplecfg.exe @PluginFile@
+Update:  id=sample version=2.0.1 url=http://example.invalid/check depends=[ramdisk base] parent=core
+Actions (15):
+  mkdir     id=a path="Sample Tools" always=true fromRoot=true
+  mkdir     id=b path="data" always=true fromRoot=false
+  copy      src="sample.exe" dir=2 rename="" ship=true noDecomp=false opt=false upper=false
+  copy      src="optional.dll" dir=2 rename="" ship=false noDecomp=false opt=true upper=false
+  copy      src="ntoskrnl.exe" dir=2 rename="ntkrnlmp.exe" ship=false noDecomp=false opt=false upper=false
+  copy      src="xp-widget.sys" dir=4 rename="" ship=false noDecomp=true opt=false upper=false
+  addreg    hive=software type=0x1 subkey="Sample\\Config" value="Owner" data="Acme"
+  addreg    hive=software type=0x4 subkey="Sample\\Config" value="Level" data="0x10"
+  addreg    hive=software type=0x3 subkey="Sample\\Config" value="Mask" data="98200080"
+  delreg    hive=software subkey="Sample\\Obsolete" value="StaleValue"
+  addreg    hive=system type=0x2 subkey="Services\\Sample" value="ImagePath" data="%SystemRoot%\\system32\\sample.sys"
+  setvalue  file="txtsetup.sif" section="SetupData" key="OsLoadOptions" data="/minint"
+  addline   file="nettcpip.inf" section="Registry.MS_TCPIP" line="HKLM,Software\\Sample,Flag,,1"
+  delline   file="nettcpip.inf" section="Registry.MS_TCPIP" prefix="HKR,Ndi,HelpText,"
+  append    file="nu2menu.xml" from="sample-menu.xml"

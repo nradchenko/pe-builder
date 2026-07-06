@@ -44,9 +44,61 @@ func (k Kind) Valid() bool {
 	return slices.Contains(Kinds, k)
 }
 
-// Action is one step in the build IR. Its per-kind payload fields are added as the
-// executing stages are implemented.
+// RegHive names the target registry hive of a registry action.
+type RegHive string
+
+// The registry hives a plugin section can target (chosen by the section prefix).
+const (
+	HiveSoftware RegHive = "software" // HKLM\Software
+	HiveSystem   RegHive = "system"   // the SYSTEM hive
+	HiveDefault  RegHive = "default"  // the default-user hive
+)
+
+// Registry value types, matching the REG_* constants used in plugin AddReg lines.
+const (
+	RegSZ       = 0x1
+	RegExpandSZ = 0x2
+	RegBinary   = 0x3
+	RegDWord    = 0x4
+	RegMultiSZ  = 0x7
+)
+
+// Action is one step in the build IR. It is a flat, kind-tagged record: only the
+// fields relevant to Kind are set. Kept as one struct (rather than an interface
+// per kind) so action lists compare cleanly under go-cmp in tests.
 type Action struct {
-	// Kind selects how the action is executed.
+	// Kind selects how the action is executed and which fields below apply.
 	Kind Kind
+
+	// CopyFile / Mkdir: DirID is the target directory ID from the plugin's
+	// [WinntDirectories] table (a numeric ID or a plugin-local a–z letter).
+	DirID string
+
+	// CopyFile fields ([SourceDisksFiles]).
+	Src            string // source file name or wildcard pattern
+	Rename         string // target name, if renamed
+	NoDecompress   bool   // copy the compressed archive as-is (attribute 2)
+	Optional       bool   // copy only if present (attribute 4)
+	Uppercase      bool   // rename the target to uppercase (attribute 8)
+	ShipWithPlugin bool   // file ships with the plugin; presence is required (attribute 1)
+
+	// Mkdir fields ([WinntDirectories]).
+	Path         string // directory name/path
+	AlwaysCreate bool   // create even when empty (attribute 1)
+	FromRoot     bool   // create from the output root, not inside \i386 (attribute 2)
+
+	// Registry fields (AddReg / DelReg / SetValue-of-registry).
+	Hive      RegHive
+	Subkey    string
+	ValueName string // empty denotes the key's default value
+	RegType   int    // REG_* type for AddReg; 0 for DelReg
+	Data      string // textual value data (SZ/EXPAND_SZ/DWORD/MULTI_SZ)
+	DataBytes []byte // raw value data for REG_BINARY
+
+	// Text/INI patch fields (SetValue / AddLine / DelLine / Append).
+	TargetFile    string // file to patch
+	TargetSection string // section within the target file
+	LineKey       string // SetValue key
+	LineData      string // SetValue value, AddLine line, or DelLine prefix
+	AppendFile    string // Append: file whose contents are appended to TargetFile
 }

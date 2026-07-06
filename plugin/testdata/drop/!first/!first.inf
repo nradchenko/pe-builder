@@ -1,0 +1,7 @@
+; A minimal plugin that sorts first (the '!' load-order convention).
+[Version]
+Signature= "$Windows NT$"
+
+[PEBuilder]
+Name="First"
+Enable=0

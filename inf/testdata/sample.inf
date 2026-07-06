@@ -1,0 +1,39 @@
+; A clean-room sample INF exercising the parser's features.
+; (Not derived from any Microsoft or third-party plugin file.)
+
+[Version]
+Signature= "$Windows NT$"
+
+[Strings]
+Product = "Sample Widget"
+Vendor  = Acme
+Greeting = "He said ""hi"""
+
+[Directories]
+a="%Vendor% Tools",3
+b="nested\path\here",1
+
+[Files]
+widget.bin=1
+readme.txt=2,,4
+data.dat = 2, renamed.dat, 8   ; trailing comment ignored
+
+[Files.2600]
+xp-only.sys=4
+
+[Files.3790]
+srv-only.sys=4
+
+[Continued]
+long = one, \
+       two, \
+       three
+
+[Registry]
+0x1,"Software\%Product%","Owner","%Vendor%"
+0x4,"Software\Sample","Level",0x10
+0x3,"Control","Mask",98,20,00,80
+
+[Notes]
+title=%Greeting%
+unknown=%Undefined% stays literal

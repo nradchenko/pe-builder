@@ -1,0 +1,12 @@
+; A minimal plugin that sorts last (the 'z_' load-order convention), marked as a
+; customization child of another plugin via the vendor [Update] section.
+[Version]
+Signature= "$Windows NT$"
+
+[PEBuilder]
+Name="Last"
+Enable=1
+
+[Update]
+id=z_last
+parent=sample

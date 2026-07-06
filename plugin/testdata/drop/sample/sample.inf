@@ -1,0 +1,53 @@
+; Clean-room sample plugin exercising the copy / registry / text mappings.
+; (Not derived from any Microsoft or third-party plugin.)
+
+[Version]
+Signature= "$Windows NT$"
+
+[PEBuilder]
+Name="Sample Plugin (""demo"")"
+Enable=1
+Help="sample.htm"
+Config=samplecfg.exe @PluginFile@
+
+[Update]
+id=sample
+Version=2.0.1
+url=http://example.invalid/check
+depends=ramdisk, base
+parent=core
+
+[WinntDirectories]
+a="Sample Tools",3
+b="data",1
+
+[SourceDisksFiles]
+sample.exe=2,,1
+optional.dll=2,,4
+ntoskrnl.exe=2,ntkrnlmp.exe
+
+[SourceDisksFiles.2600]
+xp-widget.sys=4,,2
+
+[Software.AddReg]
+0x1,"Sample\Config","Owner","Acme"
+0x4,"Sample\Config","Level",0x10
+0x3,"Sample\Config","Mask",98,20,00,80
+
+[Software.DelReg]
+"Sample\Obsolete","StaleValue"
+
+[SetupReg.AddReg]
+0x2,"Services\Sample","ImagePath","%SystemRoot%\system32\sample.sys"
+
+[SetValue]
+"txtsetup.sif", "SetupData", "OsLoadOptions", "/minint"
+
+[AddLine]
+"nettcpip.inf", "Registry.MS_TCPIP", "HKLM,Software\Sample,Flag,,1"
+
+[DelLine]
+"nettcpip.inf", "Registry.MS_TCPIP", "HKR,Ndi,HelpText,"
+
+[Append]
+nu2menu.xml, sample-menu.xml
