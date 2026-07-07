@@ -1,6 +1,7 @@
 identity: winxp build 2600 (i386)
-written: 29
+written: 32
 skipped: [cabonly.sys]
+hives: [i386/system32/config/SYSTEM i386/system32/config/SOFTWARE i386/system32/config/DEFAULT]
 
 i386/system32/advapi32.dll
 i386/system32/atapi.sys
@@ -10,9 +11,15 @@ i386/system32/bootvid.dll
 i386/system32/c_1252.nls
 i386/system32/c_437.nls
 i386/system32/cmd.exe
+i386/system32/config/DEFAULT
+i386/system32/config/SOFTWARE
+i386/system32/config/SYSTEM
 i386/system32/csrsrv.dll
 i386/system32/csrss.exe
 i386/system32/gdi32.dll
+i386/system32/hidclass.sys
+i386/system32/hidparse.sys
+i386/system32/kbdclass.sys
 i386/system32/kdcom.dll
 i386/system32/kernel32.dll
 i386/system32/l_intl.nls

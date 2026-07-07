@@ -5,7 +5,7 @@ package tree
 
 import (
 	"fmt"
-	"io/fs"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -21,10 +21,10 @@ import (
 // the output-relative path written, or — when the file is optional and absent from
 // the source — the canonical name to record as skipped. Exactly one of the two
 // strings is non-empty on success.
-func placeFile(a action.Action, l *layout.Layout, src source.Backing, outRoot string) (written, skipped string, err error) {
+func placeFile(a action.Action, l *layout.Layout, src source.Backing, cabs *cabinets, outRoot string) (written, skipped string, err error) {
 	name := strings.ToLower(a.Src)
 
-	data, compressed, found := readSource(src, name)
+	data, compressed, found := readSource(src, cabs, name)
 	if !found {
 		if a.Optional {
 			return "", name, nil
@@ -45,6 +45,10 @@ func placeFile(a action.Action, l *layout.Layout, src source.Backing, outRoot st
 				return "", "", fmt.Errorf("decompress %q: %w", name, err)
 			}
 		}
+	} else if a.NoDecompress {
+		// The file was found already-decompressed (a loose file or a cabinet member),
+		// so there is no compressed archive to preserve — attribute 2 cannot apply.
+		slog.Warn("cannot keep file compressed; source has no packed archive form", "file", name)
 	}
 
 	rel := outputPath(a, l, outName)
@@ -58,17 +62,19 @@ func placeFile(a action.Action, l *layout.Layout, src source.Backing, outRoot st
 	return rel, "", nil
 }
 
-// readSource reads a source file, trying its loose (uncompressed) name first and its
-// compressed *.??_ name second. It reports the bytes, whether they came from the
-// compressed form, and whether the file was found at all.
-func readSource(src source.Backing, name string) (data []byte, compressed, found bool) {
-	loose := path.Join(systemRoot, name)
-	if b, err := fs.ReadFile(src, loose); err == nil {
-		return b, false, true
+// readSource reads a source file, trying in order: the shared loose→*.??_ archive
+// resolution (layout.ReadSourceFile), then the driver cabinets (DRIVER.CAB /
+// SP*.CAB), where many class and HID drivers ship. It reports the bytes, whether
+// they still need decompression (only the *.??_ archive form does; loose and
+// cabinet-extracted bytes are already final), and whether the file was found.
+func readSource(src source.Backing, cabs *cabinets, name string) (data []byte, compressed, found bool) {
+	if b, packed, ok := layout.ReadSourceFile(src, name); ok {
+		return b, packed, true
 	}
-	packed := path.Join(systemRoot, layout.CompressedName(name))
-	if b, err := fs.ReadFile(src, packed); err == nil {
-		return b, true, true
+	if cabs != nil {
+		if b, ok := cabs.Find(name); ok {
+			return b, false, true
+		}
 	}
 	return nil, false, false
 }

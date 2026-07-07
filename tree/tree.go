@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/nradchenko/pe-builder/action"
 	"github.com/nradchenko/pe-builder/layout"
@@ -35,9 +36,9 @@ import (
 
 // systemRoot is the output directory the source's system-root-relative tree is
 // placed under, mirroring a Windows installation CD's I386 folder. It is also the
-// source folder files are read from; generalizing the source folder for non-i386
-// sources is future work (amd64 media use an AMD64 folder).
-const systemRoot = "i386"
+// source folder files are read from. The value is defined once, in package source,
+// and shared by the source reader, this assembler, and the hive stage.
+const systemRoot = source.SystemRoot
 
 // Result records what an assembly produced, for reporting and golden listings.
 type Result struct {
@@ -56,13 +57,24 @@ func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src s
 	res := &Result{}
 	var errs []error
 
+	// The driver cabinets are consulted only for copy targets absent loosely; collect
+	// every copy name up front so the cabinet layer can extract them in a single pass
+	// and release each (large) archive immediately.
+	want := make(map[string]bool)
+	for _, a := range acts {
+		if a.Kind == action.CopyFile {
+			want[strings.ToLower(a.Src)] = true
+		}
+	}
+	cabs := newCabinets(src, want)
+
 	for _, a := range acts {
 		if err := ctx.Err(); err != nil {
 			return res, err
 		}
 		switch a.Kind {
 		case action.CopyFile:
-			written, skipped, err := placeFile(a, l, src, outRoot)
+			written, skipped, err := placeFile(a, l, src, cabs, outRoot)
 			switch {
 			case err != nil:
 				errs = append(errs, err)

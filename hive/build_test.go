@@ -41,11 +41,16 @@ func TestBaseHivesFromSource(t *testing.T) {
 		}
 	}
 
-	// CLASSES from hivecls.inf (HKCR maps directly to the root).
-	if hives.Classes.Root.Child("*") == nil {
+	// CLASSES is built on request (not one of the pipeline hives): HKCR maps
+	// directly to the root.
+	classes, err := BaseClasses(b)
+	if err != nil {
+		t.Fatalf("BaseClasses: %v", err)
+	}
+	if classes.Root.Child("*") == nil {
 		t.Error("CLASSES missing the '*' key")
 	}
-	if hives.Classes.Root.Child("CLSID") == nil {
+	if classes.Root.Child("CLSID") == nil {
 		t.Error("CLASSES missing CLSID")
 	}
 
@@ -58,7 +63,7 @@ func TestBaseHivesFromSource(t *testing.T) {
 		{"system", hives.System},
 		{"software", hives.Software},
 		{"default", hives.Default},
-		{"classes", hives.Classes},
+		{"classes", classes},
 	} {
 		data, err := WriteHive(h.hive)
 		if err != nil {

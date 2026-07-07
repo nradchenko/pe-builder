@@ -15,11 +15,21 @@ import (
 	"testing/fstest"
 
 	"github.com/nradchenko/pe-builder/base"
+	"github.com/nradchenko/pe-builder/hive"
 	"github.com/nradchenko/pe-builder/internal/golden"
 	"github.com/nradchenko/pe-builder/layout"
 	"github.com/nradchenko/pe-builder/manifest"
 	"github.com/nradchenko/pe-builder/source"
 )
+
+// minimalHiveINF is a valid, empty hive-population INF: setupapi accepts it (it
+// carries the NT signature) and its empty [AddReg] adds nothing, so BaseHives can
+// seed the SOFTWARE/DEFAULT/CLASSES hives in a hermetic test.
+const minimalHiveINF = `[Version]
+Signature = "$Windows NT$"
+
+[AddReg]
+`
 
 const cacheISO = "../.cache/ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso"
 
@@ -48,9 +58,19 @@ cabonly = cabonly.sys
 func TestAssemblePipeline(t *testing.T) {
 	id := source.Identity{Build: 2600, Arch: "i386", Flavor: "winxp"}
 
+	// setupreg.hiv is a real (empty) regf image; the three hive*.inf files seed the
+	// remaining base hives. Together they let the hive stage run hermetically.
+	sysHive, err := hive.WriteHive(hive.NewHive("$$$PROTO.HIV"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	backing := fstest.MapFS{
 		"i386/txtsetup.sif": {Data: []byte(syntheticMeta)},
 		"i386/layout.inf":   {Data: []byte(syntheticMeta)},
+		"i386/setupreg.hiv": {Data: sysHive},
+		"i386/hivesft.inf":  {Data: []byte(minimalHiveINF)},
+		"i386/hivedef.inf":  {Data: []byte(minimalHiveINF)},
+		"i386/hivecls.inf":  {Data: []byte(minimalHiveINF)},
 	}
 
 	// Populate every base copy file loosely, plus one of the two SCSI drivers so the
@@ -81,8 +101,8 @@ func TestAssemblePipeline(t *testing.T) {
 	}
 
 	tree := walkTree(t, out)
-	summary := fmt.Sprintf("identity: %s\nwritten: %d\nskipped: %v\n\n%s",
-		rep.Identity, rep.Written, rep.Skipped, tree)
+	summary := fmt.Sprintf("identity: %s\nwritten: %d\nskipped: %v\nhives: %v\n\n%s",
+		rep.Identity, rep.Written, rep.Skipped, rep.Hives, tree)
 	golden.Assert(t, "synthetic-tree", summary)
 }
 

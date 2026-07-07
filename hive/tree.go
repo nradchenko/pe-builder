@@ -107,3 +107,44 @@ func (k *Key) SetValue(v Value) {
 	}
 	k.Values = append(k.Values, v)
 }
+
+// DeleteChild removes the immediate subkey named name (case-insensitive) and
+// reports whether one was removed.
+func (k *Key) DeleteChild(name string) bool {
+	for i, c := range k.Subkeys {
+		if strings.EqualFold(c.Name, name) {
+			k.Subkeys = append(k.Subkeys[:i], k.Subkeys[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// DeleteValue removes the value named name (case-insensitive) and reports
+// whether one was removed.
+func (k *Key) DeleteValue(name string) bool {
+	for i := range k.Values {
+		if strings.EqualFold(k.Values[i].Name, name) {
+			k.Values = append(k.Values[:i], k.Values[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// FindPath walks a backslash-separated subkey path relative to k without
+// creating anything, returning the deepest key and whether the whole path
+// existed. Empty components are skipped. An empty path returns k.
+func (k *Key) FindPath(path string) (*Key, bool) {
+	cur := k
+	for _, part := range strings.Split(path, `\`) {
+		if part == "" {
+			continue
+		}
+		cur = cur.Child(part)
+		if cur == nil {
+			return nil, false
+		}
+	}
+	return cur, true
+}

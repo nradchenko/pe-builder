@@ -18,9 +18,10 @@ func newBuildCmd() *cobra.Command {
 		Use:   "build [manifest.hcl]",
 		Short: "Build the output file tree from a manifest",
 		Long: "Run the build pipeline described by a manifest: read the Windows source,\n" +
-			"evaluate the base layer, and assemble the output file tree. Registry hives,\n" +
-			"boot configuration, and ISO mastering arrive in a later stage — this command\n" +
-			"produces the file tree in the work directory, not a bootable image yet.\n\n" +
+			"evaluate the base layer, assemble the output file tree, and build the registry\n" +
+			"hives. Boot configuration and ISO mastering arrive in a later stage — this\n" +
+			"command produces the file tree and hives in the work directory, not a bootable\n" +
+			"image yet.\n\n" +
 			"With no argument, pebuild.hcl in the current directory is used.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -62,13 +63,14 @@ func printReport(w io.Writer, rep *build.Report) error {
 	fmt.Fprintf(w, "Source:  %s\n", rep.Identity)
 	fmt.Fprintf(w, "Output:  %s (file tree)\n", rep.OutDir)
 	fmt.Fprintf(w, "Files:   %d written, %d skipped\n", rep.Written, len(rep.Skipped))
+	fmt.Fprintf(w, "Hives:   %d written\n", len(rep.Hives))
 	if len(rep.Errors) > 0 {
 		fmt.Fprintf(w, "Errors:  %d\n", len(rep.Errors))
 		for _, e := range rep.Errors {
 			fmt.Fprintf(w, "  - %v\n", e)
 		}
 	}
-	fmt.Fprintln(w, "\nNote: registry, boot configuration, and ISO output arrive in a later stage;")
-	fmt.Fprintln(w, "this is the assembled file tree, not yet a bootable image.")
+	fmt.Fprintln(w, "\nNote: boot configuration and ISO output arrive in a later stage;")
+	fmt.Fprintln(w, "this is the assembled file tree and registry hives, not yet a bootable image.")
 	return nil
 }

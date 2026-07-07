@@ -38,9 +38,9 @@ func TestDriverActions(t *testing.T) {
 	want := []action.Action{
 		{Kind: action.CopyFile, Src: "hal.dll", Optional: true},
 		{Kind: action.CopyFile, Src: "halacpi.dll", Optional: true},
+		{Kind: action.CopyFile, Src: "atapi.sys", Optional: true},
 		{Kind: action.CopyFile, Src: "ntfs.sys", Optional: true},
 		{Kind: action.CopyFile, Src: "fastfat.sys", Optional: true},
-		{Kind: action.CopyFile, Src: "atapi.sys", Optional: true},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("driverActions mismatch (-want +got):\n%s", diff)

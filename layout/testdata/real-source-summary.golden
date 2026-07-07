@@ -130,12 +130,16 @@ atapi.sys -> dir 4 (system32/drivers)
 
 # load classes
 Hal: 4
-DiskDrivers: 1
-FileSystems: 3
-SCSI: 32
 BootBusExtenders: 5
 BusExtenders: 15
+SCSI: 32
+DiskDrivers: 1
+ScsiClass: 4
+CdRomDrivers: 1
+FloppyDrivers: 2
+FileSystems: 3
 InputDevicesSupport: 9
 Keyboard: 2
+MouseDrivers: 2
 Display: 1
-boot drivers (union): 72
+boot drivers (union): 80

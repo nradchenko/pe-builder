@@ -80,6 +80,12 @@ func splitFields(s string) []string {
 	return fields
 }
 
+// ParseInt reads a setupapi integer field: a 0x-prefixed hex or decimal value
+// with an optional sign. It is the shared parser for INF integer fields, exported
+// so other packages honoring the same convention (e.g. registry value data) do
+// not reimplement it.
+func ParseInt(s string) (int64, bool) { return parseInt(s) }
+
 // parseInt reads a setupapi integer field: 0x-prefixed hex or decimal, with an
 // optional sign.
 func parseInt(s string) (int64, bool) {

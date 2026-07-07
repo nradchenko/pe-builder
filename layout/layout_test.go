@@ -139,8 +139,9 @@ func TestLoadAndBootDrivers(t *testing.T) {
 	if diff := cmp.Diff([]string{"atapi.sys"}, l.Load["SCSI"]); diff != "" {
 		t.Errorf("SCSI.Load mismatch (-want +got):\n%s", diff)
 	}
-	// BootDrivers unions the classes in class order, deduped.
-	if diff := cmp.Diff([]string{"ntfs.sys", "fastfat.sys", "atapi.sys"}, l.BootDrivers()); diff != "" {
+	// BootDrivers unions the classes in class order, deduped. SCSI is consulted
+	// before FileSystems, so atapi leads the union.
+	if diff := cmp.Diff([]string{"atapi.sys", "ntfs.sys", "fastfat.sys"}, l.BootDrivers()); diff != "" {
 		t.Errorf("BootDrivers mismatch (-want +got):\n%s", diff)
 	}
 }

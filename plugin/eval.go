@@ -117,12 +117,15 @@ func regActions(f *inf.File, build int, prefix string, hive action.RegHive) ([]a
 		if !ok {
 			return nil, fmt.Errorf("[%s.AddReg]: line %q has no registry type", prefix, l.Raw())
 		}
+		// A line with only a type and subkey (no value-name field) creates the key
+		// only; three or more fields carry a value, even when it is empty.
 		a := action.Action{
 			Kind:      action.AddReg,
 			Hive:      hive,
 			Subkey:    l.Field(1),
 			ValueName: l.Field(2),
 			RegType:   int(regType),
+			HasValue:  len(l.Fields()) >= 3,
 		}
 		switch int(regType) {
 		case action.RegBinary:

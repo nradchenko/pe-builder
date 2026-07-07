@@ -16,6 +16,13 @@ import (
 // presented uniformly so the engine never depends on which.
 type Backing = fs.FS
 
+// SystemRoot is the source (and output-tree) directory that holds the
+// system-root-relative files, mirroring a Windows CD's I386 folder. It is the
+// single definition of that convention, shared by the source reader, the tree
+// assembler, and the hive stage. (amd64 media use an AMD64 folder; supporting
+// that is future work.)
+const SystemRoot = "i386"
+
 // Identity describes a source as detected by Probe.
 type Identity struct {
 	// Build is the Windows build number, e.g. 2600 (XP) or 3790 (2003/x64).

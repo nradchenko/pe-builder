@@ -59,8 +59,17 @@ winlogon.exe =
 lsass.exe    =
 autochk.exe  =
 
-; Command shell.
+; Command shell (startnet.cmd is ours, placed by a later stage).
 cmd.exe =
+
+; Input-stack files not named in any txtsetup.sif *.Load list. The class and HID
+; drivers that are (i8042prt, kbdhid, mouclass, mouhid, hidusb, the USB host
+; controllers) come from the source's boot-driver derivation — sourced from the
+; loose media or the driver cabinets. These three ship only as loose archives and
+; are selected here so the keyboard/mouse class stack is complete.
+kbdclass.sys =
+hidclass.sys =
+hidparse.sys =
 
 ; National-language tables the kernel loads for the ANSI/OEM code pages.
 c_1252.nls =
@@ -70,17 +79,109 @@ l_intl.nls =
 ; ---------------------------------------------------------------------------
 ; Registry seed.
 ;
-; The delta laid over the hives seeded from the source's own hive*.inf. The hives
-; are constructed by a later build stage; these directives are recorded now and
-; applied there.
+; The delta laid over the hives seeded from the source's own hive*.inf and the
+; text-setup SYSTEM hive (setupreg.hiv). The hives are constructed by a later
+; build stage; these directives are recorded now and applied there.
+;
+; setupreg.hiv already carries the driver service stubs and the control-set
+; selection (Select\Current = ControlSet001). In /minint mode setupldr loads the
+; boot drivers named in txtsetup.sif directly, so the SYSTEM overlay below adds
+; only the PE-mode markers, the Session Manager environment the kernel and the
+; Win32 subsystem need, and the input/display service entries Plug-and-Play
+; brings up after boot.
 ; ---------------------------------------------------------------------------
 [Software.AddReg]
 ; Winlogon runs the command shell directly instead of Explorer.
 0x1,"Microsoft\Windows NT\CurrentVersion\Winlogon","Shell","cmd.exe"
 
 [SetupReg.AddReg]
-; The command interpreter used to expand %ComSpec%.
+; The marker that identifies a RAM-resident preinstall (PE) environment; many
+; components branch on its presence.
+0x1,"ControlSet001\Control\MiniNT"
+
+; The setup-mode shell hand-off: winlogon, seeing a non-zero SetupType, runs the
+; command line in Setup\CmdLine instead of the interactive logon chain.
+0x1,"Setup","CmdLine","cmd.exe /k startnet.cmd"
+0x4,"Setup","SetupType",0x1
+0x1,"Setup","OsLoaderPath","\"
+0x4,"Setup","SystemSetupInProgress",0x1
+
+; Skip autochk/chkdsk at boot: the volume is read-only removable media.
+0x7,"ControlSet001\Control\Session Manager","BootExecute",""
+
+; The command interpreter and search path the environment runs with.
 0x2,"ControlSet001\Control\Session Manager\Environment","ComSpec","%SystemRoot%\system32\cmd.exe"
+0x2,"ControlSet001\Control\Session Manager\Environment","Path","%SystemRoot%\system32;%SystemRoot%"
+0x2,"ControlSet001\Control\Session Manager\Environment","windir","%SystemRoot%"
+0x1,"ControlSet001\Control\Session Manager\Environment","OS","Windows_NT"
+
+; The Win32 subsystem definition csrss starts from — without it the Windows
+; subsystem, and so the whole logon/shell chain, cannot come up.
+0x2,"ControlSet001\Control\Session Manager\SubSystems","Debug",""
+0x2,"ControlSet001\Control\Session Manager\SubSystems","kmode","%SystemRoot%\System32\win32k.sys"
+0x7,"ControlSet001\Control\Session Manager\SubSystems","Required","Debug","Windows"
+0x2,"ControlSet001\Control\Session Manager\SubSystems","Windows","%SystemRoot%\system32\csrss.exe ObjectDirectory=\Windows SharedSection=1024,3072,512 Windows=On SubSystemType=Windows ServerDll=basesrv,1 ServerDll=winsrv:UserServerDllInitialization,3 ServerDll=winsrv:ConServerDllInitialization,2 ProfileControl=Off MaxRequestThreads=16"
+
+; Known DLLs loaded once and shared — the loader maps these from \KnownDlls.
+0x2,"ControlSet001\Control\Session Manager\KnownDLLs","DllDirectory","%SystemRoot%\system32"
+0x1,"ControlSet001\Control\Session Manager\KnownDLLs","advapi32","advapi32.dll"
+0x1,"ControlSet001\Control\Session Manager\KnownDLLs","gdi32","gdi32.dll"
+0x1,"ControlSet001\Control\Session Manager\KnownDLLs","kernel32","kernel32.dll"
+0x1,"ControlSet001\Control\Session Manager\KnownDLLs","rpcrt4","rpcrt4.dll"
+0x1,"ControlSet001\Control\Session Manager\KnownDLLs","user32","user32.dll"
+
+; Product identification some components read during startup.
+0x1,"ControlSet001\Control\ProductOptions","ProductType","WinNT"
+0x7,"ControlSet001\Control\ProductOptions","ProductSuite",""
+
+; The generic VGA display driver the Win32 subsystem falls back to.
+0x1,"ControlSet001\Services\VgaSave","Group","Video Save"
+0x2,"ControlSet001\Services\VgaSave","ImagePath","\SystemRoot\System32\drivers\vga.sys"
+0x4,"ControlSet001\Services\VgaSave","Start",0x1
+0x4,"ControlSet001\Services\VgaSave","Type",0x1
+0x1,"ControlSet001\Services\VgaSave\Video","Service","VgaSave"
+0x7,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\0000","InstalledDisplayDrivers","vga"
+0x4,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\0000","VgaCompatible",0x1
+0x1,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\Video","Service","VgaSave"
+
+; ---------------------------------------------------------------------------
+; Input stack — keyboard and mouse.
+;
+; Generic drivers for both buses: the i8042 PS/2 controller and the USB HID
+; stack. Plug-and-Play enumerates the controller (PS/2 via ACPI, USB via the
+; host controllers) and attaches the class driver named in the device class's
+; UpperFilters, so the class services and the class UpperFilters below are what
+; make a keyboard and mouse usable in the environment.
+; ---------------------------------------------------------------------------
+; PS/2 port and its keyboard/mouse class drivers.
+0x1,"ControlSet001\Services\i8042prt","Group","Keyboard Port"
+0x4,"ControlSet001\Services\i8042prt","Start",0x1
+0x4,"ControlSet001\Services\i8042prt","Type",0x1
+0x1,"ControlSet001\Services\kbdclass","Group","Keyboard Class"
+0x2,"ControlSet001\Services\kbdclass","ImagePath","System32\drivers\kbdclass.sys"
+0x4,"ControlSet001\Services\kbdclass","Start",0x1
+0x4,"ControlSet001\Services\kbdclass","Type",0x1
+0x1,"ControlSet001\Services\mouclass","Group","Pointer Class"
+0x2,"ControlSet001\Services\mouclass","ImagePath","System32\drivers\mouclass.sys"
+0x4,"ControlSet001\Services\mouclass","Start",0x1
+0x4,"ControlSet001\Services\mouclass","Type",0x1
+
+; USB HID keyboard/mouse mappers (demand-started; PnP loads them when a USB
+; input device enumerates on the HID bus).
+0x2,"ControlSet001\Services\HidUsb","ImagePath","System32\drivers\hidusb.sys"
+0x4,"ControlSet001\Services\HidUsb","Start",0x3
+0x4,"ControlSet001\Services\HidUsb","Type",0x1
+0x2,"ControlSet001\Services\kbdhid","ImagePath","System32\drivers\kbdhid.sys"
+0x4,"ControlSet001\Services\kbdhid","Start",0x3
+0x4,"ControlSet001\Services\kbdhid","Type",0x1
+0x2,"ControlSet001\Services\mouhid","ImagePath","System32\drivers\mouhid.sys"
+0x4,"ControlSet001\Services\mouhid","Start",0x3
+0x4,"ControlSet001\Services\mouhid","Type",0x1
+
+; Attach the class drivers to their device setup classes (Keyboard, Mouse), so
+; PnP layers kbdclass/mouclass onto whichever port enumerates the device.
+0x7,"ControlSet001\Control\Class\{4D36E96B-E325-11CE-BFC1-08002BE10318}","UpperFilters","kbdclass"
+0x7,"ControlSet001\Control\Class\{4D36E96F-E325-11CE-BFC1-08002BE10318}","UpperFilters","mouclass"
 
 ; ---------------------------------------------------------------------------
 ; Boot configuration.

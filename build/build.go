@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package build is the orchestrator: it wires the pipeline stages — open source,
-// probe identity, read layout, evaluate the base layer, assemble the file tree — and
-// returns a report of what was produced. Registry-hive construction, boot
-// configuration, and ISO mastering are later stages that slot in after tree
-// assembly; at present the pipeline stops with the assembled file tree.
+// probe identity, read layout, evaluate the base layer, assemble the file tree,
+// and build the registry hives — and returns a report of what was produced. Boot
+// configuration and ISO mastering are later stages that slot in after the hives.
 package build
 
 import (
@@ -31,6 +30,8 @@ type Report struct {
 	Written int
 	// Skipped names optional files absent from the source (e.g. cabinet-only drivers).
 	Skipped []string
+	// Hives lists the output-relative paths of the registry hives written.
+	Hives []string
 	// Errors holds non-fatal per-file failures; the build continues past them.
 	Errors []error
 }
@@ -98,6 +99,19 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 	if err != nil {
 		rep.Errors = append(rep.Errors, err)
 	}
+
+	// Build the registry hives from the source's base hive material overlaid with
+	// the registry actions, and place them in the tree's config folder. This is a
+	// pipeline-fatal step: a build with no loadable SYSTEM hive cannot boot. It also
+	// honors cancellation, so a build cancelled just as tree assembly finished does
+	// not run the full hive read/serialize/write and report success.
+	hives, err := buildHives(ctx, backing, l, acts, outDir)
+	if err != nil {
+		return nil, fmt.Errorf("build registry hives: %w", err)
+	}
+	rep.Hives = hives
+	slog.Info("built registry hives", "count", len(hives))
+
 	return rep, nil
 }
 

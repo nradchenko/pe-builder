@@ -22,15 +22,69 @@ copy winlogon.exe dir="" rename="" flags=-
 copy lsass.exe dir="" rename="" flags=-
 copy autochk.exe dir="" rename="" flags=-
 copy cmd.exe dir="" rename="" flags=-
+copy kbdclass.sys dir="" rename="" flags=-
+copy hidclass.sys dir="" rename="" flags=-
+copy hidparse.sys dir="" rename="" flags=-
 copy c_1252.nls dir="" rename="" flags=-
 copy c_437.nls dir="" rename="" flags=-
 copy l_intl.nls dir="" rename="" flags=-
 addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Winlogon" value="Shell" data="cmd.exe"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\MiniNT" value="" data=""
+addreg hive=system type=0x1 subkey="Setup" value="CmdLine" data="cmd.exe /k startnet.cmd"
+addreg hive=system type=0x4 subkey="Setup" value="SetupType" data="0x1"
+addreg hive=system type=0x1 subkey="Setup" value="OsLoaderPath" data="\\"
+addreg hive=system type=0x4 subkey="Setup" value="SystemSetupInProgress" data="0x1"
+addreg hive=system type=0x7 subkey="ControlSet001\\Control\\Session Manager" value="BootExecute" data=""
 addreg hive=system type=0x2 subkey="ControlSet001\\Control\\Session Manager\\Environment" value="ComSpec" data="%SystemRoot%\\system32\\cmd.exe"
+addreg hive=system type=0x2 subkey="ControlSet001\\Control\\Session Manager\\Environment" value="Path" data="%SystemRoot%\\system32;%SystemRoot%"
+addreg hive=system type=0x2 subkey="ControlSet001\\Control\\Session Manager\\Environment" value="windir" data="%SystemRoot%"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\Environment" value="OS" data="Windows_NT"
+addreg hive=system type=0x2 subkey="ControlSet001\\Control\\Session Manager\\SubSystems" value="Debug" data=""
+addreg hive=system type=0x2 subkey="ControlSet001\\Control\\Session Manager\\SubSystems" value="kmode" data="%SystemRoot%\\System32\\win32k.sys"
+addreg hive=system type=0x7 subkey="ControlSet001\\Control\\Session Manager\\SubSystems" value="Required" data="Debug\x00Windows"
+addreg hive=system type=0x2 subkey="ControlSet001\\Control\\Session Manager\\SubSystems" value="Windows" data="%SystemRoot%\\system32\\csrss.exe ObjectDirectory=\\Windows SharedSection=1024,3072,512 Windows=On SubSystemType=Windows ServerDll=basesrv,1 ServerDll=winsrv:UserServerDllInitialization,3 ServerDll=winsrv:ConServerDllInitialization,2 ProfileControl=Off MaxRequestThreads=16"
+addreg hive=system type=0x2 subkey="ControlSet001\\Control\\Session Manager\\KnownDLLs" value="DllDirectory" data="%SystemRoot%\\system32"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\KnownDLLs" value="advapi32" data="advapi32.dll"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\KnownDLLs" value="gdi32" data="gdi32.dll"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\KnownDLLs" value="kernel32" data="kernel32.dll"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\KnownDLLs" value="rpcrt4" data="rpcrt4.dll"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\KnownDLLs" value="user32" data="user32.dll"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\ProductOptions" value="ProductType" data="WinNT"
+addreg hive=system type=0x7 subkey="ControlSet001\\Control\\ProductOptions" value="ProductSuite" data=""
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\VgaSave" value="Group" data="Video Save"
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\VgaSave" value="ImagePath" data="\\SystemRoot\\System32\\drivers\\vga.sys"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\VgaSave" value="Start" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\VgaSave" value="Type" data="0x1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\VgaSave\\Video" value="Service" data="VgaSave"
+addreg hive=system type=0x7 subkey="ControlSet001\\Control\\Video\\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\\0000" value="InstalledDisplayDrivers" data="vga"
+addreg hive=system type=0x4 subkey="ControlSet001\\Control\\Video\\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\\0000" value="VgaCompatible" data="0x1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Video\\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\\Video" value="Service" data="VgaSave"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\i8042prt" value="Group" data="Keyboard Port"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\i8042prt" value="Start" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\i8042prt" value="Type" data="0x1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\kbdclass" value="Group" data="Keyboard Class"
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\kbdclass" value="ImagePath" data="System32\\drivers\\kbdclass.sys"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\kbdclass" value="Start" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\kbdclass" value="Type" data="0x1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\mouclass" value="Group" data="Pointer Class"
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\mouclass" value="ImagePath" data="System32\\drivers\\mouclass.sys"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\mouclass" value="Start" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\mouclass" value="Type" data="0x1"
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\HidUsb" value="ImagePath" data="System32\\drivers\\hidusb.sys"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\HidUsb" value="Start" data="0x3"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\HidUsb" value="Type" data="0x1"
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\kbdhid" value="ImagePath" data="System32\\drivers\\kbdhid.sys"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\kbdhid" value="Start" data="0x3"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\kbdhid" value="Type" data="0x1"
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\mouhid" value="ImagePath" data="System32\\drivers\\mouhid.sys"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\mouhid" value="Start" data="0x3"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\mouhid" value="Type" data="0x1"
+addreg hive=system type=0x7 subkey="ControlSet001\\Control\\Class\\{4D36E96B-E325-11CE-BFC1-08002BE10318}" value="UpperFilters" data="kbdclass"
+addreg hive=system type=0x7 subkey="ControlSet001\\Control\\Class\\{4D36E96F-E325-11CE-BFC1-08002BE10318}" value="UpperFilters" data="mouclass"
 setvalue file="txtsetup.sif" section="SetupData" key="osloadoptions" data="\"/fastdetect /minint\""
 setvalue file="txtsetup.sif" section="SetupData" key="loaderprompt" data="\"Starting pebuild...\""
 copy hal.dll dir="" rename="" flags=optional
 copy halacpi.dll dir="" rename="" flags=optional
+copy atapi.sys dir="" rename="" flags=optional
 copy ntfs.sys dir="" rename="" flags=optional
 copy fastfat.sys dir="" rename="" flags=optional
-copy atapi.sys dir="" rename="" flags=optional

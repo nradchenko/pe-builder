@@ -16,6 +16,7 @@ package layout
 import (
 	"fmt"
 	"io/fs"
+	"path"
 	"strings"
 
 	"github.com/nradchenko/pe-builder/inf"
@@ -25,15 +26,24 @@ import (
 // loadClasses are the txtsetup.sif driver *.Load section base names, in the order a
 // minimal NT boot consults them. Each section maps a driver key to the driver's
 // filename; BootDrivers unions their right-hand-side filenames.
+//
+// The set spans every driver class the setup loader loads, not just the storage
+// controllers: the CD-ROM class and CD filesystem (ScsiClass, CdRomDrivers) are
+// what let the booted kernel read a boot CD, so they belong here alongside the
+// disk/bus/HAL classes.
 var loadClasses = []string{
 	"Hal",
-	"DiskDrivers",
-	"FileSystems",
-	"SCSI",
 	"BootBusExtenders",
 	"BusExtenders",
+	"SCSI",
+	"DiskDrivers",
+	"ScsiClass",
+	"CdRomDrivers",
+	"FloppyDrivers",
+	"FileSystems",
 	"InputDevicesSupport",
 	"Keyboard",
+	"MouseDrivers",
 	"Display",
 }
 
@@ -214,6 +224,26 @@ func (l *Layout) BootDrivers() []string {
 		}
 	}
 	return out
+}
+
+// ReadSourceFile resolves a source file under the system root by name, trying its
+// loose (uncompressed) name first and its single-file *.??_ archive name second.
+// It reports the raw bytes, whether they are still the compressed archive form
+// (which the caller decompresses, unless it deliberately wants the packed bytes),
+// and whether the file was found. It is the shared loose→packed resolution both
+// the tree assembler and the hive stage read through, so the two never diverge on
+// where a source file lives or how its compressed name is formed. Cabinet-only
+// files (many drivers) are a further fallback the tree assembler layers on top.
+func ReadSourceFile(b source.Backing, name string) (data []byte, packed, found bool) {
+	loose := path.Join(source.SystemRoot, name)
+	if d, err := fs.ReadFile(b, loose); err == nil {
+		return d, false, true
+	}
+	archive := path.Join(source.SystemRoot, CompressedName(name))
+	if d, err := fs.ReadFile(b, archive); err == nil {
+		return d, true, true
+	}
+	return nil, false, false
 }
 
 // CompressedName returns the source media's compressed name for a canonical

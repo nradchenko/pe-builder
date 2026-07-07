@@ -94,6 +94,10 @@ type Action struct {
 	RegType   int    // REG_* type for AddReg; 0 for DelReg
 	Data      string // textual value data (SZ/EXPAND_SZ/DWORD/MULTI_SZ)
 	DataBytes []byte // raw value data for REG_BINARY
+	// HasValue distinguishes an AddReg that writes a value (even an empty one)
+	// from a key-only AddReg line that has no value-name field at all. Without it
+	// an empty default value would be indistinguishable from "create the key only".
+	HasValue bool
 
 	// Text/INI patch fields (SetValue / AddLine / DelLine / Append).
 	TargetFile    string // file to patch

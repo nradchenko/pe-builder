@@ -1,5 +1,5 @@
 identity: winxp build 2600 (i386)
-written: 99
+written: 110
 skipped: 
 
 i386/system32/advapi32.dll 687616
@@ -9,6 +9,9 @@ i386/system32/bootvid.dll 12288
 i386/system32/c_1252.nls 66082
 i386/system32/c_437.nls 66594
 i386/system32/cmd.exe 396288
+i386/system32/config/DEFAULT 98304
+i386/system32/config/SOFTWARE 323584
+i386/system32/config/SYSTEM 86016
 i386/system32/csrsrv.dll 32256
 i386/system32/csrss.exe 6144
 i386/system32/drivers/abp480n5.sys 23552
@@ -26,17 +29,23 @@ i386/system32/drivers/asc3550.sys 14848
 i386/system32/drivers/atapi.sys 96512
 i386/system32/drivers/cbidf2k.sys 13952
 i386/system32/drivers/cd20xrnt.sys 7680
+i386/system32/drivers/cdfs.sys 63744
+i386/system32/drivers/cdrom.sys 62976
 i386/system32/drivers/cmdide.sys 6656
 i386/system32/drivers/cpqarray.sys 14976
 i386/system32/drivers/dac2w2k.sys 179584
 i386/system32/drivers/dac960nt.sys 14720
+i386/system32/drivers/disk.sys 36352
 i386/system32/drivers/dmboot.sys 799872
 i386/system32/drivers/dmio.sys 153600
 i386/system32/drivers/dmload.sys 5888
 i386/system32/drivers/dpti2o.sys 20192
 i386/system32/drivers/fastfat.sys 143744
 i386/system32/drivers/fdc.sys 27392
+i386/system32/drivers/flpydisk.sys 20480
 i386/system32/drivers/ftdisk.sys 125440
+i386/system32/drivers/hidclass.sys 36864
+i386/system32/drivers/hidparse.sys 24960
 i386/system32/drivers/hidusb.sys 10368
 i386/system32/drivers/hpn.sys 25952
 i386/system32/drivers/i2omp.sys 18560
@@ -44,9 +53,12 @@ i386/system32/drivers/i8042prt.sys 53120
 i386/system32/drivers/ini910u.sys 16000
 i386/system32/drivers/intelide.sys 5504
 i386/system32/drivers/isapnp.sys 37504
+i386/system32/drivers/kbdclass.sys 24832
 i386/system32/drivers/kbdhid.sys 14720
 i386/system32/drivers/ksecdd.sys 92288
 i386/system32/drivers/lbrtfdc.sys 34688
+i386/system32/drivers/mouclass.sys 23296
+i386/system32/drivers/mouhid.sys 12160
 i386/system32/drivers/mountmgr.sys 42368
 i386/system32/drivers/mraid35x.sys 17280
 i386/system32/drivers/ntfs.sys 574976
@@ -61,9 +73,11 @@ i386/system32/drivers/ql10wnt.sys 33152
 i386/system32/drivers/ql12160.sys 45312
 i386/system32/drivers/ql1240.sys 40448
 i386/system32/drivers/ql1280.sys 49024
+i386/system32/drivers/ramdisk.sys 20736
 i386/system32/drivers/sbp2port.sys 43904
 i386/system32/drivers/serenum.sys 15744
 i386/system32/drivers/serial.sys 65024
+i386/system32/drivers/sfloppy.sys 11392
 i386/system32/drivers/sparrow.sys 19072
 i386/system32/drivers/sym_hi.sys 28384
 i386/system32/drivers/sym_u3.sys 30688
