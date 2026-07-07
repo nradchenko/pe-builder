@@ -53,18 +53,28 @@ type source struct {
 
 func (s *source) Backing() Backing { return s.backing }
 
-// OpenImageFile opens the raw bytes of an ISO source, for the on-disc structures
-// the fs.FS abstraction does not expose — the El Torito boot record and catalog the
-// boot image lives in. Ownership of "is this an ISO?" stays in this package: it
-// errors on a directory source, which has no boot image. The caller closes the
-// returned file.
-func OpenImageFile(path string) (*os.File, error) {
+// RequireImageSource reports whether the source at path can supply a boot image:
+// it must be an ISO file, not a directory. It lets a bootable build reject a
+// directory source up front, before assembling a whole tree. Ownership of "is this
+// an ISO?" stays in this package.
+func RequireImageSource(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
-		return nil, fmt.Errorf("open source image %q: %w", path, err)
+		return fmt.Errorf("open source image %q: %w", path, err)
 	}
 	if info.IsDir() {
-		return nil, fmt.Errorf("bootable output requires an ISO source, but %q is a directory", path)
+		return fmt.Errorf("%q is a directory", path)
+	}
+	return nil
+}
+
+// OpenImageFile opens the raw bytes of an ISO source, for the on-disc structures
+// the fs.FS abstraction does not expose — the El Torito boot record and catalog the
+// boot image lives in. It errors on a directory source, which has no boot image.
+// The caller closes the returned file.
+func OpenImageFile(path string) (*os.File, error) {
+	if err := RequireImageSource(path); err != nil {
+		return nil, err
 	}
 	return os.Open(path)
 }

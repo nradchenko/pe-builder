@@ -15,6 +15,7 @@ import (
 	"testing/fstest"
 
 	"github.com/nradchenko/pe-builder/base"
+	"github.com/nradchenko/pe-builder/boot"
 	"github.com/nradchenko/pe-builder/hive"
 	"github.com/nradchenko/pe-builder/internal/golden"
 	"github.com/nradchenko/pe-builder/layout"
@@ -133,6 +134,121 @@ func TestBuildRealSource(t *testing.T) {
 	summary := fmt.Sprintf("identity: %s\nwritten: %d\nskipped: %s\n\n%s",
 		rep.Identity, rep.Written, strings.Join(rep.Skipped, ","), walkTreeWithSizes(t, out))
 	golden.Assert(t, "real-tree", summary)
+}
+
+// TestBuildISO is the end-to-end media check: build the real XP SP3 source with the
+// iso target and confirm the produced image is bootable (El Torito boot record) and
+// carries the boot chain — the loader at \I386, txtsetup.sif switched to /minint, and
+// the SYSTEM hive — all readable back through the ISO.
+func TestBuildISO(t *testing.T) {
+	if _, err := os.Stat(cacheISO); err != nil {
+		t.Skip("real source ISO not present under .cache; skipping")
+	}
+	out := filepath.Join(t.TempDir(), "rescue.iso")
+	m := &manifest.Manifest{
+		Source: manifest.Source{Path: cacheISO, Type: "auto"},
+		Output: manifest.Output{Target: manifest.TargetISO, Path: out, VolumeLabel: "PEBUILDER"},
+		Build:  manifest.Build{WorkDir: filepath.Join(t.TempDir(), "tree")},
+	}
+
+	rep, err := Build(context.Background(), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.ISOPath != out || rep.ISOSize == 0 {
+		t.Fatalf("report ISO = %q (%d bytes)", rep.ISOPath, rep.ISOSize)
+	}
+
+	// The image has a readable El Torito no-emulation boot record.
+	f, err := os.Open(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := boot.ExtractBootImage(f); err != nil {
+		t.Errorf("boot record not readable: %v", err)
+	}
+
+	// Read the boot chain back through the ISO filesystem.
+	src, err := source.Open(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := src.Backing()
+	if _, err := fs.ReadFile(b, "i386/setupldr.bin"); err != nil {
+		t.Errorf("\\I386\\SETUPLDR.BIN not in ISO: %v", err)
+	}
+	if _, err := fs.ReadFile(b, "i386/system32/config/system"); err != nil {
+		t.Errorf("SYSTEM hive not in ISO: %v", err)
+	}
+	txt, err := fs.ReadFile(b, "i386/txtsetup.sif")
+	if err != nil {
+		t.Fatalf("txtsetup.sif not in ISO: %v", err)
+	}
+	if !strings.Contains(string(txt), "/minint") {
+		t.Error("txtsetup.sif in ISO does not carry the /minint switch")
+	}
+}
+
+// TestBuildNone checks that the none target produces a complete PE tree — boot
+// configuration applied (txtsetup.sif /minint, startnet.cmd) — but no media.
+func TestBuildNone(t *testing.T) {
+	if _, err := os.Stat(cacheISO); err != nil {
+		t.Skip("real source ISO not present under .cache; skipping")
+	}
+	out := filepath.Join(t.TempDir(), "tree")
+	m := &manifest.Manifest{
+		Source: manifest.Source{Path: cacheISO, Type: "auto"},
+		Output: manifest.Output{Target: manifest.TargetNone},
+		Build:  manifest.Build{WorkDir: out},
+	}
+	rep, err := Build(context.Background(), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.ISOPath != "" {
+		t.Errorf("none target produced media: %q", rep.ISOPath)
+	}
+	// The tree survives and carries its boot configuration.
+	txt, err := os.ReadFile(filepath.Join(out, "i386", "txtsetup.sif"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(txt), "/minint") {
+		t.Error("none tree txtsetup.sif not switched to /minint")
+	}
+	if _, err := os.Stat(filepath.Join(out, "i386", "system32", "startnet.cmd")); err != nil {
+		t.Errorf("none tree missing startnet.cmd: %v", err)
+	}
+}
+
+// TestBuildISOKeepWork checks that with keep_work the ISO is mastered from a clone,
+// leaving the work tree intact.
+func TestBuildISOKeepWork(t *testing.T) {
+	if _, err := os.Stat(cacheISO); err != nil {
+		t.Skip("real source ISO not present under .cache; skipping")
+	}
+	tree := filepath.Join(t.TempDir(), "tree")
+	out := filepath.Join(t.TempDir(), "rescue.iso")
+	m := &manifest.Manifest{
+		Source: manifest.Source{Path: cacheISO, Type: "auto"},
+		Output: manifest.Output{Target: manifest.TargetISO, Path: out, VolumeLabel: "PEBUILDER"},
+		Build:  manifest.Build{WorkDir: tree, KeepWork: true},
+	}
+	rep, err := Build(context.Background(), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.ISOPath == "" || rep.OutDir != tree {
+		t.Fatalf("keep_work: ISOPath=%q OutDir=%q (want tree kept)", rep.ISOPath, rep.OutDir)
+	}
+	// Both the image and the (non-consumed) tree exist.
+	if _, err := os.Stat(out); err != nil {
+		t.Errorf("iso not produced: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tree, "i386", "setupldr.bin")); err != nil {
+		t.Errorf("work tree not kept: %v", err)
+	}
 }
 
 func TestBuildBadSource(t *testing.T) {

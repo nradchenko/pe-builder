@@ -36,6 +36,7 @@ i386/system32/secur32.dll
 i386/system32/services.exe
 i386/system32/sfcfiles.dll
 i386/system32/smss.exe
+i386/system32/startnet.cmd
 i386/system32/user32.dll
 i386/system32/userenv.dll
 i386/system32/win32k.sys

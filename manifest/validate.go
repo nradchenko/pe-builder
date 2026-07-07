@@ -21,11 +21,13 @@ func Validate(m *Manifest) error {
 		errs = append(errs, fmt.Errorf("source.type %q is invalid (want one of %v)", m.Source.Type, SourceTypes))
 	}
 
-	if m.Output.Path == "" {
-		errs = append(errs, errors.New("output.path is required"))
-	}
 	if !slices.Contains(Targets, m.Output.Target) {
 		errs = append(errs, fmt.Errorf("output.target %q is invalid (want one of %v)", m.Output.Target, Targets))
+	}
+	// A path is required only for a target that writes a file; the "none" target
+	// (tree/hives only) needs none.
+	if m.Output.Path == "" && m.Output.Target == TargetISO {
+		errs = append(errs, errors.New("output.path is required for the iso target"))
 	}
 	// The ISO9660 volume identifier is a fixed 32-byte field, so the limit is on
 	// bytes, not runes — a multibyte label within 32 runes could still overrun 32

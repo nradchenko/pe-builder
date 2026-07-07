@@ -113,9 +113,10 @@ i386/system32/secur32.dll 56320
 i386/system32/services.exe 109056
 i386/system32/sfcfiles.dll 1571840
 i386/system32/smss.exe 50688
+i386/system32/startnet.cmd 308
 i386/system32/user32.dll 579072
 i386/system32/userenv.dll 729600
 i386/system32/win32k.sys 1845760
 i386/system32/winlogon.exe 509440
 i386/system32/winsrv.dll 293376
-i386/txtsetup.sif 475935
+i386/txtsetup.sif 475961

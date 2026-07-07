@@ -18,10 +18,18 @@ const (
 	maxVolumeLabelLen = 32
 )
 
+// Output target names.
+const (
+	// TargetISO masters a bootable ISO at output.path.
+	TargetISO = "iso"
+	// TargetNone stops after the file tree and hives, producing no media.
+	TargetNone = "none"
+)
+
 // SourceTypes and Targets enumerate the values accepted in v0.
 var (
 	SourceTypes = []string{"auto", "winxp", "win2003"}
-	Targets     = []string{"iso"}
+	Targets     = []string{TargetISO, TargetNone}
 )
 
 // Manifest is a fully decoded, defaulted build manifest.

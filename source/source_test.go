@@ -28,6 +28,19 @@ func TestOpenMissing(t *testing.T) {
 	}
 }
 
+func TestRequireImageSource(t *testing.T) {
+	if err := RequireImageSource(t.TempDir()); err == nil {
+		t.Error("RequireImageSource accepted a directory")
+	}
+	p := filepath.Join(t.TempDir(), "img.iso")
+	if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := RequireImageSource(p); err != nil {
+		t.Errorf("RequireImageSource rejected a file: %v", err)
+	}
+}
+
 func TestOpenImageFile(t *testing.T) {
 	// A directory source has no boot image and must be rejected.
 	if _, err := OpenImageFile(t.TempDir()); err == nil {
