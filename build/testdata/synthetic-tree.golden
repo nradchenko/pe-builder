@@ -1,8 +1,11 @@
 identity: winxp build 2600 (i386)
-written: 32
+written: 36
 skipped: [cabonly.sys]
 hives: [i386/system32/config/SYSTEM i386/system32/config/SOFTWARE i386/system32/config/DEFAULT]
 
+i386/bootfix.bin
+i386/ntdetect.com
+i386/setupldr.bin
 i386/system32/advapi32.dll
 i386/system32/atapi.sys
 i386/system32/autochk.exe
@@ -38,3 +41,4 @@ i386/system32/userenv.dll
 i386/system32/win32k.sys
 i386/system32/winlogon.exe
 i386/system32/winsrv.dll
+i386/txtsetup.sif

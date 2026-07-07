@@ -1,3 +1,7 @@
+copy setupldr.bin dir="1" rename="" flags=-
+copy ntdetect.com dir="1" rename="" flags=-
+copy txtsetup.sif dir="1" rename="" flags=-
+copy bootfix.bin dir="1" rename="" flags=optional
 copy ntoskrnl.exe dir="" rename="" flags=-
 copy ntdll.dll dir="" rename="" flags=-
 copy bootvid.dll dir="" rename="" flags=-

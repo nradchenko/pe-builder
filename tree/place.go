@@ -103,10 +103,16 @@ func outputPath(a action.Action, l *layout.Layout, outName string) string {
 	return path.Join(systemRoot, rel, outName)
 }
 
+// rootDirID is the [WinntDirectories] directory ID for the system root (mapped to
+// "\" universally in a source's txtsetup.sif), where the boot files are pinned.
+const rootDirID = "1"
+
 // dirPath resolves a directory ID to its system-root-relative path. An explicit
 // path (from a Mkdir action's [WinntDirectories] entry) is used directly; otherwise
-// the ID is looked up in the layout. An unknown ID falls back to system32 so a
-// misresolved file is still placed somewhere predictable rather than at the root.
+// the ID is looked up in the layout. When the ID is the well-known system-root ID,
+// it maps to the root even if a source omits it from its table — so a file pinned
+// to the root (the boot loader) is not silently relocated. Any other unknown ID
+// falls back to system32, so a misresolved file still lands somewhere predictable.
 func dirPath(dirID, explicit string, l *layout.Layout) string {
 	if explicit != "" {
 		// A [WinntDirectories] path uses backslashes; normalize to the forward-slash
@@ -116,6 +122,9 @@ func dirPath(dirID, explicit string, l *layout.Layout) string {
 	}
 	if p, ok := l.DirPath(dirID); ok {
 		return p
+	}
+	if dirID == rootDirID {
+		return "" // the system root
 	}
 	return "system32"
 }

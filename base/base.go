@@ -26,6 +26,14 @@ import (
 //go:embed base.inf
 var baseINF []byte
 
+//go:embed startnet.cmd
+var startnetCmd []byte
+
+// StartnetCmd returns the built-in PE startup script placed at system32\startnet.cmd.
+// winlogon runs it via SYSTEM\Setup\CmdLine once the environment reaches a shell;
+// it is the environment's own file, not a copy from the Windows source.
+func StartnetCmd() []byte { return startnetCmd }
+
 // Actions returns the base layer's action list for a probed source: the embedded
 // base.inf actions (core Win32 + shell files, registry seed, boot edit) followed by
 // the boot-driver copy actions derived from the source's *.Load sections. File

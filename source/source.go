@@ -53,6 +53,22 @@ type source struct {
 
 func (s *source) Backing() Backing { return s.backing }
 
+// OpenImageFile opens the raw bytes of an ISO source, for the on-disc structures
+// the fs.FS abstraction does not expose — the El Torito boot record and catalog the
+// boot image lives in. Ownership of "is this an ISO?" stays in this package: it
+// errors on a directory source, which has no boot image. The caller closes the
+// returned file.
+func OpenImageFile(path string) (*os.File, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("open source image %q: %w", path, err)
+	}
+	if info.IsDir() {
+		return nil, fmt.Errorf("bootable output requires an ISO source, but %q is a directory", path)
+	}
+	return os.Open(path)
+}
+
 // Open returns a Source backed by the directory or .iso at path. A directory path
 // is served from the filesystem; a regular file is opened as an ISO image.
 func Open(path string) (Source, error) {

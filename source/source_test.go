@@ -4,6 +4,8 @@
 package source
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -23,5 +25,26 @@ func TestOpenMissing(t *testing.T) {
 	}
 	if src != nil {
 		t.Errorf("Open returned a non-nil source on error: %v", src)
+	}
+}
+
+func TestOpenImageFile(t *testing.T) {
+	// A directory source has no boot image and must be rejected.
+	if _, err := OpenImageFile(t.TempDir()); err == nil {
+		t.Error("OpenImageFile on a directory returned no error")
+	}
+	// A regular file opens.
+	p := filepath.Join(t.TempDir(), "img.iso")
+	if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := OpenImageFile(p)
+	if err != nil {
+		t.Fatalf("OpenImageFile on a file: %v", err)
+	}
+	f.Close()
+	// A nonexistent path errors.
+	if _, err := OpenImageFile(filepath.Join(t.TempDir(), "nope")); err == nil {
+		t.Error("OpenImageFile on a missing path returned no error")
 	}
 }

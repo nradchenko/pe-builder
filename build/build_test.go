@@ -83,7 +83,10 @@ func TestAssemblePipeline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	present := map[string]bool{"cabonly.sys": false}
+	// cabonly.sys stays absent (exercises the optional-skip path); txtsetup.sif keeps
+	// its real metadata content rather than being clobbered with a stub, since the
+	// hive/layout stages re-read it.
+	present := map[string]bool{"cabonly.sys": false, "txtsetup.sif": true}
 	for _, a := range acts {
 		if _, decided := present[a.Src]; decided {
 			continue

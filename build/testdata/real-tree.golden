@@ -1,7 +1,10 @@
 identity: winxp build 2600 (i386)
-written: 110
+written: 114
 skipped: 
 
+i386/bootfix.bin 1024
+i386/ntdetect.com 47564
+i386/setupldr.bin 261392
 i386/system32/advapi32.dll 687616
 i386/system32/autochk.exe 588800
 i386/system32/basesrv.dll 52736
@@ -115,3 +118,4 @@ i386/system32/userenv.dll 729600
 i386/system32/win32k.sys 1845760
 i386/system32/winlogon.exe 509440
 i386/system32/winsrv.dll 293376
+i386/txtsetup.sif 475935
