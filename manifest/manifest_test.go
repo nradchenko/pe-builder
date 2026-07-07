@@ -156,6 +156,8 @@ func TestValidate(t *testing.T) {
 		{"missing output path", func(m *Manifest) { m.Output.Path = "" }, "output.path is required"},
 		{"bad target", func(m *Manifest) { m.Output.Target = "usb" }, "output.target"},
 		{"label too long", func(m *Manifest) { m.Output.VolumeLabel = strings.Repeat("A", 33) }, "volume_label"},
+		// 20 two-byte runes = 40 bytes: within 32 runes but over the 32-byte field.
+		{"label too many bytes", func(m *Manifest) { m.Output.VolumeLabel = strings.Repeat("é", 20) }, "volume_label"},
 		{"duplicate plugins", func(m *Manifest) {
 			m.Plugins = []Plugin{{Name: "dup"}, {Name: "dup"}}
 		}, "duplicate plugin"},

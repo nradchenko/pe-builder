@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"unicode/utf8"
 )
 
 // Validate checks a decoded manifest for semantic errors, returning all problems
@@ -28,8 +27,11 @@ func Validate(m *Manifest) error {
 	if !slices.Contains(Targets, m.Output.Target) {
 		errs = append(errs, fmt.Errorf("output.target %q is invalid (want one of %v)", m.Output.Target, Targets))
 	}
-	if n := utf8.RuneCountInString(m.Output.VolumeLabel); n > maxVolumeLabelLen {
-		errs = append(errs, fmt.Errorf("output.volume_label is %d characters (max %d)", n, maxVolumeLabelLen))
+	// The ISO9660 volume identifier is a fixed 32-byte field, so the limit is on
+	// bytes, not runes — a multibyte label within 32 runes could still overrun 32
+	// bytes and be truncated mid-character.
+	if n := len(m.Output.VolumeLabel); n > maxVolumeLabelLen {
+		errs = append(errs, fmt.Errorf("output.volume_label is %d bytes (max %d)", n, maxVolumeLabelLen))
 	}
 
 	seen := make(map[string]struct{}, len(m.Plugins))

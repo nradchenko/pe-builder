@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package target defines the pluggable output backend interface and a registry of
-// available backends. The ISO backend is the first concrete target and arrives
-// later; this package currently defines the interface and registry.
+// available backends, and provides the ISO backend that masters an assembled tree
+// into an El Torito no-emulation bootable image (see iso.go).
 package target
 
 import (
@@ -24,7 +24,10 @@ type Options struct {
 type Target interface {
 	// Name is the target's stable identifier, e.g. "iso".
 	Name() string
-	// Emit writes the artifact for the tree rooted at treeDir.
+	// Emit writes the artifact for the tree rooted at treeDir. A target may consume
+	// treeDir (the ISO master hands it to go-diskfs, which removes it once mastered),
+	// so the caller must not rely on the tree surviving the call and must copy it
+	// first if it needs to keep it.
 	Emit(ctx context.Context, treeDir string, opts Options) error
 }
 
