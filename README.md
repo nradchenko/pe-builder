@@ -38,6 +38,24 @@ taken from the source's own locale. The plugin subsystem is not wired up yet, so
 the environment ships no optional tools and, in particular, **no shutdown / power-off
 command**; those arrive with plugin support.
 
+## Quick start
+
+You need Go and a Windows XP SP3 installation source (an `.iso` or an extracted
+directory). Point the example manifest at your source and build:
+
+```sh
+go build -o pebuild ./cmd/pebuild
+
+# edit source.path in examples/minimal.hcl to your Windows media, then:
+./pebuild build examples/minimal.hcl
+
+# boot the result:
+qemu-system-i386 -M pc -m 512 -cdrom out/pe.iso -boot d
+```
+
+The ISO boots to an interactive `cmd.exe`. This is early, fast-moving work — details
+change commit to commit.
+
 ## Documentation
 
 - [`docs/reference/`](docs/reference/) — a detailed, primary-source reference for
