@@ -4,6 +4,7 @@
 package target
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	diskfs "github.com/diskfs/go-diskfs"
@@ -118,6 +120,15 @@ func (iso) Emit(ctx context.Context, treeDir string, opts Options) error {
 		return fmt.Errorf("iso: finalize: %w", err)
 	}
 
+	// go-diskfs's directory records need two fixups before the Microsoft boot chain can
+	// read them: the ";1" version suffixes stripped (CDBOOT matches \I386\SETUPLDR.BIN
+	// without a version), and the records within each directory re-sorted into ISO9660
+	// §9.3 order (SETUPLDR's real-mode reader requires it to find NTDETECT and the rest
+	// of \I386). A single walk of the directory tree does both.
+	if err := normalizeDirectories(opts.OutputPath); err != nil {
+		return fmt.Errorf("iso: normalize directory records: %w", err)
+	}
+
 	// The backing grew past initialSize as Finalize wrote; trim it to the real image
 	// length so the artifact isn't padded with trailing zero sectors. A trim failure
 	// is not fatal — the (merely padded) ISO is already written and bootable — so it
@@ -126,6 +137,200 @@ func (iso) Emit(ctx context.Context, treeDir string, opts Options) error {
 		slog.Warn("could not trim ISO padding; the image is valid but larger than necessary", "err", err)
 	}
 	return nil
+}
+
+// dirRecord field offsets within an ISO9660 directory record.
+const (
+	drExtentLBA = 2  // little-endian extent location (blocks)
+	drDataLen   = 10 // little-endian data length (bytes)
+	drFlags     = 25 // file flags; bit 1 marks a directory
+	drNameLen   = 32 // length of the file identifier
+	drName      = 33 // the file identifier itself
+	drFlagDir   = 0x02
+)
+
+// normalizeDirectories rewrites the ISO's directory tree so the Microsoft boot chain
+// can read it, in a single BFS walk that does two things to every directory extent:
+//
+//   - Strips the ISO9660 ";N" version suffix from each file name (shortening the
+//     record's name-length field to end at the ";", leaving the record length and the
+//     now-unused suffix bytes in place). CDBOOT matches \I386\SETUPLDR.BIN without a
+//     version and fails to find it otherwise. go-diskfs also renders an extensionless
+//     name as "NAME." (a bare trailing dot before ";N"); that dot is dropped too, so
+//     the on-disc name is exactly "NAME".
+//   - Re-sorts the records into ISO9660 §9.3 order (file identifiers ascending, with
+//     "." and ".." kept first). go-diskfs emits them in an arbitrary order, but XP's
+//     SETUPLDR real-mode reader requires §9.3 order to locate a file, so an unsorted
+//     \I386 leaves it unable to find NTDETECT.COM and the boot loops. (CDBOOT
+//     linear-scans, so it still finds SETUPLDR.BIN — which is why the failure only
+//     surfaces after the boot sector hands off.) The sort runs after the version strip
+//     so records sort by their final on-disc names.
+//
+// Each directory's data length is rewritten to its block-aligned size — the block
+// count go-diskfs already allocated for the extent — so no extent moves, the PVD
+// volume space size is unchanged, and trim still applies. That size is stored in four
+// places (a directory's own "." record, each child's ".." record, the child's record
+// in its parent, and the PVD root record); each is the block-aligned form of a length
+// already present in a record, so the walk fixes them locally without a cross-extent
+// size table.
+func normalizeDirectories(path string) error {
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	pvd, rootLBA, rootSize, err := readPVD(f)
+	if err != nil {
+		return err
+	}
+
+	visited := map[uint32]bool{}
+	queue := [][2]uint32{{rootLBA, rootSize}}
+	for len(queue) > 0 {
+		lba, size := queue[0][0], queue[0][1]
+		queue = queue[1:]
+		if visited[lba] {
+			continue
+		}
+		visited[lba] = true
+
+		buf, err := readExtent(f, lba, size)
+		if err != nil {
+			return err
+		}
+		recs := dirRecords(buf, size)
+
+		// First fix every record's name and child sizes, then sort — so the sort keys
+		// off the stripped names.
+		for _, rec := range recs {
+			nameLen := int(rec[drNameLen])
+			name := rec[drName : drName+nameLen]
+			isDot := nameLen == 1 && (name[0] == 0x00 || name[0] == 0x01)
+			if rec[drFlags]&drFlagDir != 0 {
+				if !isDot {
+					// A child directory: descend, and set its record's size to the
+					// child extent's block-aligned length.
+					childLBA := binary.LittleEndian.Uint32(rec[drExtentLBA:])
+					childSize := binary.LittleEndian.Uint32(rec[drDataLen:])
+					queue = append(queue, [2]uint32{childLBA, childSize})
+					setDataLen(rec, align(childSize))
+				}
+			} else if i := bytes.IndexByte(name, ';'); i >= 0 {
+				if i > 0 && name[i-1] == '.' {
+					i--
+				}
+				rec[drNameLen] = byte(i)
+			}
+		}
+		// recs[0]="." (this directory) and recs[1]=".." (its parent) carry the self and
+		// parent sizes; block-align both. Every other record keeps its position relative
+		// to these two, which stay first.
+		setDataLen(recs[0], align(size))
+		setDataLen(recs[1], align(binary.LittleEndian.Uint32(recs[1][drDataLen:])))
+
+		// §9.3: order the remaining records by file-identifier bytes ascending. Plain
+		// byte comparison matches ECMA-119's space-padded compare here — the pad 0x20
+		// sorts below every d-character, ".", and ";".
+		tail := recs[2:]
+		sort.Slice(tail, func(i, j int) bool {
+			ni, nj := int(tail[i][drNameLen]), int(tail[j][drNameLen])
+			return bytes.Compare(tail[i][drName:drName+ni], tail[j][drName:drName+nj]) < 0
+		})
+
+		packed, err := packRecords(recs, int(align(size)))
+		if err != nil {
+			return err
+		}
+		if _, err := f.WriteAt(packed, int64(lba)*isoBlockSize); err != nil {
+			return err
+		}
+	}
+
+	// The PVD's own copy of the root directory record carries the root extent's size.
+	setDataLen(pvd[156:], align(rootSize))
+	if _, err := f.WriteAt(pvd, pvdSector*isoBlockSize); err != nil {
+		return err
+	}
+	return nil
+}
+
+// align rounds a directory size up to a whole number of logical blocks.
+func align(size uint32) uint32 {
+	return ((size + isoBlockSize - 1) / isoBlockSize) * isoBlockSize
+}
+
+// readPVD reads and validates the primary volume descriptor, returning it along with
+// the root directory record's extent location and size (the root record sits at
+// offset 156 of the PVD).
+func readPVD(f *os.File) (pvd []byte, rootLBA, rootSize uint32, err error) {
+	pvd = make([]byte, isoBlockSize)
+	if _, err = f.ReadAt(pvd, pvdSector*isoBlockSize); err != nil {
+		return nil, 0, 0, err
+	}
+	if pvd[0] != 0x01 || string(pvd[1:6]) != "CD001" {
+		return nil, 0, 0, fmt.Errorf("no primary volume descriptor at sector %d", pvdSector)
+	}
+	rootLBA = binary.LittleEndian.Uint32(pvd[156+drExtentLBA:])
+	rootSize = binary.LittleEndian.Uint32(pvd[156+drDataLen:])
+	return pvd, rootLBA, rootSize, nil
+}
+
+// readExtent reads a directory extent — size rounded up to whole logical blocks —
+// starting at the given block address.
+func readExtent(f *os.File, lba, size uint32) ([]byte, error) {
+	blocks := (size + isoBlockSize - 1) / isoBlockSize
+	buf := make([]byte, blocks*isoBlockSize)
+	if _, err := f.ReadAt(buf, int64(lba)*isoBlockSize); err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
+// dirRecords returns each directory record within the first size bytes of a
+// directory extent as a sub-slice of buf (so edits write through), skipping the
+// zero padding that fills out each logical block.
+func dirRecords(buf []byte, size uint32) [][]byte {
+	var recs [][]byte
+	for off := 0; off < int(size); {
+		recLen := int(buf[off])
+		if recLen == 0 {
+			// Records do not span logical blocks; skip the block's zero padding.
+			off = (off/isoBlockSize + 1) * isoBlockSize
+			continue
+		}
+		recs = append(recs, buf[off:off+recLen])
+		off += recLen
+	}
+	return recs
+}
+
+// setDataLen writes an ISO9660 directory record's data-length field, which is
+// stored in both byte orders: little-endian at offset 10, big-endian at offset 14.
+func setDataLen(rec []byte, size uint32) {
+	binary.LittleEndian.PutUint32(rec[drDataLen:], size)
+	binary.BigEndian.PutUint32(rec[drDataLen+4:], size)
+}
+
+// packRecords lays records back into a directory extent of capacity bytes, keeping
+// the ISO9660 rule that no record spans a logical block (padding to the next block
+// when one would), and zero-filling the remainder. It errors if the records do not
+// fit — which cannot happen while the block count is preserved, but guards against a
+// silently truncated directory.
+func packRecords(recs [][]byte, capacity int) ([]byte, error) {
+	out := make([]byte, capacity)
+	pos := 0
+	for _, rec := range recs {
+		if pos%isoBlockSize != 0 && pos%isoBlockSize+len(rec) > isoBlockSize {
+			pos = (pos/isoBlockSize + 1) * isoBlockSize
+		}
+		if pos+len(rec) > capacity {
+			return nil, fmt.Errorf("directory records do not fit in %d bytes", capacity)
+		}
+		copy(out[pos:], rec)
+		pos += len(rec)
+	}
+	return out, nil
 }
 
 // warnUnmappableNames walks the tree and warns for any file or directory whose name
@@ -186,12 +391,9 @@ func trim(path string) error {
 	}
 	defer f.Close()
 
-	pvd := make([]byte, isoBlockSize)
-	if _, err := f.ReadAt(pvd, pvdSector*isoBlockSize); err != nil {
+	pvd, _, _, err := readPVD(f)
+	if err != nil {
 		return err
-	}
-	if pvd[0] != 0x01 || string(pvd[1:6]) != "CD001" {
-		return fmt.Errorf("no primary volume descriptor at sector %d", pvdSector)
 	}
 	// Volume space size: total logical blocks, little-endian at byte 80.
 	blocks := binary.LittleEndian.Uint32(pvd[80:84])
