@@ -178,8 +178,20 @@ func TestBuildISO(t *testing.T) {
 	if _, err := fs.ReadFile(b, "i386/setupldr.bin"); err != nil {
 		t.Errorf("\\I386\\SETUPLDR.BIN not in ISO: %v", err)
 	}
-	if _, err := fs.ReadFile(b, "i386/system32/config/system"); err != nil {
-		t.Errorf("SYSTEM hive not in ISO: %v", err)
+	// The boot loads a full set of hives. In /minint mode the SYSTEM hive is
+	// system32\SETUPREG.HIV (not the installed-Windows config\SYSTEM path); SOFTWARE
+	// and the default-user hive sit in config; and empty-but-valid SAM and SECURITY
+	// hives must be present in config or the config manager bugchecks (0xc0000218).
+	for _, hive := range []string{
+		"i386/system32/setupreg.hiv",
+		"i386/system32/config/software",
+		"i386/system32/config/default",
+		"i386/system32/config/sam",
+		"i386/system32/config/security",
+	} {
+		if _, err := fs.ReadFile(b, hive); err != nil {
+			t.Errorf("hive %s not in ISO: %v", hive, err)
+		}
 	}
 	txt, err := fs.ReadFile(b, "i386/txtsetup.sif")
 	if err != nil {

@@ -2,8 +2,33 @@ copy setupldr.bin dir="1" rename="" flags=-
 copy ntdetect.com dir="1" rename="" flags=-
 copy txtsetup.sif dir="1" rename="" flags=-
 copy bootfix.bin dir="1" rename="" flags=optional
-copy ntoskrnl.exe dir="" rename="" flags=-
+copy setupdd.sys dir="4" rename="" flags=-
+copy spddlang.sys dir="4" rename="" flags=-
+copy acpi.sys dir="4" rename="" flags=-
+copy 1394bus.sys dir="4" rename="" flags=-
+copy classpnp.sys dir="4" rename="" flags=-
+copy oprghdlr.sys dir="4" rename="" flags=-
+copy pciidex.sys dir="4" rename="" flags=-
+copy scsiport.sys dir="4" rename="" flags=-
+copy usbd.sys dir="4" rename="" flags=-
+copy usbport.sys dir="4" rename="" flags=-
+copy videoprt.sys dir="4" rename="" flags=-
+copy wmilib.sys dir="4" rename="" flags=-
+copy ndis.sys dir="4" rename="" flags=-
+copy afd.sys dir="4" rename="" flags=-
+copy mup.sys dir="4" rename="" flags=-
+copy dxapi.sys dir="4" rename="" flags=-
+copy dxg.sys dir="4" rename="" flags=-
+copy dxgthk.sys dir="4" rename="" flags=-
+copy watchdog.sys dir="2" rename="" flags=-
+copy null.sys dir="" rename="" flags=-
+copy npfs.sys dir="" rename="" flags=-
+copy fs_rec.sys dir="" rename="" flags=-
+copy beep.sys dir="" rename="" flags=-
+copy ntkrnlmp.exe dir="" rename="ntoskrnl.exe" flags=-
 copy ntdll.dll dir="" rename="" flags=-
+copy biosinfo.inf dir="1" rename="" flags=-
+copy biosinfo.inf dir="2" rename="" flags=-
 copy bootvid.dll dir="" rename="" flags=-
 copy kdcom.dll dir="" rename="" flags=-
 copy win32k.sys dir="" rename="" flags=-
@@ -21,19 +46,193 @@ copy msvcrt.dll dir="" rename="" flags=-
 copy secur32.dll dir="" rename="" flags=-
 copy userenv.dll dir="" rename="" flags=-
 copy sfcfiles.dll dir="" rename="" flags=-
+copy authz.dll dir="2" rename="" flags=-
+copy crypt32.dll dir="2" rename="" flags=-
+copy imagehlp.dll dir="2" rename="" flags=-
+copy msasn1.dll dir="2" rename="" flags=-
+copy nddeapi.dll dir="2" rename="" flags=-
+copy netapi32.dll dir="2" rename="" flags=-
+copy profmap.dll dir="2" rename="" flags=-
+copy psapi.dll dir="2" rename="" flags=-
+copy regapi.dll dir="2" rename="" flags=-
+copy setupapi.dll dir="2" rename="" flags=-
+copy version.dll dir="2" rename="" flags=-
+copy winsta.dll dir="2" rename="" flags=-
+copy wintrust.dll dir="2" rename="" flags=-
+copy ws2_32.dll dir="2" rename="" flags=-
+copy ws2help.dll dir="2" rename="" flags=-
+copy cryptdll.dll dir="2" rename="" flags=-
+copy dnsapi.dll dir="2" rename="" flags=-
+copy lsasrv.dll dir="2" rename="" flags=-
+copy mpr.dll dir="2" rename="" flags=-
+copy msvcp60.dll dir="2" rename="" flags=-
+copy ncobjapi.dll dir="2" rename="" flags=-
+copy ntdsapi.dll dir="2" rename="" flags=-
+copy psbase.dll dir="2" rename="" flags=-
+copy samlib.dll dir="2" rename="" flags=-
+copy samsrv.dll dir="2" rename="" flags=-
+copy scesrv.dll dir="2" rename="" flags=-
+copy umpnpmgr.dll dir="2" rename="" flags=-
+copy wldap32.dll dir="2" rename="" flags=-
 copy services.exe dir="" rename="" flags=-
 copy winlogon.exe dir="" rename="" flags=-
 copy lsass.exe dir="" rename="" flags=-
 copy autochk.exe dir="" rename="" flags=-
 copy cmd.exe dir="" rename="" flags=-
+copy chcp.com dir="" rename="" flags=-
+copy shutdown.exe dir="" rename="" flags=-
+copy find.exe dir="2" rename="" flags=-
+copy findstr.exe dir="2" rename="" flags=-
+copy xcopy.exe dir="2" rename="" flags=-
+copy more.com dir="2" rename="" flags=-
 copy kbdclass.sys dir="" rename="" flags=-
 copy hidclass.sys dir="" rename="" flags=-
 copy hidparse.sys dir="" rename="" flags=-
 copy c_1252.nls dir="" rename="" flags=-
 copy c_437.nls dir="" rename="" flags=-
 copy l_intl.nls dir="" rename="" flags=-
+copy vgaoem.fon dir="2" rename="" flags=-
+copy vgasys.fon dir="22" rename="" flags=-
+copy vgafix.fon dir="22" rename="" flags=-
+copy vgaoem.fon dir="22" rename="" flags=-
+copy micross.ttf dir="22" rename="" flags=-
+copy tahoma.ttf dir="22" rename="" flags=-
+copy marlett.ttf dir="22" rename="" flags=-
+copy serife.fon dir="22" rename="" flags=-
+copy sserife.fon dir="22" rename="" flags=-
+copy coure.fon dir="22" rename="" flags=-
+copy lucon.ttf dir="22" rename="" flags=-
+copy atmfd.dll dir="2" rename="" flags=-
+copy vga.dll dir="2" rename="" flags=-
+copy framebuf.dll dir="2" rename="" flags=-
+copy dciman32.dll dir="2" rename="" flags=-
+copy kbdus.dll dir="2" rename="" flags=-
+copy imm32.dll dir="2" rename="" flags=-
+copy lpk.dll dir="2" rename="" flags=-
+copy usp10.dll dir="2" rename="" flags=-
+copy msimg32.dll dir="2" rename="" flags=-
+copy powrprof.dll dir="2" rename="" flags=-
+copy opengl32.dll dir="2" rename="" flags=-
+copy apphelp.dll dir="2" rename="" flags=-
+copy sxs.dll dir="2" rename="" flags=-
+copy activeds.dll dir="" rename="" flags=-
+copy adsldpc.dll dir="" rename="" flags=-
+copy alrsvc.dll dir="" rename="" flags=-
+copy cabinet.dll dir="" rename="" flags=-
+copy clb.dll dir="" rename="" flags=-
+copy clusapi.dll dir="" rename="" flags=-
+copy comctl32.dll dir="" rename="" flags=-
+copy comdlg32.dll dir="" rename="" flags=-
+copy ctype.nls dir="" rename="" flags=-
+copy dnsrslvr.dll dir="" rename="" flags=-
+copy esent.dll dir="" rename="" flags=-
+copy fc.exe dir="" rename="" flags=-
+copy fltlib.dll dir="" rename="" flags=-
+copy fltmc.exe dir="" rename="" flags=-
+copy gptext.dll dir="" rename="" flags=-
+copy intl.cpl dir="" rename="" flags=-
+copy iologmsg.dll dir="" rename="" flags=-
+copy kerberos.dll dir="" rename="" flags=-
+copy l_except.nls dir="" rename="" flags=-
+copy locale.nls dir="" rename="" flags=-
+copy locator.exe dir="" rename="" flags=-
+copy lz32.dll dir="" rename="" flags=-
+copy mobsync.dll dir="" rename="" flags=-
+copy msgina.dll dir="" rename="" flags=-
+copy msls31.dll dir="" rename="" flags=-
+copy msprivs.dll dir="" rename="" flags=-
+copy msv1_0.dll dir="" rename="" flags=-
+copy netplwiz.dll dir="" rename="" flags=-
+copy odbc32.dll dir="" rename="" flags=-
+copy ole32.dll dir="" rename="" flags=-
+copy olesvr.dll dir="" rename="" flags=-
+copy peer.exe dir="" rename="" flags=-
+copy pentnt.exe dir="" rename="" flags=-
+copy portmon.exe dir="" rename="" flags=-
+copy print.exe dir="" rename="" flags=-
+copy pstorsvc.dll dir="" rename="" flags=-
+copy rpcss.dll dir="" rename="" flags=-
+copy schannel.dll dir="" rename="" flags=-
+copy shell32.dll dir="" rename="" flags=-
+copy shlwapi.dll dir="" rename="" flags=-
+copy sortkey.nls dir="" rename="" flags=-
+copy sorttbls.nls dir="" rename="" flags=-
+copy svchost.exe dir="" rename="" flags=-
+copy tzchange.exe dir="" rename="" flags=-
+copy ulib.dll dir="" rename="" flags=-
+copy unicode.nls dir="" rename="" flags=-
+copy userinit.exe dir="" rename="" flags=-
+copy uxtheme.dll dir="" rename="" flags=-
+copy vdmdbg.dll dir="" rename="" flags=-
+copy vga256.dll dir="" rename="" flags=-
+copy vga64k.dll dir="" rename="" flags=-
+copy xlog.exe dir="" rename="" flags=-
+copy xmlprov.dll dir="" rename="" flags=-
+copy xmlprovi.dll dir="" rename="" flags=-
 addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Winlogon" value="Shell" data="cmd.exe"
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Winlogon" value="ShutdownWithoutLogon" data="1"
+addreg hive=software type=0x7 subkey="Microsoft\\Windows NT\\CurrentVersion\\Svchost" value="rpcss" data="RpcSs"
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Fonts" value="Tahoma (TrueType)" data="TAHOMA.TTF"
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Fonts" value="Microsoft Sans Serif (TrueType)" data="micross.ttf"
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Fonts" value="Marlett (TrueType)" data="marlett.ttf"
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Fonts" value="MS Sans Serif 8,10,12,14,18,24 (VGA res)" data="serife.fon"
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Fonts" value="MS Serif 8,10,12,14,18,24 (VGA res)" data="sserife.fon"
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Fonts" value="Courier 10,12,15 (VGA res)" data="coure.fon"
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Fonts" value="Lucida Console (TrueType)" data="LUCON.TTF"
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Console\\TrueTypeFont" value="0" data="Lucida Console"
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\FontSubstitutes" value="MS Shell Dlg" data="Microsoft Sans Serif"
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\FontSubstitutes" value="MS Shell Dlg 2" data="Tahoma"
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\FontSubstitutes" value="Helv" data="MS Sans Serif"
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\FontSubstitutes" value="Helvetica" data="Arial"
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\FontSubstitutes" value="Tms Rmn" data="MS Serif"
+addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\FontSubstitutes" value="Times" data="Times New Roman"
 addreg hive=system type=0x1 subkey="ControlSet001\\Control\\MiniNT" value="" data=""
+addreg hive=system type=0x7 subkey="ControlSet001\\Control\\Lsa" value="Authentication Packages" data="msv1_0"
+addreg hive=system type=0x7 subkey="ControlSet001\\Control\\Lsa" value="Security Packages" data="kerberos\x00msv1_0\x00schannel"
+addreg hive=system type=0x7 subkey="ControlSet001\\Control\\Lsa" value="Notification Packages" data=""
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Lsa\\AccessProviders" value="" data=""
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\SecurityProviders" value="SecurityProviders" data="schannel.dll"
+addreg hive=system type=0x4 subkey="ControlSet001\\Control\\Lsa" value="ImpersonatePrivilegeUpgradeToolHasRun" data="0x1"
+addreg hive=system type=0x3 subkey="ControlSet001\\Control\\Lsa" value="Bounds" data=""
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\RPCSS" value="ImagePath" data="%SystemRoot%\\system32\\svchost -k rpcss"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\RPCSS" value="Start" data="0x2"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\RPCSS" value="Type" data="0x20"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\RPCSS" value="ErrorControl" data="0x1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\RPCSS" value="ObjectName" data="LocalSystem"
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\RPCSS\\Parameters" value="ServiceDll" data="%SystemRoot%\\system32\\rpcss.dll"
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\SamSs" value="ImagePath" data="%SystemRoot%\\system32\\lsass.exe"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\SamSs" value="Start" data="0x2"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\SamSs" value="Type" data="0x20"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\SamSs" value="ErrorControl" data="0x1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\SamSs" value="ObjectName" data="LocalSystem"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\SamSs" value="Group" data="MS_WindowsLocalValidation"
+addreg hive=system type=0x7 subkey="ControlSet001\\Services\\SamSs" value="DependOnService" data="RPCSS"
+addreg hive=system type=0x1 subkey="Setup\\AllowStart\\AFD" value="" data=""
+addreg hive=system type=0x1 subkey="Setup\\AllowStart\\EventLog" value="" data=""
+addreg hive=system type=0x1 subkey="Setup\\AllowStart\\PlugPlay" value="" data=""
+addreg hive=system type=0x1 subkey="Setup\\AllowStart\\ProtectedStorage" value="" data=""
+addreg hive=system type=0x1 subkey="Setup\\AllowStart\\Rpcss" value="" data=""
+addreg hive=system type=0x1 subkey="Setup\\AllowStart\\SamSs" value="" data=""
+addreg hive=system type=0x1 subkey="Setup\\AllowStart\\Seclogon" value="" data=""
+addreg hive=system type=0x1 subkey="Setup\\AllowStart\\WS2IFSL" value="" data=""
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\ProtectedStorage" value="ImagePath" data="%SystemRoot%\\system32\\lsass.exe"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\ProtectedStorage" value="Start" data="0x2"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\ProtectedStorage" value="Type" data="0x120"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\ProtectedStorage" value="ErrorControl" data="0x1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\ProtectedStorage" value="ObjectName" data="LocalSystem"
+addreg hive=system type=0x7 subkey="ControlSet001\\Services\\ProtectedStorage" value="DependOnService" data="RpcSs"
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\PlugPlay" value="ImagePath" data="%SystemRoot%\\system32\\services.exe"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\PlugPlay" value="Start" data="0x2"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\PlugPlay" value="Type" data="0x20"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\PlugPlay" value="ErrorControl" data="0x1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\PlugPlay" value="ObjectName" data="LocalSystem"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\PlugPlay" value="Group" data="PlugPlay"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\PlugPlay" value="PlugPlayServiceType" data="0x3"
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\AFD" value="ImagePath" data="\\SystemRoot\\system32\\drivers\\afd.sys"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\AFD" value="Start" data="0x3"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\AFD" value="Type" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\AFD" value="ErrorControl" data="0x1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\AFD" value="Group" data="TDI"
 addreg hive=system type=0x1 subkey="Setup" value="CmdLine" data="cmd.exe /k startnet.cmd"
 addreg hive=system type=0x4 subkey="Setup" value="SetupType" data="0x1"
 addreg hive=system type=0x1 subkey="Setup" value="OsLoaderPath" data="\\"
@@ -53,23 +252,51 @@ addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\Kno
 addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\KnownDLLs" value="kernel32" data="kernel32.dll"
 addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\KnownDLLs" value="rpcrt4" data="rpcrt4.dll"
 addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\KnownDLLs" value="user32" data="user32.dll"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\DOS Devices" value="AUX" data="\\DosDevices\\COM1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\DOS Devices" value="MAILSLOT" data="\\Device\\MailSlot"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\DOS Devices" value="NUL" data="\\Device\\Null"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\DOS Devices" value="PIPE" data="\\Device\\NamedPipe"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\DOS Devices" value="PRN" data="\\DosDevices\\LPT1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\DOS Devices" value="UNC" data="\\Device\\Mup"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\Executive" value="" data=""
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\FileRenameOperations" value="" data=""
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\Power" value="" data=""
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\AppCompatability" value="" data=""
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\AppPatches" value="" data=""
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\WPA" value="" data=""
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\SFC" value="CommonFilesDir" data="\\"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\SFC" value="ProgramFilesDir" data="\\"
 addreg hive=system type=0x1 subkey="ControlSet001\\Control\\ProductOptions" value="ProductType" data="WinNT"
 addreg hive=system type=0x7 subkey="ControlSet001\\Control\\ProductOptions" value="ProductSuite" data=""
 addreg hive=system type=0x1 subkey="ControlSet001\\Services\\VgaSave" value="Group" data="Video Save"
 addreg hive=system type=0x2 subkey="ControlSet001\\Services\\VgaSave" value="ImagePath" data="\\SystemRoot\\System32\\drivers\\vga.sys"
 addreg hive=system type=0x4 subkey="ControlSet001\\Services\\VgaSave" value="Start" data="0x1"
 addreg hive=system type=0x4 subkey="ControlSet001\\Services\\VgaSave" value="Type" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\VgaSave" value="ErrorControl" data="0x0"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\VgaSave" value="Tag" data="0x1"
+addreg hive=system type=0x7 subkey="ControlSet001\\Services\\VgaSave\\Device0" value="InstalledDisplayDrivers" data="vga\x00framebuf\x00vga256\x00vga64k"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\VgaSave\\Device0" value="VgaCompatible" data="0x1"
 addreg hive=system type=0x1 subkey="ControlSet001\\Services\\VgaSave\\Video" value="Service" data="VgaSave"
-addreg hive=system type=0x7 subkey="ControlSet001\\Control\\Video\\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\\0000" value="InstalledDisplayDrivers" data="vga"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\VgaSave\\Video" value="VideoID" data="{23A77BF7-ED96-40EC-AF06-9B1F4867732A}"
+addreg hive=system type=0x7 subkey="ControlSet001\\Control\\Video\\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\\0000" value="InstalledDisplayDrivers" data="vga\x00framebuf\x00vga256\x00vga64k"
 addreg hive=system type=0x4 subkey="ControlSet001\\Control\\Video\\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\\0000" value="VgaCompatible" data="0x1"
 addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Video\\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\\Video" value="Service" data="VgaSave"
+addreg hive=system type=0x4 subkey="ControlSet001\\Control\\GraphicsDrivers\\DCI" value="Timeout" data="0x7"
 addreg hive=system type=0x1 subkey="ControlSet001\\Services\\i8042prt" value="Group" data="Keyboard Port"
 addreg hive=system type=0x4 subkey="ControlSet001\\Services\\i8042prt" value="Start" data="0x1"
 addreg hive=system type=0x4 subkey="ControlSet001\\Services\\i8042prt" value="Type" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\i8042prt\\Parameters" value="PollingIterations" data="0x2ee0"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\i8042prt\\Parameters" value="PollingIterationsMaximum" data="0x2ee0"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\i8042prt\\Parameters" value="ResendIterations" data="0x3"
 addreg hive=system type=0x1 subkey="ControlSet001\\Services\\kbdclass" value="Group" data="Keyboard Class"
 addreg hive=system type=0x2 subkey="ControlSet001\\Services\\kbdclass" value="ImagePath" data="System32\\drivers\\kbdclass.sys"
 addreg hive=system type=0x4 subkey="ControlSet001\\Services\\kbdclass" value="Start" data="0x1"
 addreg hive=system type=0x4 subkey="ControlSet001\\Services\\kbdclass" value="Type" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\kbdclass" value="Tag" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\kbdclass\\Parameters" value="ConnectMultiplePorts" data="0x0"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\kbdclass\\Parameters" value="KeyboardDataQueueSize" data="0x64"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\kbdclass\\Parameters" value="KeyboardDeviceBaseName" data="KeyboardClass"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\kbdclass\\Parameters" value="MaximumPortsServiced" data="0x3"
 addreg hive=system type=0x1 subkey="ControlSet001\\Services\\mouclass" value="Group" data="Pointer Class"
 addreg hive=system type=0x2 subkey="ControlSet001\\Services\\mouclass" value="ImagePath" data="System32\\drivers\\mouclass.sys"
 addreg hive=system type=0x4 subkey="ControlSet001\\Services\\mouclass" value="Start" data="0x1"
@@ -83,12 +310,54 @@ addreg hive=system type=0x4 subkey="ControlSet001\\Services\\kbdhid" value="Type
 addreg hive=system type=0x2 subkey="ControlSet001\\Services\\mouhid" value="ImagePath" data="System32\\drivers\\mouhid.sys"
 addreg hive=system type=0x4 subkey="ControlSet001\\Services\\mouhid" value="Start" data="0x3"
 addreg hive=system type=0x4 subkey="ControlSet001\\Services\\mouhid" value="Type" data="0x1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\Null" value="Group" data="Base"
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\Null" value="ImagePath" data="System32\\drivers\\null.sys"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Null" value="Start" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Null" value="Type" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Null" value="ErrorControl" data="0x1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\Npfs" value="Group" data="File system"
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\Npfs" value="ImagePath" data="System32\\drivers\\npfs.sys"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Npfs" value="Start" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Npfs" value="Type" data="0x2"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Npfs" value="ErrorControl" data="0x1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\Fs_Rec" value="Group" data="Boot file system"
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\Fs_Rec" value="ImagePath" data="System32\\drivers\\fs_rec.sys"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Fs_Rec" value="Start" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Fs_Rec" value="Type" data="0x8"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Fs_Rec" value="ErrorControl" data="0x0"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\Beep" value="Group" data="Base"
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\Beep" value="ImagePath" data="System32\\drivers\\beep.sys"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Beep" value="Start" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Beep" value="Type" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Beep" value="ErrorControl" data="0x1"
 addreg hive=system type=0x7 subkey="ControlSet001\\Control\\Class\\{4D36E96B-E325-11CE-BFC1-08002BE10318}" value="UpperFilters" data="kbdclass"
 addreg hive=system type=0x7 subkey="ControlSet001\\Control\\Class\\{4D36E96F-E325-11CE-BFC1-08002BE10318}" value="UpperFilters" data="mouclass"
-setvalue file="txtsetup.sif" section="SetupData" key="osloadoptions" data="\"/fastdetect /minint\""
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Keyboard Layouts\\00000409" value="Layout File" data="KBDUS.DLL"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Keyboard Layouts\\00000409" value="Layout Text" data="US"
+delreg hive=system subkey="ControlSet001\\Services\\NDIS" value=""
+delreg hive=system subkey="ControlSet001\\Services\\Tcpip" value=""
+delreg hive=system subkey="ControlSet001\\Services\\NetBT" value=""
+delreg hive=system subkey="ControlSet001\\Services\\NetBIOS" value=""
+delreg hive=system subkey="ControlSet001\\Services\\IPSec" value=""
+delreg hive=system subkey="ControlSet001\\Services\\Ndisuio" value=""
+delreg hive=system subkey="ControlSet001\\Services\\NDProxy" value=""
+delreg hive=system subkey="ControlSet001\\Services\\PSched" value=""
+addreg hive=default type=0x1 subkey="Keyboard Layout\\Preload" value="1" data="00000409"
+addreg hive=default type=0x1 subkey="Console" value="FaceName" data="Lucida Console"
+addreg hive=default type=0x4 subkey="Console" value="FontFamily" data="0x36"
+addreg hive=default type=0x4 subkey="Console" value="FontWeight" data="0x190"
+addreg hive=default type=0x4 subkey="Console" value="FontSize" data="0xc0000"
+setvalue file="txtsetup.sif" section="SetupData" key="osloadoptions" data="\"/fastdetect /minint /kernel=ntoskrnl.exe /hal=halaacpi.dll\""
 setvalue file="txtsetup.sif" section="SetupData" key="loaderprompt" data="\"Starting pebuild...\""
 copy hal.dll dir="" rename="" flags=optional
 copy halacpi.dll dir="" rename="" flags=optional
 copy atapi.sys dir="" rename="" flags=optional
 copy ntfs.sys dir="" rename="" flags=optional
 copy fastfat.sys dir="" rename="" flags=optional
+copy c_1251.nls dir="" rename="" flags=-
+copy c_866.nls dir="" rename="" flags=-
+copy vga866.fon dir="2" rename="" flags=-
+copy kbdru.dll dir="2" rename="" flags=-
+addreg hive=default type=0x1 subkey="Keyboard Layout\\Preload" value="2" data="00000419"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Keyboard Layouts\\00000419" value="Layout File" data="KBDRU.DLL"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Keyboard Layouts\\00000419" value="Layout Text" data="Russian"

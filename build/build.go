@@ -152,6 +152,12 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 	if err := configure(outDir, acts, res.Written); err != nil {
 		return nil, err
 	}
+
+	// Copy the disc identity markers (WIN51*) and boot font from the source root to
+	// the tree root, where the loader looks for them to confirm the disc.
+	if err := copyIdentityMarkers(backing, outDir); err != nil {
+		return nil, fmt.Errorf("copy identity markers: %w", err)
+	}
 	return rep, nil
 }
 

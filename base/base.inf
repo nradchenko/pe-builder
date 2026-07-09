@@ -37,10 +37,71 @@ setupldr.bin = 1
 ntdetect.com = 1
 txtsetup.sif = 1
 bootfix.bin  = 1,,4
+; The text-setup mini-driver the loader loads for setup-mode device access, from
+; the drivers directory (matching a working reference build). It depends on the
+; setup language driver, loaded alongside it.
+setupdd.sys   = 4
+spddlang.sys  = 4
 
-; Kernel and its loader-adjacent dependencies (HAL comes from the source *.Load).
-ntoskrnl.exe =
+; The ACPI bus driver the ACPI HAL loads at boot.
+acpi.sys      = 4
+
+; Framework drivers the boot-start drivers import (bus, port, and class libraries);
+; the loader must load a driver's dependencies alongside it.
+1394bus.sys   = 4
+classpnp.sys  = 4
+oprghdlr.sys  = 4
+pciidex.sys   = 4
+scsiport.sys  = 4
+usbd.sys      = 4
+usbport.sys   = 4
+videoprt.sys  = 4
+wmilib.sys    = 4
+
+; The NDIS wrapper. Setup's detection pass loads it regardless of the (removed)
+; network services, so it must be present or the boot stops. Only the wrapper is
+; shipped here — no protocol or adapter drivers — so the base carries no working
+; network stack; that belongs to a plugin.
+ndis.sys      = 4
+
+; The Winsock TDI kernel driver (its service is re-enabled above for the LSA/RPC
+; stack; the rest of the network stack stays stripped).
+afd.sys       = 4
+
+; The Multiple UNC Provider, a boot-start filesystem driver setup loads by group/tag.
+mup.sys       = 4
+
+; Kernel drivers win32k.sys imports (DirectX kernel API, display watchdog); the Win32
+; subsystem cannot initialize without them. watchdog.sys is resolved beside win32k in
+; system32, dxapi from the drivers directory (matching a working reference build).
+; dxg.sys/dxgthk.sys are the DirectX kernel graphics module and its thunk that win32k
+; loads during graphics init; without them the subsystem's display init never completes.
+dxapi.sys     = 4
+dxg.sys       = 4
+dxgthk.sys    = 4
+watchdog.sys  = 2
+
+; Core NT system drivers not named in any txtsetup.sif *.Load list: the Null and
+; Beep devices, the named-pipe file system (RPC/LPC over \Device\NamedPipe), and
+; the boot file-system recognizer. Loaded from the SYSTEM-hive service entries
+; below (Start=1), so the files must be present or those services fail to start.
+null.sys   =
+npfs.sys   =
+fs_rec.sys =
+beep.sys   =
+
+; The multiprocessor kernel, installed as ntoskrnl.exe. It runs on uniprocessor
+; machines too (a safe superset), so one kernel covers both. The HAL files come
+; from the source *.Load derivation; the loader options below name which one to
+; load (see the boot configuration).
+ntkrnlmp.exe = ,ntoskrnl.exe
 ntdll.dll    =
+; The loader reads this BIOS-info table early in the boot. It lives in the source's
+; inf directory, but the boot chain looks for it both beside the loader at the
+; system root (\I386, for ntdetect) and in system32 (for the loader), so it is
+; placed in both.
+biosinfo.inf = 1
+biosinfo.inf = 2
 bootvid.dll  =
 kdcom.dll    =
 
@@ -63,14 +124,62 @@ secur32.dll  =
 userenv.dll  =
 sfcfiles.dll =
 
+; Further user-mode DLLs the logon/csrss/lsass chain pulls in (crypto, winsock,
+; setupapi, security), pinned to system32.
+authz.dll    = 2
+crypt32.dll  = 2
+imagehlp.dll = 2
+msasn1.dll   = 2
+nddeapi.dll  = 2
+netapi32.dll = 2
+profmap.dll  = 2
+psapi.dll    = 2
+regapi.dll   = 2
+setupapi.dll = 2
+version.dll  = 2
+winsta.dll   = 2
+wintrust.dll = 2
+ws2_32.dll   = 2
+ws2help.dll  = 2
+
+; The LSA/SAM security, user-mode PnP, and directory/name DLLs the logon and service
+; hosts (lsass, services, umpnpmgr) pull in.
+cryptdll.dll = 2
+dnsapi.dll   = 2
+lsasrv.dll   = 2
+mpr.dll      = 2
+msvcp60.dll  = 2
+ncobjapi.dll = 2
+ntdsapi.dll  = 2
+psbase.dll   = 2
+samlib.dll   = 2
+samsrv.dll   = 2
+scesrv.dll   = 2
+umpnpmgr.dll = 2
+wldap32.dll  = 2
+
 ; Session, logon, and service host — the chain that reaches the shell.
 services.exe =
 winlogon.exe =
 lsass.exe    =
 autochk.exe  =
 
-; Command shell (startnet.cmd is ours, placed by a later stage).
-cmd.exe =
+; Command shell (startnet.cmd is ours, placed by a later stage). chcp reports/sets
+; the console code page; shutdown powers the environment off (shutdown -s -t 0).
+cmd.exe      =
+chcp.com     =
+shutdown.exe =
+
+; Shell-utilities preset: a small default-enabled set of console file/text tools that
+; make the environment operable, kept visibly separate from the boot floor above. The
+; GUI tools (Task Manager, Registry Editor, winver) are a separate preset deferred
+; until the WinSxS side-by-side support lands — they fail to start without the
+; comctl32 v6 assembly their manifests require. (Both presets become proper plugins
+; once the plugin engine formalizes them; the floor above is the true minimum.)
+find.exe     = 2
+findstr.exe  = 2
+xcopy.exe    = 2
+more.com     = 2
 
 ; Input-stack files not named in any txtsetup.sif *.Load list. The class and HID
 ; drivers that are (i8042prt, kbdhid, mouclass, mouhid, hidusb, the USB host
@@ -81,11 +190,132 @@ kbdclass.sys =
 hidclass.sys =
 hidparse.sys =
 
-; National-language tables the kernel loads for the ANSI/OEM code pages.
+; National-language tables the kernel loads for the ANSI/OEM code pages. These are
+; the US-English defaults and the Unicode case table; the source locale's own ANSI
+; and OEM code-page tables are added from its txtsetup.sif [nls] section.
 c_1252.nls =
 c_437.nls  =
 l_intl.nls =
 
+; The US-English OEM console font the loader maps for boot-screen text, pinned to
+; system32 where the loader looks for it. The source locale's own OEM console font
+; (named by [nls] OemHalFont) is added alongside it.
+vgaoem.fon = 2
+
+; The bitmap system fonts win32k maps during GDI init (named by the SOFTWARE hive's
+; GRE_Initialize: System, FixedSys, Terminal), loaded from the Fonts directory.
+; Without them the Win32 subsystem fails to start and the boot stops.
+vgasys.fon = 22
+vgafix.fon = 22
+vgaoem.fon = 22
+
+; The UI fonts the GUI renders menus and dialogs in. The default dialog font family
+; (MS Shell Dlg / MS Shell Dlg 2) substitutes to Microsoft Sans Serif (micross) and
+; Tahoma; marlett supplies the window-control glyphs; serife/sserife are the bitmap
+; MS Sans/MS Serif fallbacks and coure the fixed-pitch bitmap. All are Cyrillic-capable.
+; Without them registered (see the Fonts/FontSubstitutes seed) the GUI shows no text.
+micross.ttf = 22
+tahoma.ttf  = 22
+marlett.ttf = 22
+serife.fon  = 22
+sserife.fon = 22
+coure.fon   = 22
+; Lucida Console — a Unicode fixed-pitch TrueType face for the console, so cmd.exe
+; renders the source's Cyrillic (and any) text regardless of the OEM raster font.
+lucon.ttf   = 22
+
+; The Adobe Type Manager font driver win32k loads during GDI init.
+atmfd.dll  = 2
+
+; The GDI display driver win32k loads to render through (the VgaSave miniport's
+; user-mode half), the framebuffer display driver, and the DCI manager. Without the
+; display driver the Win32 subsystem's graphics init fails.
+vga.dll      = 2
+framebuf.dll = 2
+dciman32.dll = 2
+
+; The US-English keyboard layout DLL win32k loads at init. The source locale's own
+; layout DLL is added from its detected locale.
+kbdus.dll    = 2
+
+; user32/gdi32 load these at init by name (not as static imports): the input-method
+; manager and the language-pack / Uniscribe text-shaping DLLs.
+imm32.dll    = 2
+lpk.dll      = 2
+usp10.dll    = 2
+
+; Further DLLs user32/gdi32 reference by name (image blit, power profile, OpenGL).
+msimg32.dll  = 2
+powrprof.dll = 2
+opengl32.dll = 2
+
+; DLLs the loader itself pulls in during process init (not as static imports): the
+; application-compatibility shim engine and the side-by-side/manifest resolver.
+apphelp.dll  = 2
+sxs.dll      = 2
+
+
+; ===========================================================================
+; system32 base file set — the core Win32 subsystem, common system DLLs, and the
+; supporting files a no-plugin PE needs beyond the boot-driver set, so the session
+; reaches an interactive shell. Blank dirid: the source's own layout resolves each
+; file's target directory. Network/RAS/NIC *driver* files are intentionally
+; excluded (network is a plugin); this is the system32 base only.
+; ===========================================================================
+activeds.dll =
+adsldpc.dll =
+alrsvc.dll =
+cabinet.dll =
+clb.dll =
+clusapi.dll =
+comctl32.dll =
+comdlg32.dll =
+ctype.nls =
+dnsrslvr.dll =
+esent.dll =
+fc.exe =
+fltlib.dll =
+fltmc.exe =
+gptext.dll =
+intl.cpl =
+iologmsg.dll =
+kerberos.dll =
+l_except.nls =
+locale.nls =
+locator.exe =
+lz32.dll =
+mobsync.dll =
+msgina.dll =
+msls31.dll =
+msprivs.dll =
+msv1_0.dll =
+netplwiz.dll =
+odbc32.dll =
+ole32.dll =
+olesvr.dll =
+peer.exe =
+pentnt.exe =
+portmon.exe =
+print.exe =
+pstorsvc.dll =
+rpcss.dll =
+schannel.dll =
+shell32.dll =
+shlwapi.dll =
+sortkey.nls =
+sorttbls.nls =
+svchost.exe =
+tzchange.exe =
+ulib.dll =
+unicode.nls =
+userinit.exe =
+uxtheme.dll =
+vdmdbg.dll =
+vga256.dll =
+vga64k.dll =
+xlog.exe =
+xmlprov.dll =
+xmlprovi.dll =
 ; ---------------------------------------------------------------------------
 ; Registry seed.
 ;
@@ -101,13 +331,138 @@ l_intl.nls =
 ; brings up after boot.
 ; ---------------------------------------------------------------------------
 [Software.AddReg]
-; Winlogon runs the command shell directly instead of Explorer.
+; Winlogon runs the command shell directly instead of Explorer. ShutdownWithoutLogon
+; lets the shutdown sequence complete when no interactive user is logged on (the PE
+; runs the shell directly), so shutdown.exe can power the machine off.
 0x1,"Microsoft\Windows NT\CurrentVersion\Winlogon","Shell","cmd.exe"
+0x1,"Microsoft\Windows NT\CurrentVersion\Winlogon","ShutdownWithoutLogon","1"
+
+; The svchost group table: tells "svchost -k rpcss" which service(s) to host.
+0x7,"Microsoft\Windows NT\CurrentVersion\Svchost","rpcss","RpcSs"
+
+; Register the UI fonts so GDI can enumerate them (name → file in the Fonts dir).
+; Microsoft Sans Serif and Marlett are system fonts win32k loads implicitly, but
+; registering them explicitly is safe and guarantees they load.
+0x1,"Microsoft\Windows NT\CurrentVersion\Fonts","Tahoma (TrueType)","TAHOMA.TTF"
+0x1,"Microsoft\Windows NT\CurrentVersion\Fonts","Microsoft Sans Serif (TrueType)","micross.ttf"
+0x1,"Microsoft\Windows NT\CurrentVersion\Fonts","Marlett (TrueType)","marlett.ttf"
+0x1,"Microsoft\Windows NT\CurrentVersion\Fonts","MS Sans Serif 8,10,12,14,18,24 (VGA res)","serife.fon"
+0x1,"Microsoft\Windows NT\CurrentVersion\Fonts","MS Serif 8,10,12,14,18,24 (VGA res)","sserife.fon"
+0x1,"Microsoft\Windows NT\CurrentVersion\Fonts","Courier 10,12,15 (VGA res)","coure.fon"
+0x1,"Microsoft\Windows NT\CurrentVersion\Fonts","Lucida Console (TrueType)","LUCON.TTF"
+
+; Offer Lucida Console to the console subsystem (its TrueType font list).
+0x1,"Microsoft\Windows NT\CurrentVersion\Console\TrueTypeFont","0","Lucida Console"
+
+; Font substitutes: the GUI's default dialog font families resolve here. MS Shell Dlg
+; (most controls) and MS Shell Dlg 2 (XP dialogs) are the ones that make menu/dialog
+; text appear; the rest are the standard legacy aliases.
+0x1,"Microsoft\Windows NT\CurrentVersion\FontSubstitutes","MS Shell Dlg","Microsoft Sans Serif"
+0x1,"Microsoft\Windows NT\CurrentVersion\FontSubstitutes","MS Shell Dlg 2","Tahoma"
+0x1,"Microsoft\Windows NT\CurrentVersion\FontSubstitutes","Helv","MS Sans Serif"
+0x1,"Microsoft\Windows NT\CurrentVersion\FontSubstitutes","Helvetica","Arial"
+0x1,"Microsoft\Windows NT\CurrentVersion\FontSubstitutes","Tms Rmn","MS Serif"
+0x1,"Microsoft\Windows NT\CurrentVersion\FontSubstitutes","Times","Times New Roman"
+
+; ---------------------------------------------------------------------------
+; The default-user hive overlay (HKU\.DEFAULT).
+; ---------------------------------------------------------------------------
+[Default.AddReg]
+; Preloaded keyboard layouts. The source's hivedef.inf ships none (GUI setup adds
+; them from the chosen locale); win32k loads these at Win32-subsystem init, so with
+; none present the layout load resolves to nothing. US is the base; the source
+; locale's own layout is preloaded after it (slot 2) from its detected locale.
+0x1,"Keyboard Layout\Preload","1","00000409"
+
+; Default console font: the Unicode TrueType Lucida Console, so cmd.exe renders the
+; source's Cyrillic text cleanly instead of misreading the OEM raster font. FontFamily
+; 0x36 = FF_MODERN|TMPF_TRUETYPE|TMPF_VECTOR, FontWeight 0x190 = normal (400).
+0x1,"Console","FaceName","Lucida Console"
+0x4,"Console","FontFamily",0x36
+0x4,"Console","FontWeight",0x190
+0x4,"Console","FontSize",0xc0000
 
 [SetupReg.AddReg]
 ; The marker that identifies a RAM-resident preinstall (PE) environment; many
 ; components branch on its presence.
 0x1,"ControlSet001\Control\MiniNT"
+
+; LSA security packages. Text-setup's setupreg.hiv ships Control\Lsa empty, so lsass
+; loads no authentication/security package and fails its DllMain init (0xc0000142).
+; Seed the standard package set (the package DLLs msv1_0/kerberos/schannel are in the
+; file selection above), matching the working reference build.
+0x7,"ControlSet001\Control\Lsa","Authentication Packages","msv1_0"
+0x7,"ControlSet001\Control\Lsa","Security Packages","kerberos","msv1_0","schannel"
+0x7,"ControlSet001\Control\Lsa","Notification Packages",""
+0x1,"ControlSet001\Control\Lsa\AccessProviders"
+
+; The security-provider (SSP) DLL list secur32 loads for lsass.
+0x1,"ControlSet001\Control\SecurityProviders","SecurityProviders","schannel.dll"
+
+; Skip the per-boot SeImpersonate privilege upgrade, which loads msprivs.dll and races
+; the privilege-DB population — the residual intermittent lsass 0xc0000142. A Microsoft
+; HIVESYS.INF default that the text-setup hive we build from omits.
+0x4,"ControlSet001\Control\Lsa","ImpersonatePrivilegeUpgradeToolHasRun",0x1
+; LSA private-heap reserve bounds — another HIVESYS default the text-setup hive lacks.
+0x3,"ControlSet001\Control\Lsa","Bounds",00,30,00,00,00,20,00,00
+
+; RPCSS (the RPC endpoint mapper) and SamSs (the SAM/LSA server = lsass). Text-setup's
+; setupreg.hiv omits RPCSS; without the endpoint mapper, lsass and the security
+; packages have no RPC infrastructure to bind to and their init races — the source of
+; the intermittent lsass 0xc0000142. SamSs depends on RPCSS so the SCM starts it first.
+; The files (rpcss.dll, svchost.exe) are already selected above.
+0x2,"ControlSet001\Services\RPCSS","ImagePath","%SystemRoot%\system32\svchost -k rpcss"
+0x4,"ControlSet001\Services\RPCSS","Start",0x2
+0x4,"ControlSet001\Services\RPCSS","Type",0x20
+0x4,"ControlSet001\Services\RPCSS","ErrorControl",0x1
+0x1,"ControlSet001\Services\RPCSS","ObjectName","LocalSystem"
+0x2,"ControlSet001\Services\RPCSS\Parameters","ServiceDll","%SystemRoot%\system32\rpcss.dll"
+0x2,"ControlSet001\Services\SamSs","ImagePath","%SystemRoot%\system32\lsass.exe"
+0x4,"ControlSet001\Services\SamSs","Start",0x2
+0x4,"ControlSet001\Services\SamSs","Type",0x20
+0x4,"ControlSet001\Services\SamSs","ErrorControl",0x1
+0x1,"ControlSet001\Services\SamSs","ObjectName","LocalSystem"
+0x1,"ControlSet001\Services\SamSs","Group","MS_WindowsLocalValidation"
+0x7,"ControlSet001\Services\SamSs","DependOnService","RPCSS"
+
+; Setup-mode service whitelist: with SystemSetupInProgress=1 the SCM starts only the
+; services listed under Setup\AllowStart. Without it the LSA/RPC services (RPCSS,
+; SamSs, ProtectedStorage) never start, so lsass's msprivs races infrastructure that
+; never comes up — the source of the intermittent 0xc0000142.
+0x1,"Setup\AllowStart\AFD"
+0x1,"Setup\AllowStart\EventLog"
+0x1,"Setup\AllowStart\PlugPlay"
+0x1,"Setup\AllowStart\ProtectedStorage"
+0x1,"Setup\AllowStart\Rpcss"
+0x1,"Setup\AllowStart\SamSs"
+0x1,"Setup\AllowStart\Seclogon"
+0x1,"Setup\AllowStart\WS2IFSL"
+
+; ProtectedStorage — the LSA secret/credential store, hosted in lsass; the piece
+; msprivs's privilege init needs. Depends on RpcSs.
+0x2,"ControlSet001\Services\ProtectedStorage","ImagePath","%SystemRoot%\system32\lsass.exe"
+0x4,"ControlSet001\Services\ProtectedStorage","Start",0x2
+0x4,"ControlSet001\Services\ProtectedStorage","Type",0x120
+0x4,"ControlSet001\Services\ProtectedStorage","ErrorControl",0x1
+0x1,"ControlSet001\Services\ProtectedStorage","ObjectName","LocalSystem"
+0x7,"ControlSet001\Services\ProtectedStorage","DependOnService","RpcSs"
+
+; PlugPlay — the user-mode PnP service (services.exe-hosted).
+0x2,"ControlSet001\Services\PlugPlay","ImagePath","%SystemRoot%\system32\services.exe"
+0x4,"ControlSet001\Services\PlugPlay","Start",0x2
+0x4,"ControlSet001\Services\PlugPlay","Type",0x20
+0x4,"ControlSet001\Services\PlugPlay","ErrorControl",0x1
+0x1,"ControlSet001\Services\PlugPlay","ObjectName","LocalSystem"
+0x1,"ControlSet001\Services\PlugPlay","Group","PlugPlay"
+0x4,"ControlSet001\Services\PlugPlay","PlugPlayServiceType",0x3
+
+; AFD — the Winsock TDI kernel driver (Winsock/local-socket transport the RPC/LSA
+; stack uses). Its service is otherwise stripped with the network stack below.
+0x2,"ControlSet001\Services\AFD","ImagePath","\SystemRoot\system32\drivers\afd.sys"
+0x4,"ControlSet001\Services\AFD","Start",0x3
+0x4,"ControlSet001\Services\AFD","Type",0x1
+0x4,"ControlSet001\Services\AFD","ErrorControl",0x1
+0x1,"ControlSet001\Services\AFD","Group","TDI"
 
 ; The setup-mode shell hand-off: winlogon, seeing a non-zero SetupType, runs the
 ; command line in Setup\CmdLine instead of the interactive logon chain.
@@ -118,6 +473,7 @@ l_intl.nls =
 
 ; Skip autochk/chkdsk at boot: the volume is read-only removable media.
 0x7,"ControlSet001\Control\Session Manager","BootExecute",""
+
 
 ; The command interpreter and search path the environment runs with.
 0x2,"ControlSet001\Control\Session Manager\Environment","ComSpec","%SystemRoot%\system32\cmd.exe"
@@ -140,19 +496,56 @@ l_intl.nls =
 0x1,"ControlSet001\Control\Session Manager\KnownDLLs","rpcrt4","rpcrt4.dll"
 0x1,"ControlSet001\Control\Session Manager\KnownDLLs","user32","user32.dll"
 
+; The DOS-device namespace smss builds at init. The raw setup hive omits it; without
+; it smss's initialization fails by name (0xc0000034) before it ever loads SOFTWARE
+; or launches the Win32 subsystem.
+0x1,"ControlSet001\Control\Session Manager\DOS Devices","AUX","\DosDevices\COM1"
+0x1,"ControlSet001\Control\Session Manager\DOS Devices","MAILSLOT","\Device\MailSlot"
+0x1,"ControlSet001\Control\Session Manager\DOS Devices","NUL","\Device\Null"
+0x1,"ControlSet001\Control\Session Manager\DOS Devices","PIPE","\Device\NamedPipe"
+0x1,"ControlSet001\Control\Session Manager\DOS Devices","PRN","\DosDevices\LPT1"
+0x1,"ControlSet001\Control\Session Manager\DOS Devices","UNC","\Device\Mup"
+
+; Empty subkeys smss opens during init.
+0x1,"ControlSet001\Control\Session Manager\Executive"
+0x1,"ControlSet001\Control\Session Manager\FileRenameOperations"
+0x1,"ControlSet001\Control\Session Manager\Power"
+0x1,"ControlSet001\Control\Session Manager\AppCompatability"
+0x1,"ControlSet001\Control\Session Manager\AppPatches"
+0x1,"ControlSet001\Control\Session Manager\WPA"
+
+; System File Checker directories some startup components read.
+0x1,"ControlSet001\Control\Session Manager\SFC","CommonFilesDir","\"
+0x1,"ControlSet001\Control\Session Manager\SFC","ProgramFilesDir","\"
+
+; The system locale (Nls\CodePage ACP/OEMCP/MACCP and Nls\Language) is left as
+; text-setup's setupreg.hiv ships it — empty. The kernel resolves the console/ANSI
+; code pages from the loaded NLS tables; overriding them here mismatched the console
+; and garbled its Cyrillic text, so matching the working reference (no override) is
+; correct.
+
 ; Product identification some components read during startup.
 0x1,"ControlSet001\Control\ProductOptions","ProductType","WinNT"
 0x7,"ControlSet001\Control\ProductOptions","ProductSuite",""
 
-; The generic VGA display driver the Win32 subsystem falls back to.
+; The generic VGA display driver the Win32 subsystem falls back to. win32k resolves
+; the display driver through the DEVICEMAP→Device0 lookup, so the miniport service
+; carries the full Device0\InstalledDisplayDrivers list (vga plus the framebuffer and
+; 256-colour/64k variants); without it graphics init fails with STOP 0xB4.
 0x1,"ControlSet001\Services\VgaSave","Group","Video Save"
 0x2,"ControlSet001\Services\VgaSave","ImagePath","\SystemRoot\System32\drivers\vga.sys"
 0x4,"ControlSet001\Services\VgaSave","Start",0x1
 0x4,"ControlSet001\Services\VgaSave","Type",0x1
+0x4,"ControlSet001\Services\VgaSave","ErrorControl",0x0
+0x4,"ControlSet001\Services\VgaSave","Tag",0x1
+0x7,"ControlSet001\Services\VgaSave\Device0","InstalledDisplayDrivers","vga","framebuf","vga256","vga64k"
+0x4,"ControlSet001\Services\VgaSave\Device0","VgaCompatible",0x1
 0x1,"ControlSet001\Services\VgaSave\Video","Service","VgaSave"
-0x7,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\0000","InstalledDisplayDrivers","vga"
+0x1,"ControlSet001\Services\VgaSave\Video","VideoID","{23A77BF7-ED96-40EC-AF06-9B1F4867732A}"
+0x7,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\0000","InstalledDisplayDrivers","vga","framebuf","vga256","vga64k"
 0x4,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\0000","VgaCompatible",0x1
 0x1,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\Video","Service","VgaSave"
+0x4,"ControlSet001\Control\GraphicsDrivers\DCI","Timeout",0x7
 
 ; ---------------------------------------------------------------------------
 ; Input stack — keyboard and mouse.
@@ -162,15 +555,27 @@ l_intl.nls =
 ; host controllers) and attaches the class driver named in the device class's
 ; UpperFilters, so the class services and the class UpperFilters below are what
 ; make a keyboard and mouse usable in the environment.
-; ---------------------------------------------------------------------------
 ; PS/2 port and its keyboard/mouse class drivers.
 0x1,"ControlSet001\Services\i8042prt","Group","Keyboard Port"
 0x4,"ControlSet001\Services\i8042prt","Start",0x1
 0x4,"ControlSet001\Services\i8042prt","Type",0x1
+; i8042 controller polling/resend tuning (the reference build carries these; the
+; driver falls back to hardcoded defaults when absent).
+0x4,"ControlSet001\Services\i8042prt\Parameters","PollingIterations",0x2ee0
+0x4,"ControlSet001\Services\i8042prt\Parameters","PollingIterationsMaximum",0x2ee0
+0x4,"ControlSet001\Services\i8042prt\Parameters","ResendIterations",0x3
 0x1,"ControlSet001\Services\kbdclass","Group","Keyboard Class"
 0x2,"ControlSet001\Services\kbdclass","ImagePath","System32\drivers\kbdclass.sys"
 0x4,"ControlSet001\Services\kbdclass","Start",0x1
 0x4,"ControlSet001\Services\kbdclass","Type",0x1
+0x4,"ControlSet001\Services\kbdclass","Tag",0x1
+; kbdclass connection parameters: the device base name it registers (\Device\
+; KeyboardClass0) and its port-servicing config. Without these it uses defaults that,
+; in this environment, leave the keyboard class device unbuilt so no key input flows.
+0x4,"ControlSet001\Services\kbdclass\Parameters","ConnectMultiplePorts",0x0
+0x4,"ControlSet001\Services\kbdclass\Parameters","KeyboardDataQueueSize",0x64
+0x1,"ControlSet001\Services\kbdclass\Parameters","KeyboardDeviceBaseName","KeyboardClass"
+0x4,"ControlSet001\Services\kbdclass\Parameters","MaximumPortsServiced",0x3
 0x1,"ControlSet001\Services\mouclass","Group","Pointer Class"
 0x2,"ControlSet001\Services\mouclass","ImagePath","System32\drivers\mouclass.sys"
 0x4,"ControlSet001\Services\mouclass","Start",0x1
@@ -188,18 +593,81 @@ l_intl.nls =
 0x4,"ControlSet001\Services\mouhid","Start",0x3
 0x4,"ControlSet001\Services\mouhid","Type",0x1
 
+; Core system drivers (Start=1, loaded by the SCM after boot; not in txtsetup.sif
+; *.Load, so both the file and this service entry are required). Values from the
+; source HIVESYS.INF.
+
+; Null — the \Device\Null sink (cmd redirection to NUL, misc components).
+0x1,"ControlSet001\Services\Null","Group","Base"
+0x2,"ControlSet001\Services\Null","ImagePath","System32\drivers\null.sys"
+0x4,"ControlSet001\Services\Null","Start",0x1
+0x4,"ControlSet001\Services\Null","Type",0x1
+0x4,"ControlSet001\Services\Null","ErrorControl",0x1
+
+; Npfs — named-pipe file system (\Device\NamedPipe); RPC/LPC named-pipe transport.
+0x1,"ControlSet001\Services\Npfs","Group","File system"
+0x2,"ControlSet001\Services\Npfs","ImagePath","System32\drivers\npfs.sys"
+0x4,"ControlSet001\Services\Npfs","Start",0x1
+0x4,"ControlSet001\Services\Npfs","Type",0x2
+0x4,"ControlSet001\Services\Npfs","ErrorControl",0x1
+
+; Fs_Rec — boot file-system recognizer (FAT/NTFS/CDFS/UDFS detection).
+0x1,"ControlSet001\Services\Fs_Rec","Group","Boot file system"
+0x2,"ControlSet001\Services\Fs_Rec","ImagePath","System32\drivers\fs_rec.sys"
+0x4,"ControlSet001\Services\Fs_Rec","Start",0x1
+0x4,"ControlSet001\Services\Fs_Rec","Type",0x8
+0x4,"ControlSet001\Services\Fs_Rec","ErrorControl",0x0
+
+; Beep — the \Device\Beep driver.
+0x1,"ControlSet001\Services\Beep","Group","Base"
+0x2,"ControlSet001\Services\Beep","ImagePath","System32\drivers\beep.sys"
+0x4,"ControlSet001\Services\Beep","Start",0x1
+0x4,"ControlSet001\Services\Beep","Type",0x1
+0x4,"ControlSet001\Services\Beep","ErrorControl",0x1
+
 ; Attach the class drivers to their device setup classes (Keyboard, Mouse), so
 ; PnP layers kbdclass/mouclass onto whichever port enumerates the device.
 0x7,"ControlSet001\Control\Class\{4D36E96B-E325-11CE-BFC1-08002BE10318}","UpperFilters","kbdclass"
 0x7,"ControlSet001\Control\Class\{4D36E96F-E325-11CE-BFC1-08002BE10318}","UpperFilters","mouclass"
+
+; Map the US keyboard layout (see the .DEFAULT Preload seed) to its layout DLL.
+; Without this, win32k cannot resolve the HKL to a DLL and keystrokes are never
+; translated — the keyboard appears dead even though the class stack is up. The
+; source locale's own layout is mapped the same way from its detected locale.
+0x1,"ControlSet001\Control\Keyboard Layouts\00000409","Layout File","KBDUS.DLL"
+0x1,"ControlSet001\Control\Keyboard Layouts\00000409","Layout Text","US"
+
+; ---------------------------------------------------------------------------
+; Drop the source hive's network-stack service stubs.
+;
+; setupreg.hiv seeds these services in the tag-ordered "drivers" group with no
+; Start value, so text-setup loads them by group/tag during the boot-driver stage
+; and fails on the drivers a minimal base does not ship (ndis.sys and friends).
+; Deleting the service keys removes them from the boot load order. The network and
+; PnP stack belongs to a plugin, which re-adds these services with their drivers.
+; ---------------------------------------------------------------------------
+[SetupReg.DelReg]
+"ControlSet001\Services\NDIS"
+"ControlSet001\Services\Tcpip"
+"ControlSet001\Services\NetBT"
+"ControlSet001\Services\NetBIOS"
+"ControlSet001\Services\IPSec"
+"ControlSet001\Services\Ndisuio"
+"ControlSet001\Services\NDProxy"
+"ControlSet001\Services\PSched"
 
 ; ---------------------------------------------------------------------------
 ; Boot configuration.
 ;
 ; The single edit that makes the result a PE: /minint puts the loader and kernel
 ; into the minimal, RAM-based preinstall mode, running from the boot media rather
-; than an installed disk. Applied to txtsetup.sif by a later build stage.
+; than an installed disk. /kernel and /hal name the kernel and HAL images
+; explicitly: /kernel=ntoskrnl.exe (the multiprocessor kernel installed under that
+; name) and /hal=halaacpi.dll, the ACPI PIC HAL. The pinned HAL targets a standard
+; ACPI machine with a uniprocessor interrupt controller — the common VM/PC case; a
+; host needing a different HAL (an APIC/multiprocessor halmacpi.dll, or a non-ACPI
+; HAL) would need this value adjusted. Applied to txtsetup.sif by a later build stage.
 ; ---------------------------------------------------------------------------
 [SetValue]
-"txtsetup.sif","SetupData","osloadoptions","""/fastdetect /minint"""
+"txtsetup.sif","SetupData","osloadoptions","""/fastdetect /minint /kernel=ntoskrnl.exe /hal=halaacpi.dll"""
 "txtsetup.sif","SetupData","loaderprompt","""Starting pebuild..."""

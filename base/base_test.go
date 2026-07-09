@@ -30,6 +30,38 @@ func fixtureLayout() *layout.Layout {
 			"FileSystems": {"ntfs.sys", "fastfat.sys"},
 			"SCSI":        {"atapi.sys"},
 		},
+		NLS: layout.NLS{
+			AnsiCodepageFile: "c_1251.nls",
+			OemCodepageFile:  "c_866.nls",
+			OemHalFont:       "vga866.fon",
+			LangID:           "0419",
+		},
+	}
+}
+
+func TestLocaleActions(t *testing.T) {
+	got := localeActions(fixtureLayout())
+	want := []action.Action{
+		{Kind: action.CopyFile, Src: "c_1251.nls"},
+		{Kind: action.CopyFile, Src: "c_866.nls"},
+		{Kind: action.CopyFile, Src: "vga866.fon", DirID: "2"},
+		{Kind: action.CopyFile, Src: "kbdru.dll", DirID: "2"},
+		localeReg(action.HiveDefault, `Keyboard Layout\Preload`, "2", "00000419"),
+		localeReg(action.HiveSystem, `ControlSet001\Control\Keyboard Layouts\00000419`, "Layout File", "KBDRU.DLL"),
+		localeReg(action.HiveSystem, `ControlSet001\Control\Keyboard Layouts\00000419`, "Layout Text", "Russian"),
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("localeActions mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestLocaleActionsUnknown checks a source whose locale is not in the keyboard table
+// gets no locale layer — it keeps the US-English base.
+func TestLocaleActionsUnknown(t *testing.T) {
+	l := fixtureLayout()
+	l.NLS.LangID = "0407" // German: not in the table
+	if got := localeActions(l); got != nil {
+		t.Errorf("localeActions for unknown locale = %v, want nil", got)
 	}
 }
 

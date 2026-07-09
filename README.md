@@ -30,6 +30,14 @@ licensed Windows installation source (Windows XP Service Pack 1 or later, or
 Windows Server 2003). The tool only reads and repackages files from the source you
 provide.
 
+## Status
+
+Early development. A build currently produces a bootable PE that reaches an
+interactive `cmd.exe`, with the console locale — code pages, fonts, and keyboard —
+taken from the source's own locale. The plugin subsystem is not wired up yet, so
+the environment ships no optional tools and, in particular, **no shutdown / power-off
+command**; those arrive with plugin support.
+
 ## Documentation
 
 - [`docs/reference/`](docs/reference/) — a detailed, primary-source reference for

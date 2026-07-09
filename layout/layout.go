@@ -82,6 +82,29 @@ type Layout struct {
 	// Load maps a load class (e.g. "FileSystems") to its driver filenames in
 	// declaration order, deduplicated.
 	Load map[string][]string
+	// NLS is the source's national-language configuration (code pages, OEM console
+	// font, language ID), read from txtsetup.sif's [nls] section.
+	NLS NLS
+}
+
+// NLS is a source's national-language configuration from txtsetup.sif's [nls]
+// section: the code-page tables and OEM console font its locale needs, and the
+// language ID that identifies the locale.
+type NLS struct {
+	AnsiCodepageFile string // ANSI code-page table, e.g. c_1251.nls
+	OemCodepageFile  string // OEM code-page table, e.g. c_866.nls
+	OemHalFont       string // OEM console/HAL raster font, e.g. vga866.fon
+	LangID           string // language ID from the Unicode case table, e.g. 0419
+}
+
+// KLID returns the source locale's keyboard-layout ID — the eight-hex-digit
+// "0000"+LANGID form the registry uses (e.g. 00000419 for 0419) — or "" if the
+// source declared no language ID.
+func (n NLS) KLID() string {
+	if n.LangID == "" {
+		return ""
+	}
+	return "0000" + strings.ToUpper(n.LangID)
 }
 
 // Parse reads the source's txtsetup.sif and layout.inf and builds the model. The
@@ -113,7 +136,26 @@ func Parse(src source.Backing, id source.Identity) (*Layout, error) {
 	l.readFiles(lay, id.Build, suffix)
 	l.readFiles(txt, id.Build, suffix)
 	l.readLoad(txt, id.Build)
+	l.readNLS(txt, id.Build)
 	return l, nil
+}
+
+// readNLS fills NLS from txtsetup.sif's [nls] section: the ANSI/OEM code-page table
+// files (field 0 of each entry) and OEM console font, and the language ID carried as
+// the second field of the Unicode case table entry.
+func (l *Layout) readNLS(f *inf.File, build int) {
+	for _, ln := range f.Section("nls", build) {
+		switch {
+		case strings.EqualFold(ln.Key, "AnsiCodepage"):
+			l.NLS.AnsiCodepageFile = strings.TrimSpace(ln.Field(0))
+		case strings.EqualFold(ln.Key, "OemCodepage"):
+			l.NLS.OemCodepageFile = strings.TrimSpace(ln.Field(0))
+		case strings.EqualFold(ln.Key, "OemHalFont"):
+			l.NLS.OemHalFont = strings.TrimSpace(ln.Field(0))
+		case strings.EqualFold(ln.Key, "UnicodeCasetable"):
+			l.NLS.LangID = strings.TrimSpace(ln.Field(1))
+		}
+	}
 }
 
 // parseSourceINF reads and parses an INF from the source backing.

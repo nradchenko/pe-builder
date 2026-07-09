@@ -48,5 +48,7 @@ func Actions(l *layout.Layout, id source.Identity) ([]action.Action, error) {
 	if err != nil {
 		return nil, fmt.Errorf("compile base.inf: %w", err)
 	}
-	return append(acts, driverActions(l)...), nil
+	acts = append(acts, driverActions(l)...)
+	acts = append(acts, localeActions(l)...)
+	return acts, nil
 }
