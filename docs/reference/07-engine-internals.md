@@ -94,7 +94,7 @@ base is selected from the Windows source itself:
   filenames appear as embedded strings in the binary).
 
 The result is a **curated subset** of the source, not its full file set (a bare
-build is ~100 MB). *(The exact subset was not enumerated from static analysis; the
+build is ~160 MB). *(The exact subset was not enumerated from static analysis; the
 mechanism is inferred from the `*.Load` / `layout.inf` references in the binary and
 from comparing `pebuilder.inf` against a real source's `txtsetup.sif`.)*
 

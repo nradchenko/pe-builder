@@ -45,8 +45,8 @@ Depending on the selected media output, a build yields one of:
 4. **A bootable USB flash disk** — via the separate `pe2usb` helper (uses a RAM
    disk boot method; see [`02-build-process.md`](02-build-process.md)).
 
-A bare BartPE CD is on the order of ~100 MB; a full desktop build using the XPE
-plugin is roughly ~250 MB.
+A bare BartPE CD is about ~160 MB; a full desktop build using the XPE plugin is
+around ~220 MB.
 
 ## Requirements
 
