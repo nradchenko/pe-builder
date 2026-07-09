@@ -24,11 +24,15 @@ over it.
     `DRIVER.CAB`).
   - `inf/` — a Windows setupapi-compatible `.inf` parser.
   - `layout/` — resolve the source's `txtsetup.sif` / `layout.inf` (file → target
-    directory, on-disk name, boot-driver lists).
+    directory, on-disk name, boot-driver lists, and the source's locale from the
+    `[nls]` section).
   - `action/` — the build action IR (copy-file, mkdir, registry, text-edit) that the
     base layer and plugins compile to.
+  - `inifile/` — apply the text/INI edit actions (e.g. the `txtsetup.sif` boot edits)
+    to files in the assembled tree.
   - `plugin/` — plugin discovery, parsing, and evaluation into actions.
-  - `base/` — the clean-room base layer (`base.inf` + boot-driver derivation).
+  - `base/` — the clean-room base layer (`base.inf` plus boot-driver and locale
+    derivation from the source).
   - `tree/` — assemble the output file tree (resolve → decompress → place).
   - `hive/` — build the Windows registry hives (pure-Go `regf` read/write).
   - `target/` — output targets (e.g. a bootable ISO).
