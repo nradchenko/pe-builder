@@ -1,0 +1,9 @@
+app.exe  [i386/app.exe]
+  absent.dll  [MISSING]
+  delaymod.dll  [i386/delaymod.dll]
+  gui.dll  [i386/gui.dl_ (compressed)]
+    cabmod.dll  [i386/drivers.cab (cabinet)]
+    leaf.dll  [i386/leaf.dll]
+  leaf.dll  [i386/leaf.dll]
+
+Summary: 6 modules — 5 resolved (3 loose, 1 compressed, 1 cabinet), 1 missing

@@ -13,9 +13,12 @@ clean-room, Linux-first reimplementation of the ideas behind the discontinued
 ## Repository layout
 
 The build **engine** is a set of importable Go packages; `cmd/pebuild` is a thin CLI
-over it.
+over it. `pewalk` is a second, standalone tool (library + CLI) that inspects a source's
+PE dependencies.
 
 - `cmd/pebuild/` — the command-line frontend (cobra).
+- `cmd/pewalk/` — the `pewalk` command: an "ldd for PE" that computes and renders the
+  import closure of a Windows binary against a source (cobra).
 - Engine packages, roughly in pipeline order:
   - `manifest/` — the HCL build manifest (load + validate).
   - `source/` — read a Windows installation source (directory or ISO) and probe its
@@ -39,6 +42,12 @@ over it.
   - `hive/` — build the Windows registry hives (pure-Go `regf` read/write).
   - `target/` — output targets (e.g. a bootable ISO).
   - `build/` — the orchestrator that wires the pipeline together.
+- `pewalk/` — the "ldd for PE" library: computes the transitive PE import closure
+  (static + delay imports) of a binary against a source, resolving each imported module
+  through the `source` and `compress` backings (loose, compressed-loose `.??_`, and
+  cabinet-packed forms) and reporting missing modules as flagged red herrings. Renders
+  the closure as text, Graphviz DOT, or JSON. Backs both `cmd/pewalk` and the durable
+  import-walk scanners.
 - `plugins/` — the built-in plugins bundled with pebuild (embedded via `go:embed`),
   each a directory with an `.inf`; a build-capable one (e.g. `poweroff`) ships source
   and a `[Build]` declaration, not a prebuilt binary.

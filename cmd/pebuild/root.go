@@ -32,7 +32,7 @@ func newRootCmd() *cobra.Command {
 	}
 
 	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable debug logging")
-	root.SetVersionTemplate(buildinfo.String() + "\n")
+	root.SetVersionTemplate(buildinfo.String("pebuild") + "\n")
 
 	root.AddCommand(
 		newVersionCmd(),

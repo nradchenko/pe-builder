@@ -1,0 +1,300 @@
+// Copyright 2026 Nikita Radchenko
+// SPDX-License-Identifier: Apache-2.0
+
+package pewalk
+
+import (
+	"bytes"
+	"encoding/json"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"testing"
+	"testing/fstest"
+
+	"github.com/nradchenko/pe-builder/internal/golden"
+	"github.com/nradchenko/pe-builder/source"
+)
+
+// fixtureSource assembles a small closure that exercises every resolution path:
+//
+//	app.exe (loose)            → gui.dll, leaf.dll, absent.dll, delaymod.dll (delay)
+//	gui.dll (compressed loose) → leaf.dll, cabmod.dll
+//	leaf.dll (loose)           → (none)      [shared: a diamond via app + gui]
+//	cabmod.dll (cabinet)       → (none)
+//	delaymod.dll (loose)       → (none)
+//	absent.dll                 → missing (a red herring)
+func fixtureSource(t *testing.T) *Source {
+	t.Helper()
+	fsys := fstest.MapFS{
+		"i386/app.exe": {Data: buildPE(
+			[]string{"gui.dll", "leaf.dll", "absent.dll"},
+			[]string{"delaymod.dll"}, false)},
+		"i386/leaf.dll":     {Data: buildPE(nil, nil, true)},
+		"i386/delaymod.dll": {Data: buildPE(nil, nil, true)},
+		"i386/gui.dl_": {Data: writeCabinet([]cabMember{
+			{name: "gui.dll", data: buildPE([]string{"leaf.dll", "cabmod.dll"}, nil, true)},
+		})},
+		"i386/drivers.cab": {Data: writeCabinet([]cabMember{
+			{name: "cabmod.dll", data: buildPE(nil, nil, true)},
+		})},
+	}
+	s, err := Open(fsys)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	return s
+}
+
+func TestSourceResolution(t *testing.T) {
+	s := fixtureSource(t)
+	cases := []struct {
+		name string
+		kind OriginKind
+		path string
+	}{
+		{"app.exe", OriginLoose, "i386/app.exe"},
+		{"APP.EXE", OriginLoose, "i386/app.exe"}, // case-insensitive
+		{"gui.dll", OriginCompressedLoose, "i386/gui.dl_"},
+		{"cabmod.dll", OriginCab, "i386/drivers.cab"},
+	}
+	for _, c := range cases {
+		if !s.Has(c.name) {
+			t.Errorf("Has(%q) = false, want true", c.name)
+		}
+		_, origin, err := s.Read(c.name)
+		if err != nil {
+			t.Errorf("Read(%q): %v", c.name, err)
+			continue
+		}
+		if origin.Kind != c.kind || origin.Path != c.path {
+			t.Errorf("Read(%q) origin = %v %q, want kind %v path %q",
+				c.name, origin.Kind, origin.Path, c.kind, c.path)
+		}
+	}
+
+	if s.Has("absent.dll") {
+		t.Errorf("Has(absent.dll) = true, want false")
+	}
+	if _, _, err := s.Read("absent.dll"); err == nil {
+		t.Errorf("Read(absent.dll) = nil error, want not-found")
+	}
+}
+
+func TestWalkClosure(t *testing.T) {
+	s := fixtureSource(t)
+	res, err := Walk(s, "app.exe")
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+
+	wantOrder := []string{"app.exe", "absent.dll", "delaymod.dll", "gui.dll", "leaf.dll", "cabmod.dll"}
+	if len(res.Order) != len(wantOrder) {
+		t.Fatalf("Order = %v, want %v", res.Order, wantOrder)
+	}
+	for i, name := range wantOrder {
+		if res.Order[i] != name {
+			t.Fatalf("Order = %v, want %v", res.Order, wantOrder)
+		}
+	}
+
+	if got := res.Nodes["absent.dll"].Status; got != StatusMissing {
+		t.Errorf("absent.dll status = %v, want missing", got)
+	}
+	if got := res.Nodes["cabmod.dll"].Origin.Kind; got != OriginCab {
+		t.Errorf("cabmod.dll origin = %v, want cabinet", got)
+	}
+	// leaf.dll is imported by both app.exe and gui.dll but appears once.
+	if !res.Nodes["leaf.dll"].Seed {
+		// not a seed, just ensure it exists once
+	}
+	if got := len(res.Missing()); got != 1 {
+		t.Errorf("Missing count = %d, want 1", got)
+	}
+}
+
+func TestWalkOutputGolden(t *testing.T) {
+	s := fixtureSource(t)
+	res, err := Walk(s, "app.exe")
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+
+	var text bytes.Buffer
+	res.WriteText(&text, false)
+	golden.Assert(t, "walk/text", text.String())
+
+	var missing bytes.Buffer
+	res.WriteText(&missing, true)
+	golden.Assert(t, "walk/text-missing-only", missing.String())
+
+	var dot bytes.Buffer
+	res.WriteDOT(&dot)
+	golden.Assert(t, "walk/dot", dot.String())
+
+	var jsonBuf bytes.Buffer
+	if err := res.WriteJSON(&jsonBuf); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+	golden.Assert(t, "walk/json", jsonBuf.String())
+}
+
+func TestWalkMaxDepth(t *testing.T) {
+	s := fixtureSource(t)
+	res, err := WalkWith(s, Options{MaxDepth: 1}, "app.exe")
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	// Depth 1 reaches app.exe's direct imports but does not expand gui.dll, so
+	// cabmod.dll (only reachable through gui.dll) is never discovered.
+	if _, ok := res.Nodes["cabmod.dll"]; ok {
+		t.Errorf("cabmod.dll discovered at max-depth 1, want it bounded out")
+	}
+	if _, ok := res.Nodes["gui.dll"]; !ok {
+		t.Errorf("gui.dll not discovered at max-depth 1")
+	}
+	if imports := res.Nodes["gui.dll"].Imports; imports != nil {
+		t.Errorf("gui.dll imports = %v, want none expanded at depth cap", imports)
+	}
+}
+
+func TestMissingSeedIsNotFatal(t *testing.T) {
+	s := fixtureSource(t)
+	res, err := Walk(s, "nosuch.exe")
+	if err != nil {
+		t.Fatalf("Walk with missing seed: %v", err)
+	}
+	if got := res.Nodes["nosuch.exe"].Status; got != StatusMissing {
+		t.Errorf("missing seed status = %v, want missing", got)
+	}
+}
+
+// TestWalkDirectoryBacking exercises the same path the CLI uses: a real on-disk
+// directory opened through the source package (os.DirFS behind the case-folding
+// normFS wrapper), rather than an in-memory MapFS. It confirms compressed-loose
+// and cabinet resolution work over the real backing and that lookups tolerate the
+// case differences that backing normalizes.
+func TestWalkDirectoryBacking(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "i386")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string][]byte{
+		"app.exe":     buildPE([]string{"gui.dll", "absent.dll"}, nil, false),
+		"gui.dl_":     writeCabinet([]cabMember{{name: "gui.dll", data: buildPE([]string{"cabmod.dll"}, nil, true)}}),
+		"drivers.cab": writeCabinet([]cabMember{{name: "cabmod.dll", data: buildPE(nil, nil, true)}}),
+	}
+	for name, data := range files {
+		if err := os.WriteFile(filepath.Join(root, name), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	src, err := source.Open(dir)
+	if err != nil {
+		t.Fatalf("source.Open: %v", err)
+	}
+	s, err := Open(src.Backing())
+	if err != nil {
+		t.Fatalf("pewalk.Open: %v", err)
+	}
+	// Query with uppercase to exercise case-insensitive resolution end to end.
+	res, err := Walk(s, "APP.EXE")
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+
+	if got := res.Nodes["gui.dll"].Origin.Kind; got != OriginCompressedLoose {
+		t.Errorf("gui.dll origin = %v, want compressed-loose", got)
+	}
+	if got := res.Nodes["cabmod.dll"].Origin.Kind; got != OriginCab {
+		t.Errorf("cabmod.dll origin = %v, want cabinet", got)
+	}
+	if got := res.Nodes["absent.dll"].Status; got != StatusMissing {
+		t.Errorf("absent.dll status = %v, want missing", got)
+	}
+}
+
+// TestImportsOfMalformedDoesNotPanic feeds importsOf inputs that are not valid
+// PE images (including ones that have tripped saferwall panics) and asserts it
+// returns an error instead of panicking — so one bad module never aborts a walk.
+func TestImportsOfMalformedDoesNotPanic(t *testing.T) {
+	cases := map[string][]byte{
+		"empty":        {},
+		"tiny":         []byte("MZ"),
+		"not-pe":       []byte("this is plainly not a PE binary at all, just text"),
+		"mz-no-pe":     append([]byte("MZ"), make([]byte, 200)...),
+		"truncated-pe": buildPE([]string{"leaf.dll"}, nil, false)[:80],
+	}
+	for name, data := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, err := importsOf(data)
+			if err == nil {
+				t.Errorf("importsOf(%s) = %v, nil; want an error", name, got)
+			}
+		})
+	}
+}
+
+// TestUnreadableCabinetIsSkipped confirms a cabinet the compress package cannot
+// parse is skipped with a warning rather than aborting Open, and the rest of the
+// source still resolves.
+func TestUnreadableCabinetIsSkipped(t *testing.T) {
+	fsys := fstest.MapFS{
+		"i386/app.exe":  {Data: buildPE([]string{"leaf.dll"}, nil, false)},
+		"i386/leaf.dll": {Data: buildPE(nil, nil, true)},
+		// "MSCF" makes IsCabinet true, but the truncated header fails ReadCabinet.
+		"i386/broken.cab": {Data: []byte("MSCF\x00\x00\x00\x00")},
+	}
+	s, err := Open(fsys)
+	if err != nil {
+		t.Fatalf("Open must not fail on a bad cabinet: %v", err)
+	}
+	if len(s.Warnings()) != 1 {
+		t.Fatalf("Warnings = %v, want exactly one skipped-cabinet warning", s.Warnings())
+	}
+	res, err := Walk(s, "app.exe")
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	if got := res.Nodes["leaf.dll"].Status; got != StatusResolved {
+		t.Errorf("leaf.dll status = %v, want resolved despite the bad cabinet", got)
+	}
+}
+
+// TestMalformedModuleYieldsCleanOutput checks that a resolvable-but-unparseable
+// module becomes a ParseError node (not a crash) and that JSON output stays valid
+// — i.e. no stray parser diagnostics leak onto stdout.
+func TestMalformedModuleYieldsCleanOutput(t *testing.T) {
+	fsys := fstest.MapFS{
+		"i386/app.exe":  {Data: buildPE([]string{"junk.dll"}, nil, false)},
+		"i386/junk.dll": {Data: []byte("MZ not really a PE, will fail to parse")},
+	}
+	s, err := Open(fsys)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	res, err := Walk(s, "app.exe")
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	junk := res.Nodes["junk.dll"]
+	if junk.Status != StatusResolved || junk.ParseError == "" {
+		t.Errorf("junk.dll = status %v parseError %q; want resolved with a parse error",
+			junk.Status, junk.ParseError)
+	}
+
+	var buf bytes.Buffer
+	if err := res.WriteJSON(&buf); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+	var decoded jsonResult
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("JSON output is not valid: %v\n%s", err, buf.String())
+	}
+}
+
+// Guard: the fixture MapFS resolves through fs.WalkDir the same way a real source
+// backing does.
+var _ fs.FS = fstest.MapFS(nil)

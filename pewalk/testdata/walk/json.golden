@@ -1,0 +1,74 @@
+{
+  "seeds": [
+    "app.exe"
+  ],
+  "nodes": [
+    {
+      "name": "app.exe",
+      "status": "resolved",
+      "origin": {
+        "kind": "loose",
+        "path": "i386/app.exe"
+      },
+      "imports": [
+        "absent.dll",
+        "delaymod.dll",
+        "gui.dll",
+        "leaf.dll"
+      ],
+      "seed": true
+    },
+    {
+      "name": "absent.dll",
+      "status": "missing",
+      "origin": {
+        "kind": "none"
+      },
+      "imports": [],
+      "seed": false
+    },
+    {
+      "name": "delaymod.dll",
+      "status": "resolved",
+      "origin": {
+        "kind": "loose",
+        "path": "i386/delaymod.dll"
+      },
+      "imports": [],
+      "seed": false
+    },
+    {
+      "name": "gui.dll",
+      "status": "resolved",
+      "origin": {
+        "kind": "compressed-loose",
+        "path": "i386/gui.dl_"
+      },
+      "imports": [
+        "cabmod.dll",
+        "leaf.dll"
+      ],
+      "seed": false
+    },
+    {
+      "name": "leaf.dll",
+      "status": "resolved",
+      "origin": {
+        "kind": "loose",
+        "path": "i386/leaf.dll"
+      },
+      "imports": [],
+      "seed": false
+    },
+    {
+      "name": "cabmod.dll",
+      "status": "resolved",
+      "origin": {
+        "kind": "cabinet",
+        "path": "i386/drivers.cab"
+      },
+      "imports": [],
+      "seed": false
+    }
+  ]
+}

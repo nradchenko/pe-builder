@@ -17,7 +17,7 @@ var (
 	Date = "unknown"
 )
 
-// String renders a single human-readable build-info line.
-func String() string {
-	return fmt.Sprintf("pebuild %s (commit %s, built %s)", Version, Commit, Date)
+// String renders a single human-readable build-info line for the named program.
+func String(prog string) string {
+	return fmt.Sprintf("%s %s (commit %s, built %s)", prog, Version, Commit, Date)
 }

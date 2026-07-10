@@ -1,0 +1,16 @@
+digraph pewalk {
+  rankdir=LR;
+  node [shape=ellipse, fontname="monospace"];
+  "app.exe" [penwidth=2];
+  "absent.dll" [color="red", fontcolor="red", style="dashed"];
+  "delaymod.dll";
+  "gui.dll" [shape=box];
+  "leaf.dll";
+  "cabmod.dll" [color="blue"];
+  "app.exe" -> "absent.dll";
+  "app.exe" -> "delaymod.dll";
+  "app.exe" -> "gui.dll";
+  "app.exe" -> "leaf.dll";
+  "gui.dll" -> "cabmod.dll";
+  "gui.dll" -> "leaf.dll";
+}
