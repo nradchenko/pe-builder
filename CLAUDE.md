@@ -30,17 +30,22 @@ over it.
     base layer and plugins compile to.
   - `inifile/` — apply the text/INI edit actions (e.g. the `txtsetup.sif` boot edits)
     to files in the assembled tree.
-  - `plugin/` — plugin discovery, parsing, evaluation into actions, and installing
-    plugins from `.cab`/`.zip` archives (`plugins add`).
+  - `plugin/` — plugin discovery, parsing, evaluation into actions, the `[Build]`
+    pre-pass that compiles a build-capable plugin's payload from source, and
+    installing plugins from `.cab`/`.zip` archives (`plugins add`).
   - `base/` — the clean-room base layer (`base.inf` plus boot-driver and locale
     derivation from the source).
   - `tree/` — assemble the output file tree (resolve → decompress → place).
   - `hive/` — build the Windows registry hives (pure-Go `regf` read/write).
   - `target/` — output targets (e.g. a bootable ISO).
   - `build/` — the orchestrator that wires the pipeline together.
+- `plugins/` — the built-in plugins bundled with pebuild (embedded via `go:embed`),
+  each a directory with an `.inf`; a build-capable one (e.g. `poweroff`) ships source
+  and a `[Build]` declaration, not a prebuilt binary.
 - `internal/` — support packages: `golden` (golden-file test helper), `buildinfo`
   (version metadata).
 - `docs/` — project documentation.
+  - `docs/plugins/` — the plugin bundling/inclusion policy (what may ship built-in).
   - `docs/reference/` — a primary-source reference describing the **original**
     Bart's PE Builder: its build process, the plugin `.inf` format, conventions,
     and internals. Treat these as the authoritative model of how the original tool

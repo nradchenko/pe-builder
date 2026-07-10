@@ -4,15 +4,79 @@
 package plugin
 
 import (
+	"bytes"
 	"context"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/nradchenko/pe-builder/inf"
 )
+
+func TestBuiltinPoweroff(t *testing.T) {
+	// poweroff is a built-in, build-capable plugin.
+	names, err := Builtin().List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsStr(names, "poweroff") {
+		t.Fatalf("built-in plugins = %v, want poweroff among them", names)
+	}
+	fsys, canonical, ok := Builtin().Resolve("poweroff")
+	if !ok {
+		t.Fatal("Resolve(poweroff) not found in the built-in source")
+	}
+	p, err := ParseFS(fsys, canonical, 2600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.Build.Present {
+		t.Fatal("poweroff has no [Build] section")
+	}
+	if !containsStr(p.Build.Requires, "i686-w64-mingw32-gcc") || !containsStr(p.Build.Produces, "poweroff.exe") {
+		t.Errorf("poweroff [Build] = %+v, want mingw Requires and poweroff.exe Produces", p.Build)
+	}
+
+	// It ships source, not a binary.
+	if _, err := fs.Stat(fsys, "poweroff.exe"); err == nil {
+		t.Error("the built-in poweroff embeds a prebuilt poweroff.exe; it must ship source only")
+	}
+	if _, err := fs.Stat(fsys, "poweroff.c"); err != nil {
+		t.Errorf("poweroff.c not embedded: %v", err)
+	}
+
+	// Build it for real when the mingw toolchain is available.
+	if _, err := exec.LookPath("i686-w64-mingw32-gcc"); err != nil {
+		t.Skip("mingw i686 toolchain not present; skipping the compile")
+	}
+	d := &Discovered{Name: canonical, Source: BuiltinLabel, FS: fsys, Units: []*Plugin{p}}
+	built, err := RunBuild(context.Background(), d, t.TempDir())
+	if err != nil {
+		t.Fatalf("poweroff build failed: %v", err)
+	}
+	if !built.Produces["poweroff.exe"] {
+		t.Fatal("build did not produce poweroff.exe")
+	}
+	bin, err := fs.ReadFile(built.Dir, "poweroff.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(bin, []byte("MZ")) {
+		t.Error("produced poweroff.exe is not a PE/DOS executable (no MZ header)")
+	}
+}
+
+func containsStr(ss []string, want string) bool {
+	for _, s := range ss {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
 
 func TestParseBuildSection(t *testing.T) {
 	src := `[Version]
