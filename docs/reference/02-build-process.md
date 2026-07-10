@@ -99,6 +99,28 @@ The single most important boot edit lives in the base manifest and targets
   Plugins may override it (XPE sets its own prompt via the same `[SetValue]`
   mechanism).
 
+### The base registry overlay that makes it a PE
+
+Beyond the `txtsetup.sif` edit, `pebuilder.inf`'s registry sections establish the
+handful of keys that turn an otherwise normal NT boot into a read-only PE (in the
+SYSTEM hive unless noted):
+
+- **`ControlSet001\Control\MiniNT`** — a marker key that identifies the environment
+  as a PE; many Windows components and applications key their behaviour off its
+  presence.
+- **`Setup\SetupType`** (non-zero) with **`Setup\CmdLine`** — put the boot into the
+  "setup is in progress" path, so that **`winlogon.exe` runs `Setup\CmdLine` instead
+  of showing the interactive logon UI** (see the boot chain below). This is the
+  XP-era mechanism by which BartPE launches its shell — there is no `winpeshl`
+  (that is Vista+ WinPE).
+- **`Control\Session Manager\BootExecute`** set empty — skips the `autochk`/`chkdsk`
+  boot pass, which a volatile, read-only PE cannot usefully run.
+- **Security services** — the source's `setupreg.hiv` is minimal, so the base
+  manifest hand-authors the LSA/security stack the boot assumes: the `Control\Lsa`
+  package list (`kerberos`, `msv1_0`, `schannel`), the lsass-hosted `SamSs` and
+  `ProtectedStorage` services and their `RpcSs` dependency, a `Setup\AllowStart`
+  service whitelist, and `Control\SecurityProviders = schannel.dll`.
+
 ## Boot chain
 
 ### CD / DVD
@@ -113,11 +135,27 @@ The single most important boot edit lives in the base manifest and targets
 3. `setupldr.bin` reads **`txtsetup.sif`** (with the `/minint` os-load options),
    invokes **`ntdetect.com`** for hardware detection, then loads the kernel
    (`ntoskrnl.exe`) and `hal.dll` and the boot-class drivers.
-4. The kernel initializes using the BartPE-built registry hives, runs services
-   and the logon/shell chain, and lands in the configured shell
+4. The kernel initializes from the BartPE-built registry hives and runs services.
+   Because the base registry marks setup as in progress (`Setup\SetupType`),
+   **`winlogon.exe` runs the command in `Setup\CmdLine`** rather than presenting an
+   interactive logon — and that command launches the configured shell
    (Nu2Menu / nu2shell for a bare build, or Explorer via the XPE plugin).
 5. The optional **Boot Fix** plugin adds `bootfix.bin` to enable the familiar
    "Press any key to boot from CD..." prompt.
+
+### Kernel & HAL selection
+
+Because BartPE must boot on unknown hardware, `pebuilder.inf` does not pin a single
+kernel/HAL pair:
+
+- **Kernel** — the **multiprocessor** kernel is copied *as* `ntoskrnl.exe`
+  (`ntoskrnl.exe=2,ntkrnlmp.exe` in `[SourceDisksFiles]`). The MP kernel also runs
+  correctly on uniprocessor machines, so one kernel covers both cases and only the
+  HAL has to be chosen at boot.
+- **HAL** — several HAL variants are shipped (ACPI-uniprocessor, ACPI-PIC, MPS, …)
+  and **no static `hal.dll`**; `setupldr` / `ntdetect.com` detect ACPI/APIC/MP at
+  boot and load the matching variant as `hal.dll`, driven by `txtsetup.sif`'s
+  `[Hal.Load]` list (see *File selection* in [`07-engine-internals.md`](07-engine-internals.md)).
 
 ### USB flash disk (`pe2usb`)
 

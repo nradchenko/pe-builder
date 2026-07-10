@@ -168,6 +168,26 @@ Key points:
   boot.catalog`, then `-o "<output.iso>"`, then the **source directory** as the
   final positional argument (with `-duplicates-once` among the options).
 
+### CD-boot constraints the ISO must satisfy
+
+The XP real-mode boot chain imposes two ISO 9660 requirements on any bootable disc,
+including the ones PE Builder produces. Both are **measured against real Microsoft XP
+media**, which satisfy them:
+
+- **Version-less filenames.** Microsoft's mastered media carry bare names
+  (`SETUPLDR.BIN`), *not* the classic ISO 9660 `;1` version suffix. XP's **CDBOOT**
+  boot sector matches `\I386\SETUPLDR.BIN` byte-for-byte and **fails if the `;1`
+  suffix is present**. Level 4 (`-iso-level 4`, ISO 9660:1999) is the relaxation
+  under which version-less names are conformant; whether the original `mkisofs` line
+  omits the suffix through level 4 alone or via an explicit omit-version flag (`-N` /
+  `-omit-version-number`) was not determined from the binary.
+- **§9.3-sorted directory records.** XP's real-mode **`setupldr`** ISO 9660 reader
+  locates a file only if the containing directory's records are in ISO 9660 §9.3
+  order (sorted by file identifier). CDBOOT itself linear-scans and is
+  order-independent, so a disc with unsorted records *begins* to boot but then
+  `setupldr` cannot find `\I386\NTDETECT.COM`, producing the characteristic NTDETECT
+  reboot loop.
+
 ### Boot files
 
 - `SETUPLDR.BIN`, `NTDETECT.COM`, and `BOOTFIX.BIN` are copied from the source
