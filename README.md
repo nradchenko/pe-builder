@@ -4,9 +4,9 @@ An open-source, cross-platform tool for building bootable **Windows PE**
 environments from a Windows installation source — a modern, Linux-first revival of
 the ideas behind the classic, discontinued **Bart's PE Builder**.
 
-> **Status: early development.** This project is a work in progress and does not
-> yet produce bootable images. Formats, commands, and structure are subject to
-> change, and there are no releases yet.
+> **Status: early development.** A build already produces a bootable PE that reaches
+> an interactive `cmd.exe`. Formats, commands, and structure are subject to change,
+> and there are no releases yet.
 
 ## What this is
 
@@ -34,9 +34,10 @@ provide.
 
 Early development. A build currently produces a bootable PE that reaches an
 interactive `cmd.exe`, with the console locale — code pages, fonts, and keyboard —
-taken from the source's own locale. The plugin subsystem is not wired up yet, so
-the environment ships no optional tools and, in particular, **no shutdown / power-off
-command**; those arrive with plugin support.
+taken from the source's own locale. The plugin subsystem is wired up: builds apply
+the plugins a manifest enables, and pebuild ships a small set of built-ins — including
+`poweroff`, a shutdown / power-off command compiled from source at build time. See
+[`docs/plugins/`](docs/plugins/) to use or write plugins.
 
 ## Quick start
 
@@ -58,6 +59,8 @@ change commit to commit.
 
 ## Documentation
 
+- [`docs/plugins/`](docs/plugins/) — using and writing plugins: a short guide, and
+  the policy for what may be bundled with pe-builder.
 - [`docs/reference/`](docs/reference/) — a detailed, primary-source reference for
   the original Bart's PE Builder: its build process, the complete plugin `.inf`
   format, conventions, and internals. This is the foundation the implementation is
