@@ -5,6 +5,7 @@ package plugin
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,6 +13,53 @@ import (
 
 	"github.com/nradchenko/pe-builder/inf"
 )
+
+// ParseFS parses a plugin from its own directory, as returned by a Source.Resolve.
+// It selects the main .inf — the one named after the plugin if present, else the
+// alphabetically first — reads it, and parses it for the given build. name is the
+// plugin's identifier (its directory name).
+func ParseFS(fsys fs.FS, name string, build int) (*Plugin, error) {
+	main, ok := mainInfFS(fsys, name)
+	if !ok {
+		return nil, fmt.Errorf("plugin %q: no .inf found", name)
+	}
+	data, err := fs.ReadFile(fsys, main)
+	if err != nil {
+		return nil, err
+	}
+	f, err := inf.Parse(data)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", main, err)
+	}
+	return Parse(name, f, build)
+}
+
+// mainInfFS returns the main .inf within a plugin's fs.FS: the one named after the
+// plugin if present, otherwise the alphabetically first. It returns ok=false if the
+// directory holds no .inf.
+func mainInfFS(fsys fs.FS, name string) (string, bool) {
+	entries, err := fs.ReadDir(fsys, ".")
+	if err != nil {
+		return "", false
+	}
+	var infs []string
+	for _, e := range entries {
+		if !e.IsDir() && isINF(e.Name()) {
+			infs = append(infs, e.Name())
+		}
+	}
+	if len(infs) == 0 {
+		return "", false
+	}
+	sort.Strings(infs)
+	preferred := name + ".inf"
+	for _, n := range infs {
+		if strings.EqualFold(n, preferred) {
+			return n, true
+		}
+	}
+	return infs[0], true
+}
 
 // ParseFile parses a single plugin .inf at path. The plugin name is the file's
 // base name without extension.
@@ -79,29 +127,13 @@ func isINF(name string) bool {
 	return strings.EqualFold(filepath.Ext(name), ".inf")
 }
 
-// mainInf returns the main .inf of a plugin folder: the one named after the folder
-// if present, otherwise the alphabetically first .inf. It returns "" if the folder
-// holds no .inf.
+// mainInf returns the path to the main .inf of a plugin folder — the one named
+// after the folder if present, otherwise the alphabetically first — or "" if the
+// folder holds no .inf. It is the on-disk-path form of mainInfFS.
 func mainInf(folder, name string) string {
-	entries, err := os.ReadDir(folder)
-	if err != nil {
+	n, ok := mainInfFS(os.DirFS(folder), name)
+	if !ok {
 		return ""
 	}
-	var infs []string
-	for _, e := range entries {
-		if !e.IsDir() && isINF(e.Name()) {
-			infs = append(infs, e.Name())
-		}
-	}
-	if len(infs) == 0 {
-		return ""
-	}
-	sort.Strings(infs)
-	preferred := name + ".inf"
-	for _, n := range infs {
-		if strings.EqualFold(n, preferred) {
-			return filepath.Join(folder, n)
-		}
-	}
-	return filepath.Join(folder, infs[0])
+	return filepath.Join(folder, n)
 }

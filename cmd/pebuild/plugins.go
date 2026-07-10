@@ -25,62 +25,84 @@ func newPluginsCmd() *cobra.Command {
 }
 
 func newPluginsListCmd() *cobra.Command {
-	var build int
+	var (
+		build int
+		dir   string
+	)
 	cmd := &cobra.Command{
-		Use:   "list <dir>",
-		Short: "List discovered plugins",
-		Long: "List the plugins discovered in a drop-in directory: their name, default\n" +
-			"enabled state, action count, and vendor id.",
-		Args: cobra.ExactArgs(1),
+		Use:   "list",
+		Short: "List available plugins and where each resolves from",
+		Long: "List every plugin available across the search path — the project dir\n" +
+			"(--dir), PEBUILD_PLUGIN_PATH, the global dir, and the built-ins — with the\n" +
+			"source each resolves from. A more specific source shadows a less specific\n" +
+			"one of the same name.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			plugins, err := plugin.Discover(args[0], build)
-			// Discover returns partial results alongside a parse-error summary;
-			// print what parsed, then surface the errors.
-			printPluginList(cmd.OutOrStdout(), plugins)
-			return err
-		},
-	}
-	cmd.Flags().IntVar(&build, "build", 0, "source build number for .BuildNo sections (e.g. 2600, 3790)")
-	return cmd
-}
-
-func newPluginsInfoCmd() *cobra.Command {
-	var build int
-	cmd := &cobra.Command{
-		Use:   "info <plugin.inf>",
-		Short: "Show parsed details for a plugin",
-		Long: "Parse a single plugin .inf file and print its descriptor and a summary of\n" +
-			"the actions it compiles to.",
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			p, err := plugin.ParseFile(args[0], build)
+			sp, err := plugin.DefaultSearchPath(dir)
 			if err != nil {
 				return err
 			}
-			printPluginInfo(cmd.OutOrStdout(), p)
+			printAvailable(cmd.OutOrStdout(), sp.List())
 			return nil
 		},
 	}
 	cmd.Flags().IntVar(&build, "build", 0, "source build number for .BuildNo sections (e.g. 2600, 3790)")
+	cmd.Flags().StringVar(&dir, "dir", "", "project plugins directory to include (highest precedence)")
 	return cmd
 }
 
-func printPluginList(w io.Writer, plugins []*plugin.Plugin) {
-	// Nothing parsed (e.g. an unreadable directory): print no table header, so a
-	// hard failure surfaces as just its error rather than an empty table.
-	if len(plugins) == 0 {
+func newPluginsInfoCmd() *cobra.Command {
+	var (
+		build int
+		dir   string
+	)
+	cmd := &cobra.Command{
+		Use:   "info <name>",
+		Short: "Show parsed details for an available plugin",
+		Long: "Resolve a plugin by name across the search path and print its descriptor,\n" +
+			"the source it resolved from, and a summary of the actions it compiles to.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			sp, err := plugin.DefaultSearchPath(dir)
+			if err != nil {
+				return err
+			}
+			fsys, src, canonical, ok := sp.Resolve(name)
+			if !ok {
+				return fmt.Errorf("plugin %q not found on the search path", name)
+			}
+			// Parse under the plugin's canonical on-disk name, not the (possibly
+			// differently cased) name the user typed.
+			p, err := plugin.ParseFS(fsys, canonical, build)
+			if err != nil {
+				return err
+			}
+			printPluginInfo(cmd.OutOrStdout(), p, src.Name())
+			return nil
+		},
+	}
+	cmd.Flags().IntVar(&build, "build", 0, "source build number for .BuildNo sections (e.g. 2600, 3790)")
+	cmd.Flags().StringVar(&dir, "dir", "", "project plugins directory to include (highest precedence)")
+	return cmd
+}
+
+func printAvailable(w io.Writer, avail []plugin.Available) {
+	if len(avail) == 0 {
+		fmt.Fprintln(w, "No plugins found.")
 		return
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tENABLED\tACTIONS\tID")
-	for _, p := range plugins {
-		fmt.Fprintf(tw, "%s\t%v\t%d\t%s\n", p.Name, p.Enabled, len(p.Actions), p.Update.ID)
+	fmt.Fprintln(tw, "NAME\tSOURCE")
+	for _, a := range avail {
+		fmt.Fprintf(tw, "%s\t%s\n", a.Name, a.Source.Name())
 	}
 	tw.Flush()
 }
 
-func printPluginInfo(w io.Writer, p *plugin.Plugin) {
+func printPluginInfo(w io.Writer, p *plugin.Plugin, source string) {
 	fmt.Fprintf(w, "Name:    %s\n", p.Name)
+	fmt.Fprintf(w, "Source:  %s\n", source)
 	fmt.Fprintf(w, "Display: %s\n", p.Display)
 	fmt.Fprintf(w, "Enabled: %v\n", p.Enabled)
 	if p.Help != "" {
