@@ -65,6 +65,10 @@ type Build struct {
 	WorkDir string
 	// KeepWork retains the scratch directory after a build.
 	KeepWork bool
+	// AllowPluginBuilds opts in to running a user-supplied plugin's [Build] command,
+	// which executes an arbitrary shell command. Built-in plugins build regardless;
+	// this gate only affects plugins from a drop-in directory.
+	AllowPluginBuilds bool
 }
 
 // Plugin is a manifest-declared plugin together with its override layers.

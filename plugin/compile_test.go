@@ -68,6 +68,31 @@ func TestCompileOriginStamping(t *testing.T) {
 	}
 }
 
+func TestCompileBuiltPlugin(t *testing.T) {
+	// A copy of a file the plugin's [Build] produced resolves from the build output,
+	// not the Windows source and not the plugin's shipped files.
+	d := &Discovered{
+		Name: "demo",
+		Units: []*Plugin{{Name: "demo", Actions: []action.Action{
+			{Kind: action.CopyFile, Src: "tool.exe", DirID: "2"}, // produced, not ShipWithPlugin
+		}}},
+	}
+	built := &Built{
+		Dir:      fstest.MapFS{"tool.exe": &fstest.MapFile{Data: []byte("bin")}},
+		Produces: map[string]bool{"tool.exe": true},
+	}
+	acts, origins, err := Compile([]Selected{{Plugin: d, Built: built}}, byTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(acts) != 1 || acts[0].Origin != "build:demo" {
+		t.Fatalf("acts = %+v, want the copy stamped with origin build:demo", acts)
+	}
+	if _, ok := origins["build:demo"]; !ok {
+		t.Error("origins missing the build output for demo")
+	}
+}
+
 func TestCompileExcludeSuppresses(t *testing.T) {
 	d := &Discovered{
 		Name: "p",

@@ -57,6 +57,16 @@ func (d *Discovered) Update() Update {
 	return m.Update
 }
 
+// Build returns the main unit's [Build] section; its Present field reports whether
+// the plugin compiles its own payload from source at build time.
+func (d *Discovered) Build() BuildSpec {
+	m := d.Main()
+	if m == nil {
+		return BuildSpec{}
+	}
+	return m.Build
+}
+
 // Actions returns every unit's compiled actions concatenated in unit order — the
 // plugin's full contribution to the build.
 func (d *Discovered) Actions() []action.Action {

@@ -36,8 +36,9 @@ type rawOutput struct {
 }
 
 type rawBuild struct {
-	WorkDir  string `hcl:"work_dir,optional"`
-	KeepWork bool   `hcl:"keep_work,optional"`
+	WorkDir           string `hcl:"work_dir,optional"`
+	KeepWork          bool   `hcl:"keep_work,optional"`
+	AllowPluginBuilds bool   `hcl:"allow_plugin_builds,optional"`
 }
 
 type rawPlugin struct {
@@ -111,7 +112,11 @@ func toManifest(raw *rawManifest) (*Manifest, error) {
 		PluginsDir: raw.PluginsDir,
 	}
 	if raw.Build != nil {
-		m.Build = Build{WorkDir: raw.Build.WorkDir, KeepWork: raw.Build.KeepWork}
+		m.Build = Build{
+			WorkDir:           raw.Build.WorkDir,
+			KeepWork:          raw.Build.KeepWork,
+			AllowPluginBuilds: raw.Build.AllowPluginBuilds,
+		}
 	}
 
 	for _, rp := range raw.Plugins {

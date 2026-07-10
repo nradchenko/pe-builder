@@ -275,6 +275,133 @@ demo.exe=2,,1
 	}
 }
 
+// buildCapable makes a build-capable selected plugin: a source dir + a [Build] that
+// produces tool.exe, and a [SourceDisksFiles] copy of it into system32.
+func buildCapable(t *testing.T, provenance string) plugin.Selected {
+	t.Helper()
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "tool.c"), []byte("int main(){}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d := &plugin.Discovered{
+		Name:   "tool",
+		Source: provenance,
+		FS:     os.DirFS(src),
+		Units: []*plugin.Plugin{{
+			Name:  "tool",
+			Build: plugin.BuildSpec{Present: true, Produces: []string{"tool.exe"}, Command: "printf TOOL > tool.exe"},
+			Actions: []action.Action{
+				{Kind: action.CopyFile, Src: "tool.exe", DirID: "2"},
+			},
+		}},
+	}
+	return plugin.Selected{Plugin: d}
+}
+
+func TestRunPluginBuildsTrustGate(t *testing.T) {
+	// A user-supplied build-capable plugin is refused without the opt-in.
+	user := []plugin.Selected{buildCapable(t, "project")}
+	if _, err := runPluginBuilds(context.Background(), user, &manifest.Manifest{}); err == nil {
+		t.Error("user-supplied [Build] ran without allow_plugin_builds")
+	}
+	// With the opt-in it builds.
+	user = []plugin.Selected{buildCapable(t, "project")}
+	m := &manifest.Manifest{Build: manifest.Build{AllowPluginBuilds: true}}
+	cleanup, err := runPluginBuilds(context.Background(), user, m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if user[0].Built == nil {
+		t.Error("opted-in user build produced no Built result")
+	}
+
+	// A built-in build-capable plugin builds automatically, no opt-in.
+	builtin := []plugin.Selected{buildCapable(t, plugin.BuiltinLabel)}
+	cleanup2, err := runPluginBuilds(context.Background(), builtin, &manifest.Manifest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup2()
+	if builtin[0].Built == nil {
+		t.Error("built-in build produced no Built result")
+	}
+}
+
+func TestRunPluginBuildsCreatesWorkDir(t *testing.T) {
+	// A configured work_dir that does not exist yet is created; the pre-pass does not
+	// fail on MkdirTemp under an absent parent.
+	workDir := filepath.Join(t.TempDir(), "work") // not created yet
+	selected := []plugin.Selected{buildCapable(t, plugin.BuiltinLabel)}
+	m := &manifest.Manifest{Build: manifest.Build{WorkDir: workDir}}
+
+	cleanup, err := runPluginBuilds(context.Background(), selected, m)
+	if err != nil {
+		t.Fatalf("runPluginBuilds with an absent work_dir errored: %v", err)
+	}
+	defer cleanup()
+	if selected[0].Built == nil {
+		t.Error("build produced no result")
+	}
+}
+
+// TestAssembleBuiltPlugin runs the [Build] pre-pass and assembly together: a
+// build-capable plugin compiles tool.exe, which is placed into the tree from the build
+// output rather than the Windows source.
+func TestAssembleBuiltPlugin(t *testing.T) {
+	id := source.Identity{Build: 2600, Arch: "i386", Flavor: "winxp"}
+	sysHive, err := hive.WriteHive(hive.NewHive("$$$PROTO.HIV"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	backing := fstest.MapFS{
+		"i386/txtsetup.sif": {Data: []byte(syntheticMeta)},
+		"i386/layout.inf":   {Data: []byte(syntheticMeta)},
+		"i386/setupreg.hiv": {Data: sysHive},
+		"i386/hivesft.inf":  {Data: []byte(minimalHiveINF)},
+		"i386/hivedef.inf":  {Data: []byte(minimalHiveINF)},
+		"i386/hivecls.inf":  {Data: []byte(minimalHiveINF)},
+	}
+	l, err := layout.Parse(backing, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseActs, err := base.Actions(l, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	present := map[string]bool{"cabonly.sys": false, "txtsetup.sif": true}
+	for _, a := range baseActs {
+		if _, decided := present[a.Src]; decided {
+			continue
+		}
+		backing["i386/"+a.Src] = &fstest.MapFile{Data: []byte("stub:" + a.Src)}
+	}
+
+	selected := []plugin.Selected{buildCapable(t, plugin.BuiltinLabel)}
+	cleanup, err := runPluginBuilds(context.Background(), selected, &manifest.Manifest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	out := t.TempDir()
+	rep, err := assemble(context.Background(), backing, id, out, selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Errors) != 0 {
+		t.Fatalf("per-file errors: %v", rep.Errors)
+	}
+	got, err := os.ReadFile(filepath.Join(out, "i386", "system32", "tool.exe"))
+	if err != nil {
+		t.Fatalf("built tool.exe not placed: %v", err)
+	}
+	if string(got) != "TOOL" {
+		t.Errorf("tool.exe = %q, want the built payload TOOL", got)
+	}
+}
+
 // TestBuildRealSource is the end-to-end check: build the real XP SP3 source
 // and diff the assembled tree (sorted path + size) against a committed golden listing.
 // It skips when the source ISO is absent, keeping CI hermetic.

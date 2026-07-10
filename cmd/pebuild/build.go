@@ -14,7 +14,8 @@ import (
 )
 
 func newBuildCmd() *cobra.Command {
-	return &cobra.Command{
+	var allowPluginBuilds bool
+	cmd := &cobra.Command{
 		Use:   "build [manifest.hcl]",
 		Short: "Build a bootable image from a manifest",
 		Long: "Run the build pipeline described by a manifest: read the Windows source,\n" +
@@ -39,6 +40,11 @@ func newBuildCmd() *cobra.Command {
 			if err := manifest.Validate(m); err != nil {
 				return fmt.Errorf("%s is invalid:\n%w", path, err)
 			}
+			// The flag lets a user-supplied plugin's [Build] run without editing the
+			// manifest; either source opts in.
+			if allowPluginBuilds {
+				m.Build.AllowPluginBuilds = true
+			}
 
 			rep, err := build.Build(cmd.Context(), m)
 			if err != nil {
@@ -55,6 +61,9 @@ func newBuildCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&allowPluginBuilds, "allow-plugin-builds", false,
+		"allow a user-supplied plugin's [Build] section to run its command")
+	return cmd
 }
 
 // printReport writes a human-readable summary of a build.

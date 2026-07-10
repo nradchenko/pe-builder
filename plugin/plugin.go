@@ -33,8 +33,28 @@ type Plugin struct {
 	// Update holds the vendor [Update] section; its Present field reports whether
 	// the section existed.
 	Update Update
+	// Build holds the [Build] section; its Present field reports whether the plugin
+	// compiles its own payload from source at build time.
+	Build BuildSpec
 	// Actions is the compiled build-IR for the selected build.
 	Actions []action.Action
+}
+
+// BuildSpec is the [Build] section of a build-capable plugin: one that ships source
+// and a build declaration rather than a prebuilt binary. Before its actions are
+// evaluated, a pre-pass checks the required tools, runs the command, and captures the
+// produced files as plugin-built origins.
+type BuildSpec struct {
+	// Present reports whether the plugin declares a [Build] section.
+	Present bool
+	// Requires lists executables that must be on PATH before building.
+	Requires []string
+	// Produces lists the file names the build emits (served as plugin-built files).
+	Produces []string
+	// Command is the shell command run in the build directory; defaults to "make". It
+	// is taken verbatim; a ';' (an INF comment) cannot appear in it, so multi-step
+	// logic belongs in the Makefile.
+	Command string
 }
 
 // Update is the vendor [Update] section: a per-vendor relationship/versioning
@@ -72,6 +92,7 @@ func Parse(name string, f *inf.File, build int) (*Plugin, error) {
 	}
 
 	p.Update = parseUpdate(f, build)
+	p.Build = parseBuild(f, build)
 
 	actions, err := Actions(f, build)
 	if err != nil {
@@ -124,6 +145,42 @@ func parseUpdate(f *inf.File, build int) Update {
 		}
 	}
 	return u
+}
+
+// parseBuild reads the optional [Build] section. Requires/Produces are space- or
+// comma-separated lists; Command defaults to "make".
+func parseBuild(f *inf.File, build int) BuildSpec {
+	if !f.HasSection("Build") {
+		return BuildSpec{}
+	}
+	b := BuildSpec{Present: true, Command: "make"}
+	for _, l := range f.Section("Build", build) {
+		switch strings.ToLower(l.Key) {
+		case "requires":
+			b.Requires = append(b.Requires, tokens(l)...)
+		case "produces":
+			b.Produces = append(b.Produces, tokens(l)...)
+		case "command":
+			// Take the command verbatim (Raw), so quotes and commas survive to the
+			// shell — INF field splitting would strip/truncate them. An INF ';' comment
+			// still ends the line, so ';'-separated sequencing is unavailable; put
+			// multi-step logic in the Makefile instead.
+			if v := strings.TrimSpace(l.Raw()); v != "" {
+				b.Command = v
+			}
+		}
+	}
+	return b
+}
+
+// tokens splits an INF line's fields further on whitespace, so a Requires/Produces
+// value written space-separated, comma-separated, or both yields individual tokens.
+func tokens(l *inf.Line) []string {
+	var out []string
+	for _, f := range l.Fields() {
+		out = append(out, strings.Fields(f)...)
+	}
+	return out
 }
 
 // sectionMap collapses a key=value section into a lowercased-key map, keeping the

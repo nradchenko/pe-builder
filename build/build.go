@@ -84,6 +84,17 @@ func Build(ctx context.Context, m *manifest.Manifest) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Compile the build-capable plugins' payloads before assembly, so their produced
+	// files are available as origins when the tree is placed. This runs after workDir,
+	// which creates a configured work_dir the plugin build directories nest under. The
+	// build directories are cleaned up once the tree (which reads them) is assembled.
+	cleanupBuilds, err := runPluginBuilds(ctx, selected, m)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanupBuilds()
+
 	rep, err := assemble(ctx, src.Backing(), id, outDir, selected)
 	if err != nil {
 		return nil, err
@@ -232,6 +243,51 @@ func selectPlugins(m *manifest.Manifest, build int) ([]plugin.Selected, error) {
 	}
 	slog.Info("selected plugins", "count", len(out))
 	return out, nil
+}
+
+// runPluginBuilds runs the [Build] pre-pass for every build-capable selected plugin,
+// populating each Selected.Built, and returns a cleanup for the temporary build
+// directories (a no-op when nothing was built). A built-in (embedded) plugin builds
+// automatically; a user-supplied plugin's [Build] runs an arbitrary command, so it is
+// refused unless the manifest opts in with build.allow_plugin_builds.
+func runPluginBuilds(ctx context.Context, selected []plugin.Selected, m *manifest.Manifest) (func(), error) {
+	cleanup := func() {}
+	var buildRoot string
+
+	for i := range selected {
+		d := selected[i].Plugin
+		if !d.Build().Present {
+			continue
+		}
+		if d.Source != plugin.BuiltinLabel && !m.Build.AllowPluginBuilds {
+			cleanup()
+			return nil, fmt.Errorf("plugin %q declares a [Build] section, which runs an arbitrary command; "+
+				"set build.allow_plugin_builds = true to allow user-supplied plugin builds", d.Name)
+		}
+		if buildRoot == "" {
+			// A configured work_dir may not exist yet; create it so the temp build root
+			// nests under it regardless of call order.
+			if m.Build.WorkDir != "" {
+				if err := os.MkdirAll(m.Build.WorkDir, 0o755); err != nil {
+					return nil, err
+				}
+			}
+			root, err := os.MkdirTemp(m.Build.WorkDir, "pebuild-plugin-builds-*")
+			if err != nil {
+				return nil, err
+			}
+			buildRoot = root
+			cleanup = func() { os.RemoveAll(buildRoot) }
+		}
+		built, err := plugin.RunBuild(ctx, d, buildRoot)
+		if err != nil {
+			cleanup()
+			return nil, err
+		}
+		selected[i].Built = built
+		slog.Info("built plugin payload", "plugin", d.Name, "produces", len(d.Build().Produces))
+	}
+	return cleanup, nil
 }
 
 // overrideLayer maps a manifest plugin block's file/registry overrides to the plugin
