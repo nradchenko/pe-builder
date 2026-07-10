@@ -21,12 +21,20 @@ import (
 // declaration order) is preserved as the tie-break.
 func Order(plugins []*Discovered) {
 	sort.SliceStable(plugins, func(i, j int) bool {
-		bi, bj := loadBucket(plugins[i].Name), loadBucket(plugins[j].Name)
-		if bi != bj {
-			return bi < bj
-		}
-		return strings.ToLower(plugins[i].Name) < strings.ToLower(plugins[j].Name)
+		return byConvention(plugins[i].Name, plugins[j].Name)
 	})
+}
+
+// byConvention reports whether plugin name a sorts before b under the load-order
+// convention: the '!'/'z_' bucket first, then ascending case-insensitive name. It is
+// the shared comparator behind both Order and Resolve's topological tie-break — with no
+// dependency edges, Resolve reduces exactly to Order.
+func byConvention(a, b string) bool {
+	ba, bb := loadBucket(a), loadBucket(b)
+	if ba != bb {
+		return ba < bb
+	}
+	return strings.ToLower(a) < strings.ToLower(b)
 }
 
 // loadBucket ranks a plugin name into the three load-order groups: 0 for a '!'

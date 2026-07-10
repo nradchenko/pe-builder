@@ -5,7 +5,6 @@ package plugin
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -89,24 +88,6 @@ func TestDiscoverBundleUnits(t *testing.T) {
 	}
 }
 
-func TestSelect(t *testing.T) {
-	byName, disc := discoverAll(t)
-	_ = byName
-
-	// Selection preserves the given (manifest) order and matches case-insensitively.
-	sel, err := Select(disc, []string{"z_late", "ALPHA"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got []string
-	for _, d := range sel {
-		got = append(got, d.Name)
-	}
-	if want := []string{"z_late", "alpha"}; !reflect.DeepEqual(got, want) {
-		t.Errorf("Select order = %v, want %v (given order preserved, case-folded)", got, want)
-	}
-}
-
 func TestParseFSSkipsSupportManifest(t *testing.T) {
 	// The .inf named after the plugin is a shipped support file (no [PEBuilder]); the
 	// real manifest is another .inf. ParseFS shares parseUnits with Discover, so it
@@ -129,19 +110,5 @@ func TestParseFSSkipsSupportManifest(t *testing.T) {
 	noManifest := fstest.MapFS{"foo.inf": &fstest.MapFile{Data: []byte(support)}}
 	if _, err := ParseFS(noManifest, "foo", 0); err == nil {
 		t.Error("ParseFS on a manifest-less directory returned no error")
-	}
-}
-
-func TestSelectMissingErrors(t *testing.T) {
-	_, disc := discoverAll(t)
-	_, err := Select(disc, []string{"alpha", "ghost", "phantom"})
-	if err == nil {
-		t.Fatal("Select with missing plugins returned no error")
-	}
-	// The error names every unmatched plugin.
-	for _, name := range []string{"ghost", "phantom"} {
-		if !strings.Contains(err.Error(), name) {
-			t.Errorf("error %q does not name missing plugin %q", err, name)
-		}
 	}
 }

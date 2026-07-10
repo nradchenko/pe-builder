@@ -113,32 +113,6 @@ func Discover(sp SearchPath, build int) ([]*Discovered, error) {
 	return out, nil
 }
 
-// Select returns the discovered plugins named in enabled, matched by case-insensitive
-// name and kept in the given order (the manifest's declaration order). It errors,
-// naming every unmatched entry, if an enabled plugin is not among the discovered set —
-// no silent skip. Call Order afterward to apply the load-order convention.
-func Select(discovered []*Discovered, enabled []string) ([]*Discovered, error) {
-	byName := make(map[string]*Discovered, len(discovered))
-	for _, d := range discovered {
-		byName[strings.ToLower(d.Name)] = d
-	}
-	var (
-		out     []*Discovered
-		missing []string
-	)
-	for _, name := range enabled {
-		if d, ok := byName[strings.ToLower(name)]; ok {
-			out = append(out, d)
-			continue
-		}
-		missing = append(missing, name)
-	}
-	if len(missing) > 0 {
-		return nil, fmt.Errorf("enabled plugin(s) not found on the search path: %s", strings.Join(missing, ", "))
-	}
-	return out, nil
-}
-
 // parseUnits parses every plugin-manifest .inf in a plugin's directory into a unit,
 // the manifest named after the directory first and the rest in name order. A .inf
 // without a [PEBuilder] section is a shipped support file, not a manifest, and is

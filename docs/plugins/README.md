@@ -62,8 +62,12 @@ plugin "shell" {
 }
 ```
 
-If a plugin `depends` on another (via `[Update]`), enable the dependency too —
-pebuild errors, rather than enabling it for you.
+If a plugin `depends` on another (via `[Update]`), enabling it **auto-enables** the
+dependency — and its dependencies in turn — placing each one before the plugin that
+needs it. You only enable what you want directly; the graph pulls in the rest. Enabling
+a dependency explicitly is still fine. The one conflict is enabling a plugin while
+setting `enabled = false` on something it requires: pebuild errors rather than silently
+overriding your choice. A dependency cycle is also an error, reported as its path.
 
 ## Writing a plugin
 

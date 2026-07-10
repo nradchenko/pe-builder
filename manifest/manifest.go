@@ -119,3 +119,17 @@ func (m *Manifest) EnabledPlugins() []Plugin {
 	}
 	return out
 }
+
+// DisabledPluginNames returns the names of the plugins carrying an explicit
+// `enabled = false` block, in manifest order. These are distinct from plugins the
+// manifest never mentions: a required dependency that is explicitly disabled is a
+// conflict the resolver rejects, whereas an unmentioned dependency is auto-enabled.
+func (m *Manifest) DisabledPluginNames() []string {
+	var out []string
+	for _, p := range m.Plugins {
+		if !p.Enabled {
+			out = append(out, p.Name)
+		}
+	}
+	return out
+}

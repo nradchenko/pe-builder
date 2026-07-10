@@ -209,14 +209,17 @@ func selectPlugins(m *manifest.Manifest, build int) ([]plugin.Selected, error) {
 	}
 	discovered, discErr := plugin.Discover(sp, build)
 
-	names := make([]string, len(enabled))
+	enabledNames := make([]string, len(enabled))
 	for i, p := range enabled {
-		names[i] = p.Name
+		enabledNames[i] = p.Name
 	}
-	selected, err := plugin.Select(discovered, names)
+	// Resolve the enabled set into the full ordered build set: auto-enable the transitive
+	// depends closure, order dependencies before their dependents, and reject cycles,
+	// undiscoverable requirements, and explicitly-disabled dependencies.
+	selected, err := plugin.Resolve(discovered, enabledNames, m.DisabledPluginNames())
 	if err != nil {
-		// An enabled plugin is missing. If some plugins also failed to parse, the
-		// cause may be one of them, so include that detail.
+		// An enabled or depended-upon plugin is unresolvable. If some plugins also failed
+		// to parse, the cause may be one of them, so include that detail.
 		if discErr != nil {
 			return nil, fmt.Errorf("%w (%v)", err, discErr)
 		}
@@ -224,11 +227,6 @@ func selectPlugins(m *manifest.Manifest, build int) ([]plugin.Selected, error) {
 	}
 	if discErr != nil {
 		slog.Warn("some plugins in the search path failed to parse; enabled plugins are unaffected", "error", discErr)
-	}
-
-	plugin.Order(selected)
-	if err := plugin.ValidateDepends(selected); err != nil {
-		return nil, err
 	}
 	warnUnappliedAppends(selected)
 

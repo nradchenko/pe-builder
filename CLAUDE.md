@@ -33,8 +33,9 @@ PE dependencies.
     base layer and plugins compile to.
   - `inifile/` — apply the text/INI edit actions (e.g. the `txtsetup.sif` boot edits)
     to files in the assembled tree.
-  - `plugin/` — plugin discovery, parsing, evaluation into actions, the `[Build]`
-    pre-pass that compiles a build-capable plugin's payload from source, and
+  - `plugin/` — plugin discovery, parsing, dependency resolution (auto-enable the
+    transitive `depends` closure and order it deps-first), evaluation into actions, the
+    `[Build]` pre-pass that compiles a build-capable plugin's payload from source, and
     installing plugins from `.cab`/`.zip` archives (`plugins add`).
   - `base/` — the clean-room base layer (`base.inf` plus boot-driver and locale
     derivation from the source).
