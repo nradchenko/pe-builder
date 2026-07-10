@@ -229,7 +229,7 @@ func TestImportsOfMalformedDoesNotPanic(t *testing.T) {
 	}
 	for name, data := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, err := importsOf(data)
+			got, err := importsOf(data, true)
 			if err == nil {
 				t.Errorf("importsOf(%s) = %v, nil; want an error", name, got)
 			}

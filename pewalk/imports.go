@@ -19,8 +19,14 @@ import (
 var silentLogger = log.NewStdLogger(io.Discard)
 
 // importsOf parses PE image bytes and returns the sorted, de-duplicated set of
-// modules it imports — both the static import table and the delay-load import
-// table. Names are canonicalized to their bare lowercased file name.
+// modules it imports. The static import table is always included; the delay-load
+// import table is included only when includeDelay is set. Names are canonicalized to
+// their bare lowercased file name.
+//
+// The distinction matters to a caller computing a boot-necessary file set: a module's
+// static imports are resolved by the loader when the module loads and must be present,
+// whereas its delay imports are resolved lazily on first use and frequently never load
+// in a minimal environment — so following them transitively over-includes.
 //
 // Parsing is limited to the two import directories: every other data directory is
 // omitted, which keeps the parse fast and avoids the certificate and CLR paths
@@ -29,7 +35,7 @@ var silentLogger = log.NewStdLogger(io.Discard)
 // saferwall recovers panics only within its data-directory parse; a malformed
 // DOS/NT/section header can still panic. That panic is contained here so a single
 // bad module degrades to a parse error rather than aborting the whole walk.
-func importsOf(data []byte) (names []string, err error) {
+func importsOf(data []byte, includeDelay bool) (names []string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			names, err = nil, fmt.Errorf("parse PE: panic: %v", r)
@@ -78,8 +84,10 @@ func importsOf(data []byte) (names []string, err error) {
 	for _, imp := range f.Imports {
 		add(imp.Name)
 	}
-	for _, imp := range f.DelayImports {
-		add(imp.Name)
+	if includeDelay {
+		for _, imp := range f.DelayImports {
+			add(imp.Name)
+		}
 	}
 	sort.Strings(names)
 	return names, nil

@@ -56,6 +56,12 @@ type Options struct {
 	// MaxDepth bounds recursion depth from the seeds (0 = unbounded). Seeds are at
 	// depth 0; a module imported by a seed is at depth 1.
 	MaxDepth int
+	// StaticOnly follows only the static import table, skipping delay-load imports.
+	// Delay imports are resolved lazily at runtime and often never load, so following
+	// them transitively over-includes; a caller computing a boot-necessary file set
+	// wants the static closure. The default (false) follows both, as an "ldd for PE"
+	// should.
+	StaticOnly bool
 }
 
 // Walk computes the transitive import closure of seeds against s, following both
@@ -120,7 +126,7 @@ func WalkWith(s *Source, opts Options, seeds ...string) (*Result, error) {
 			continue
 		}
 
-		imports, err := importsOf(data)
+		imports, err := importsOf(data, !opts.StaticOnly)
 		if err != nil {
 			node.ParseError = err.Error()
 			continue
