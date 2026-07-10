@@ -82,7 +82,7 @@ func TestAssemblePipeline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	acts, err := base.Actions(l, id)
+	acts, err := base.Actions(nil, l, id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestAssembleWithPlugin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	baseActs, err := base.Actions(l, id)
+	baseActs, err := base.Actions(nil, l, id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +366,7 @@ func TestAssembleBuiltPlugin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	baseActs, err := base.Actions(l, id)
+	baseActs, err := base.Actions(nil, l, id)
 	if err != nil {
 		t.Fatal(err)
 	}

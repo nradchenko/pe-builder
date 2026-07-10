@@ -23,6 +23,7 @@ import (
 	"github.com/nradchenko/pe-builder/inifile"
 	"github.com/nradchenko/pe-builder/layout"
 	"github.com/nradchenko/pe-builder/manifest"
+	"github.com/nradchenko/pe-builder/pewalk"
 	"github.com/nradchenko/pe-builder/plugin"
 	"github.com/nradchenko/pe-builder/source"
 	"github.com/nradchenko/pe-builder/target"
@@ -133,7 +134,16 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 	if err != nil {
 		return nil, fmt.Errorf("read source layout: %w", err)
 	}
-	acts, err := base.Actions(l, id)
+	// Index the source for the base layer's import-closure scanners, so the file set is
+	// computed from the source's own PE dependency graph rather than hand-listed.
+	pw, err := pewalk.Open(backing)
+	if err != nil {
+		return nil, fmt.Errorf("index source: %w", err)
+	}
+	for _, warn := range pw.Warnings() {
+		slog.Warn("source index", "warning", warn)
+	}
+	acts, err := base.Actions(pw, l, id)
 	if err != nil {
 		return nil, fmt.Errorf("evaluate base layer: %w", err)
 	}

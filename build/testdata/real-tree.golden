@@ -1,5 +1,5 @@
 identity: winxp build 2600 (i386)
-written: 255
+written: 258
 skipped: 
 
 BOOTFONT.BIN 4952
@@ -37,6 +37,7 @@ i386/system32/c_1252.nls 66082
 i386/system32/c_437.nls 66594
 i386/system32/c_866.nls 66594
 i386/system32/cabinet.dll 60416
+i386/system32/cfgmgr32.dll 16896
 i386/system32/chcp.com 7680
 i386/system32/clb.dll 11264
 i386/system32/clusapi.dll 58368
@@ -168,6 +169,7 @@ i386/system32/hal.dll 105344
 i386/system32/halaacpi.dll 131840
 i386/system32/halacpi.dll 81152
 i386/system32/halapic.dll 150528
+i386/system32/ifsutil.dll 70656
 i386/system32/imagehlp.dll 144384
 i386/system32/imm32.dll 110080
 i386/system32/intl.cpl 132096
@@ -255,6 +257,7 @@ i386/system32/vgaoem.fon 5168
 i386/system32/watchdog.sys 17664
 i386/system32/win32k.sys 1845760
 i386/system32/winlogon.exe 509440
+i386/system32/winspool.drv 146944
 i386/system32/winsrv.dll 293376
 i386/system32/winsta.dll 53760
 i386/system32/wintrust.dll 176640

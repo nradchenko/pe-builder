@@ -37,14 +37,17 @@ PE dependencies.
     transitive `depends` closure and order it deps-first), evaluation into actions, the
     `[Build]` pre-pass that compiles a build-capable plugin's payload from source, and
     installing plugins from `.cab`/`.zip` archives (`plugins add`).
-  - `base/` — the clean-room base layer (`base.inf` plus boot-driver and locale
-    derivation from the source).
+  - `base/` — the clean-room base layer: a hand-curated seed and registry/boot edits in
+    `base.inf`, the boot-driver and locale derivation from the source, and the
+    `pewalk`-based import-closure scanner that computes the import-derivable half of the
+    boot file set from the source's own PE dependency graph (so it is not hand-listed).
   - `tree/` — assemble the output file tree (resolve → decompress → place).
   - `hive/` — build the Windows registry hives (pure-Go `regf` read/write).
   - `target/` — output targets (e.g. a bootable ISO).
   - `build/` — the orchestrator that wires the pipeline together.
 - `pewalk/` — the "ldd for PE" library: computes the transitive PE import closure
-  (static + delay imports) of a binary against a source, resolving each imported module
+  (static + delay imports, or static-only for a boot-necessary set) of a binary against a
+  source, resolving each imported module
   through the `source` and `compress` backings (loose, compressed-loose `.??_`, and
   cabinet-packed forms) and reporting missing modules as flagged red herrings. Renders
   the closure as text, Graphviz DOT, or JSON. Backs both `cmd/pewalk` and the durable

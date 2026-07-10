@@ -46,18 +46,6 @@ spddlang.sys  = 4
 ; The ACPI bus driver the ACPI HAL loads at boot.
 acpi.sys      = 4
 
-; Framework drivers the boot-start drivers import (bus, port, and class libraries);
-; the loader must load a driver's dependencies alongside it.
-1394bus.sys   = 4
-classpnp.sys  = 4
-oprghdlr.sys  = 4
-pciidex.sys   = 4
-scsiport.sys  = 4
-usbd.sys      = 4
-usbport.sys   = 4
-videoprt.sys  = 4
-wmilib.sys    = 4
-
 ; The NDIS wrapper. Setup's detection pass loads it regardless of the (removed)
 ; network services, so it must be present or the boot stops. Only the wrapper is
 ; shipped here — no protocol or adapter drivers — so the base carries no working
@@ -71,15 +59,11 @@ afd.sys       = 4
 ; The Multiple UNC Provider, a boot-start filesystem driver setup loads by group/tag.
 mup.sys       = 4
 
-; Kernel drivers win32k.sys imports (DirectX kernel API, display watchdog); the Win32
-; subsystem cannot initialize without them. watchdog.sys is resolved beside win32k in
-; system32, dxapi from the drivers directory (matching a working reference build).
-; dxg.sys/dxgthk.sys are the DirectX kernel graphics module and its thunk that win32k
-; loads during graphics init; without them the subsystem's display init never completes.
-dxapi.sys     = 4
+; The DirectX kernel graphics module and its thunk that win32k loads at runtime during
+; graphics init — a runtime load invisible to the static import closure, so seeded here;
+; without them the subsystem's display init never completes.
 dxg.sys       = 4
 dxgthk.sys    = 4
-watchdog.sys  = 2
 
 ; Core NT system drivers not named in any txtsetup.sif *.Load list: the Null and
 ; Beep devices, the named-pipe file system (RPC/LPC over \Device\NamedPipe), and
@@ -105,58 +89,20 @@ biosinfo.inf = 2
 bootvid.dll  =
 kdcom.dll    =
 
-; Win32 subsystem.
+; Win32 subsystem: the kernel-mode module, the client/server runtime, and the session
+; manager (the load roots the import closure grows from), plus the base and Windows
+; server DLLs csrss loads by name from its ServerDll registry list — a runtime load, not
+; a static import, so seeded here.
 win32k.sys  =
 csrss.exe   =
 smss.exe    =
-csrsrv.dll  =
 basesrv.dll =
 winsrv.dll  =
 
-; Core user-mode DLLs.
-kernel32.dll =
-gdi32.dll    =
-user32.dll   =
-advapi32.dll =
-rpcrt4.dll   =
-msvcrt.dll   =
-secur32.dll  =
-userenv.dll  =
+; The System File Checker's protected-file list and the protected-storage base DLL,
+; each loaded by name (not as a static import), so not reached by the import closure.
 sfcfiles.dll =
-
-; Further user-mode DLLs the logon/csrss/lsass chain pulls in (crypto, winsock,
-; setupapi, security), pinned to system32.
-authz.dll    = 2
-crypt32.dll  = 2
-imagehlp.dll = 2
-msasn1.dll   = 2
-nddeapi.dll  = 2
-netapi32.dll = 2
-profmap.dll  = 2
-psapi.dll    = 2
-regapi.dll   = 2
-setupapi.dll = 2
-version.dll  = 2
-winsta.dll   = 2
-wintrust.dll = 2
-ws2_32.dll   = 2
-ws2help.dll  = 2
-
-; The LSA/SAM security, user-mode PnP, and directory/name DLLs the logon and service
-; hosts (lsass, services, umpnpmgr) pull in.
-cryptdll.dll = 2
-dnsapi.dll   = 2
-lsasrv.dll   = 2
-mpr.dll      = 2
-msvcp60.dll  = 2
-ncobjapi.dll = 2
-ntdsapi.dll  = 2
 psbase.dll   = 2
-samlib.dll   = 2
-samsrv.dll   = 2
-scesrv.dll   = 2
-umpnpmgr.dll = 2
-wldap32.dll  = 2
 
 ; Session, logon, and service host — the chain that reaches the shell.
 services.exe =
@@ -181,14 +127,10 @@ findstr.exe  = 2
 xcopy.exe    = 2
 more.com     = 2
 
-; Input-stack files not named in any txtsetup.sif *.Load list. The class and HID
-; drivers that are (i8042prt, kbdhid, mouclass, mouhid, hidusb, the USB host
-; controllers) come from the source's boot-driver derivation — sourced from the
-; loose media or the driver cabinets. These three ship only as loose archives and
-; are selected here so the keyboard/mouse class stack is complete.
+; The keyboard class driver: not named in any txtsetup.sif *.Load list and not reached
+; as an import (it is loaded by PnP), so selected here to complete the input stack. The
+; HID class and parse libraries it works with are pulled in by the import closure.
 kbdclass.sys =
-hidclass.sys =
-hidparse.sys =
 
 ; National-language tables the kernel loads for the ANSI/OEM code pages. These are
 ; the US-English defaults and the Unicode case table; the source locale's own ANSI
@@ -256,20 +198,19 @@ sxs.dll      = 2
 
 
 ; ===========================================================================
-; system32 base file set — the core Win32 subsystem, common system DLLs, and the
-; supporting files a no-plugin PE needs beyond the boot-driver set, so the session
-; reaches an interactive shell. Blank dirid: the source's own layout resolves each
-; file's target directory. Network/RAS/NIC *driver* files are intentionally
-; excluded (network is a plugin); this is the system32 base only.
+; system32 base residual — the supporting files a no-plugin PE needs that the import
+; closure does not reach: service DLLs the generic host (svchost) loads by name, the
+; security packages the LSA loads by name, name/locale and font-substitution tables,
+; and modules loaded at runtime. The import-derivable system DLLs are computed from the
+; source's own PE dependency graph, not listed here. Blank dirid: the source's own
+; layout resolves each file's target directory. Network/RAS/NIC *driver* files are
+; intentionally excluded (network is a plugin); this is the system32 base only.
 ; ===========================================================================
 activeds.dll =
 adsldpc.dll =
 alrsvc.dll =
-cabinet.dll =
 clb.dll =
 clusapi.dll =
-comctl32.dll =
-comdlg32.dll =
 ctype.nls =
 dnsrslvr.dll =
 esent.dll =
@@ -283,7 +224,6 @@ kerberos.dll =
 l_except.nls =
 locale.nls =
 locator.exe =
-lz32.dll =
 mobsync.dll =
 msgina.dll =
 msls31.dll =
@@ -291,7 +231,6 @@ msprivs.dll =
 msv1_0.dll =
 netplwiz.dll =
 odbc32.dll =
-ole32.dll =
 olesvr.dll =
 peer.exe =
 pentnt.exe =
@@ -300,13 +239,10 @@ print.exe =
 pstorsvc.dll =
 rpcss.dll =
 schannel.dll =
-shell32.dll =
-shlwapi.dll =
 sortkey.nls =
 sorttbls.nls =
 svchost.exe =
 tzchange.exe =
-ulib.dll =
 unicode.nls =
 userinit.exe =
 uxtheme.dll =
