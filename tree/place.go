@@ -5,6 +5,7 @@ package tree
 
 import (
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path"
@@ -21,13 +22,18 @@ import (
 // the output-relative path written, or — when the file is optional and absent from
 // the source — the canonical name to record as skipped. Exactly one of the two
 // strings is non-empty on success.
-func placeFile(a action.Action, l *layout.Layout, src source.Backing, cabs *cabinets, outRoot string) (written, skipped string, err error) {
+func placeFile(a action.Action, l *layout.Layout, src source.Backing, cabs *cabinets, origins map[string]fs.FS, outRoot string) (written, skipped string, err error) {
 	name := strings.ToLower(a.Src)
 
-	data, compressed, found := readSource(src, cabs, name)
+	data, compressed, found := readFile(a, origins, src, cabs, name)
 	if !found {
 		if a.Optional {
 			return "", name, nil
+		}
+		// A file the plugin promised to ship (Origin set, ShipWithPlugin) but did not
+		// is the plugin's fault, not a missing Windows-source file — say so.
+		if a.Origin != "" {
+			return "", "", fmt.Errorf("plugin %q does not ship required file %q", a.Origin, a.Src)
 		}
 		return "", "", fmt.Errorf("required source file %q not found", name)
 	}
@@ -45,9 +51,11 @@ func placeFile(a action.Action, l *layout.Layout, src source.Backing, cabs *cabi
 				return "", "", fmt.Errorf("decompress %q: %w", name, err)
 			}
 		}
-	} else if a.NoDecompress {
+	} else if a.NoDecompress && a.Origin == "" {
 		// The file was found already-decompressed (a loose file or a cabinet member),
 		// so there is no compressed archive to preserve — attribute 2 cannot apply.
+		// A plugin-shipped file is always final, so attribute 2 on it is simply a
+		// no-op (write as-is), not a lost packed form worth warning about.
 		slog.Warn("cannot keep file compressed; source has no packed archive form", "file", name)
 	}
 
@@ -60,6 +68,39 @@ func placeFile(a action.Action, l *layout.Layout, src source.Backing, cabs *cabi
 		return "", "", fmt.Errorf("write %q: %w", rel, err)
 	}
 	return rel, "", nil
+}
+
+// readFile resolves a copy action's bytes by origin. An Origin is set only for a file
+// the plugin ships itself, so those bytes come from the origin's fs.FS and never from
+// the Windows source: a miss is a not-found (the plugin failed to ship a file it
+// promised), not a silent fall-through that could pick up an unrelated source file of
+// the same name. Everything else resolves from the Windows source. Origin bytes are
+// already final (never a *.??_ archive), so they never need decompression.
+func readFile(a action.Action, origins map[string]fs.FS, src source.Backing, cabs *cabinets, name string) (data []byte, compressed, found bool) {
+	if a.Origin != "" {
+		if fsys, ok := origins[a.Origin]; ok {
+			if b, ok := readOrigin(fsys, a.Src); ok {
+				return b, false, true
+			}
+		}
+		return nil, false, false
+	}
+	return readSource(src, cabs, name)
+}
+
+// readOrigin reads a shipped file from a plugin/build-output fs.FS. It tries the name
+// as the action spells it, then its lowercased form, so a case difference between the
+// [SourceDisksFiles] entry and the shipped file name does not miss the file.
+func readOrigin(fsys fs.FS, src string) ([]byte, bool) {
+	if b, err := fs.ReadFile(fsys, src); err == nil {
+		return b, true
+	}
+	if lower := strings.ToLower(src); lower != src {
+		if b, err := fs.ReadFile(fsys, lower); err == nil {
+			return b, true
+		}
+	}
+	return nil, false
 }
 
 // readSource reads a source file, trying in order: the shared loose→*.??_ archive
@@ -89,17 +130,22 @@ func targetName(a action.Action, name string) string {
 }
 
 // outputPath computes the output-relative (forward-slash) path for a placed file:
-// the system root, the file's target directory, then the file name. The directory
-// is taken from the action when it specifies one, else resolved from the source
-// layout, else defaulted to system32.
+// the file's target directory then its name, under the system root unless the
+// directory is created from the output root. The directory comes from the action's
+// own path when it carries one (a plugin-defined [WinntDirectories] entry), else its
+// directory ID resolved from the source layout, else the source layout keyed by file
+// name, else system32.
 func outputPath(a action.Action, l *layout.Layout, outName string) string {
 	dirID := a.DirID
-	if dirID == "" {
+	if dirID == "" && a.Path == "" {
 		if e, ok := l.Resolve(a.Src); ok {
 			dirID = e.TargetDir
 		}
 	}
-	rel := dirPath(dirID, "", l)
+	rel := dirPath(dirID, a.Path, l)
+	if a.FromRoot {
+		return path.Join(rel, outName)
+	}
 	return path.Join(systemRoot, rel, outName)
 }
 

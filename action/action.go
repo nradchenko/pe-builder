@@ -81,6 +81,12 @@ type Action struct {
 	Optional       bool   // copy only if present (attribute 4)
 	Uppercase      bool   // rename the target to uppercase (attribute 8)
 	ShipWithPlugin bool   // file ships with the plugin; presence is required (attribute 1)
+	// Origin names where a copy's bytes come from: empty means the Windows source
+	// (loose file / archive / driver cabinet); a non-empty key selects a plugin's own
+	// directory (a shipped file) or, later, a plugin's build output — the tree
+	// assembler is given a map from this key to the backing fs.FS, and consults it
+	// before the Windows source.
+	Origin string
 
 	// Mkdir fields ([WinntDirectories]).
 	Path         string // directory name/path

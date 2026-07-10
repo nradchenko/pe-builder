@@ -13,6 +13,7 @@ package build
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/nradchenko/pe-builder/inifile"
 	"github.com/nradchenko/pe-builder/layout"
 	"github.com/nradchenko/pe-builder/manifest"
+	"github.com/nradchenko/pe-builder/plugin"
 	"github.com/nradchenko/pe-builder/source"
 	"github.com/nradchenko/pe-builder/target"
 	"github.com/nradchenko/pe-builder/tree"
@@ -73,18 +75,16 @@ func Build(ctx context.Context, m *manifest.Manifest) (*Report, error) {
 		}
 	}
 
-	if enabled := m.EnabledPlugins(); len(enabled) > 0 {
-		// The plugin engine — discovery, load ordering, and override layers — is a
-		// later stage. Until it lands, the base layer is the whole build.
-		slog.Warn("plugins are enabled but plugin evaluation is not yet wired; building base layer only",
-			"count", len(enabled))
+	pluginActs, origins, err := selectPlugins(m, id.Build)
+	if err != nil {
+		return nil, err
 	}
 
 	outDir, err := workDir(m)
 	if err != nil {
 		return nil, err
 	}
-	rep, err := assemble(ctx, src.Backing(), id, outDir)
+	rep, err := assemble(ctx, src.Backing(), id, outDir, pluginActs, origins)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,12 @@ func Build(ctx context.Context, m *manifest.Manifest) (*Report, error) {
 // can be exercised without a real source's version-gated probe. Boot configuration
 // runs here — not gated on the media target — so the produced tree is a complete PE
 // tree regardless of whether an ISO is then mastered from it.
-func assemble(ctx context.Context, backing source.Backing, id source.Identity, outDir string) (*Report, error) {
+//
+// pluginActs are the enabled plugins' compiled actions in load order (empty when no
+// plugin is enabled); they apply after the base layer, last-writer-wins. origins maps
+// each plugin's name to its directory so the tree assembler reads a file the plugin
+// ships from the plugin rather than the Windows source.
+func assemble(ctx context.Context, backing source.Backing, id source.Identity, outDir string, pluginActs []action.Action, origins map[string]fs.FS) (*Report, error) {
 	l, err := layout.Parse(backing, id)
 	if err != nil {
 		return nil, fmt.Errorf("read source layout: %w", err)
@@ -120,8 +125,11 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 	if err != nil {
 		return nil, fmt.Errorf("evaluate base layer: %w", err)
 	}
+	// The base layer is not a plugin; the enabled plugins layer on top of it, in load
+	// order, so a later plugin's write wins over the base and earlier plugins.
+	acts = append(acts, pluginActs...)
 
-	res, err := tree.Assemble(ctx, acts, l, backing, outDir)
+	res, err := tree.Assemble(ctx, acts, l, backing, origins, outDir)
 	if err != nil && ctx.Err() != nil {
 		// A cancelled build is fatal — the tree is aborted mid-assembly — not a
 		// per-file error to be reported and shrugged off.
@@ -159,6 +167,66 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 		return nil, fmt.Errorf("copy identity markers: %w", err)
 	}
 	return rep, nil
+}
+
+// selectPlugins resolves the manifest's enabled plugins into their compiled actions
+// (in load order) and the file-origin map for their shipped files. It returns nils
+// when no plugin is enabled — the base layer is then the whole build.
+//
+// A plugin in the search path that fails to parse does not fail the build unless it
+// is one the manifest enabled: Select errors clearly when an enabled plugin is
+// missing (whether absent or unparseable), and an unrelated broken plugin is only
+// warned about.
+func selectPlugins(m *manifest.Manifest, build int) ([]action.Action, map[string]fs.FS, error) {
+	enabled := m.EnabledPlugins()
+	if len(enabled) == 0 {
+		return nil, nil, nil
+	}
+
+	sp, err := plugin.DefaultSearchPath(m.PluginsDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	discovered, discErr := plugin.Discover(sp, build)
+
+	names := make([]string, len(enabled))
+	for i, p := range enabled {
+		names[i] = p.Name
+	}
+	selected, err := plugin.Select(discovered, names)
+	if err != nil {
+		// An enabled plugin is missing. If some plugins also failed to parse, the
+		// cause may be one of them, so include that detail.
+		if discErr != nil {
+			return nil, nil, fmt.Errorf("%w (%v)", err, discErr)
+		}
+		return nil, nil, err
+	}
+	if discErr != nil {
+		slog.Warn("some plugins in the search path failed to parse; enabled plugins are unaffected", "error", discErr)
+	}
+
+	plugin.Order(selected)
+	warnUnappliedAppends(selected)
+
+	acts, origins := plugin.Compile(selected)
+	slog.Info("evaluated plugins", "count", len(selected), "actions", len(acts))
+	return acts, origins, nil
+}
+
+// warnUnappliedAppends warns for each enabled plugin that uses [Append] (the Nu2Menu
+// XML merge), which pebuild parses but deliberately does not apply, so the omission
+// is visible rather than silent.
+func warnUnappliedAppends(selected []*plugin.Discovered) {
+	for _, d := range selected {
+		for _, a := range d.Actions() {
+			if a.Kind == action.Append {
+				slog.Warn("plugin uses [Append] (Nu2Menu XML), which pebuild does not apply; skipping it",
+					"plugin", d.Name, "target", a.TargetFile)
+				break
+			}
+		}
+	}
 }
 
 // configure applies the boot configuration to the assembled tree: the text edits

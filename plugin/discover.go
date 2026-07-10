@@ -25,6 +25,9 @@ type Discovered struct {
 	Name string
 	// Source is the provenance label of the resolving source (e.g. "project").
 	Source string
+	// FS is the plugin's directory, from which its shipped files are read when the
+	// build places a [SourceDisksFiles] entry the plugin ships itself.
+	FS fs.FS
 	// Units are the parsed plugin manifests, main first.
 	Units []*Plugin
 }
@@ -92,7 +95,7 @@ func Discover(sp SearchPath, build int) ([]*Discovered, error) {
 			// .inf(s) present but none is a plugin manifest — not a plugin.
 			continue
 		}
-		out = append(out, &Discovered{Name: canonical, Source: a.Source.Name(), Units: units})
+		out = append(out, &Discovered{Name: canonical, Source: a.Source.Name(), FS: fsys, Units: units})
 	}
 	if len(errs) > 0 {
 		return out, fmt.Errorf("%d plugin(s) failed to parse:\n%s", len(errs), strings.Join(errs, "\n"))

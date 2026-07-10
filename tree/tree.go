@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -53,16 +54,18 @@ type Result struct {
 // Actions apply in order; a later write to the same path wins. Missing optional
 // files are skipped and recorded; other read/write failures are accumulated and
 // returned together so one bad file does not abort the build.
-func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src source.Backing, outRoot string) (*Result, error) {
+func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src source.Backing, origins map[string]fs.FS, outRoot string) (*Result, error) {
 	res := &Result{}
 	var errs []error
 
 	// The driver cabinets are consulted only for copy targets absent loosely; collect
 	// every copy name up front so the cabinet layer can extract them in a single pass
-	// and release each (large) archive immediately.
+	// and release each (large) archive immediately. Files a plugin ships itself (an
+	// Origin is set) come from the plugin, not the Windows source, so they are left
+	// out of the cabinet search.
 	want := make(map[string]bool)
 	for _, a := range acts {
-		if a.Kind == action.CopyFile {
+		if a.Kind == action.CopyFile && a.Origin == "" {
 			want[strings.ToLower(a.Src)] = true
 		}
 	}
@@ -74,7 +77,7 @@ func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src s
 		}
 		switch a.Kind {
 		case action.CopyFile:
-			written, skipped, err := placeFile(a, l, src, cabs, outRoot)
+			written, skipped, err := placeFile(a, l, src, cabs, origins, outRoot)
 			switch {
 			case err != nil:
 				errs = append(errs, err)

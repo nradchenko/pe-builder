@@ -14,12 +14,14 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/nradchenko/pe-builder/action"
 	"github.com/nradchenko/pe-builder/base"
 	"github.com/nradchenko/pe-builder/boot"
 	"github.com/nradchenko/pe-builder/hive"
 	"github.com/nradchenko/pe-builder/internal/golden"
 	"github.com/nradchenko/pe-builder/layout"
 	"github.com/nradchenko/pe-builder/manifest"
+	"github.com/nradchenko/pe-builder/plugin"
 	"github.com/nradchenko/pe-builder/source"
 )
 
@@ -96,7 +98,7 @@ func TestAssemblePipeline(t *testing.T) {
 	}
 
 	out := t.TempDir()
-	rep, err := assemble(context.Background(), backing, id, out)
+	rep, err := assemble(context.Background(), backing, id, out, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +112,144 @@ func TestAssemblePipeline(t *testing.T) {
 	golden.Assert(t, "synthetic-tree", summary)
 }
 
-// TestBuildRealSource is the milestone end-to-end check: build the real XP SP3 source
+// TestAssembleWithPlugin exercises plugin evaluation end-to-end through the pipeline:
+// an enabled plugin ships a file (placed from the plugin, not the source) and writes a
+// SOFTWARE registry value (merged into the built hive on top of the base layer).
+func TestAssembleWithPlugin(t *testing.T) {
+	id := source.Identity{Build: 2600, Arch: "i386", Flavor: "winxp"}
+
+	sysHive, err := hive.WriteHive(hive.NewHive("$$$PROTO.HIV"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	backing := fstest.MapFS{
+		"i386/txtsetup.sif": {Data: []byte(syntheticMeta)},
+		"i386/layout.inf":   {Data: []byte(syntheticMeta)},
+		"i386/setupreg.hiv": {Data: sysHive},
+		"i386/hivesft.inf":  {Data: []byte(minimalHiveINF)},
+		"i386/hivedef.inf":  {Data: []byte(minimalHiveINF)},
+		"i386/hivecls.inf":  {Data: []byte(minimalHiveINF)},
+	}
+	l, err := layout.Parse(backing, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseActs, err := base.Actions(l, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	present := map[string]bool{"cabonly.sys": false, "txtsetup.sif": true}
+	for _, a := range baseActs {
+		if _, decided := present[a.Src]; decided {
+			continue
+		}
+		backing["i386/"+a.Src] = &fstest.MapFile{Data: []byte("stub:" + a.Src)}
+	}
+
+	// A plugin that ships demo.exe and adds a SOFTWARE registry value.
+	demo := &plugin.Discovered{
+		Name: "demo",
+		FS:   fstest.MapFS{"demo.exe": &fstest.MapFile{Data: []byte("demo payload\n")}},
+		Units: []*plugin.Plugin{{Name: "demo", Actions: []action.Action{
+			{Kind: action.CopyFile, Src: "demo.exe", DirID: "2", ShipWithPlugin: true},
+			{Kind: action.AddReg, Hive: action.HiveSoftware, Subkey: `PeBuilder\Demo`,
+				ValueName: "Installed", RegType: action.RegSZ, Data: "yes", HasValue: true},
+		}}},
+	}
+	pluginActs, origins := plugin.Compile([]*plugin.Discovered{demo})
+
+	out := t.TempDir()
+	rep, err := assemble(context.Background(), backing, id, out, pluginActs, origins)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Errors) != 0 {
+		t.Fatalf("unexpected per-file errors: %v", rep.Errors)
+	}
+
+	// The plugin's shipped file is placed from the plugin, not fetched from the source.
+	got, err := os.ReadFile(filepath.Join(out, "i386", "system32", "demo.exe"))
+	if err != nil {
+		t.Fatalf("demo.exe not placed: %v", err)
+	}
+	if string(got) != "demo payload\n" {
+		t.Errorf("demo.exe = %q, want the plugin payload", got)
+	}
+
+	// The plugin's registry value merged into the SOFTWARE hive.
+	swData, err := os.ReadFile(filepath.Join(out, "i386", "system32", "config", "SOFTWARE"))
+	if err != nil {
+		t.Fatalf("read SOFTWARE hive: %v", err)
+	}
+	h, err := hive.ReadHive(swData)
+	if err != nil {
+		t.Fatalf("parse SOFTWARE hive: %v", err)
+	}
+	k, ok := h.Root.FindPath(`PeBuilder\Demo`)
+	if !ok {
+		t.Fatal("plugin registry subkey PeBuilder\\Demo not found in SOFTWARE hive")
+	}
+	if v, ok := k.Value("Installed"); !ok || v.AsString() != "yes" {
+		t.Errorf("Installed value = %q (ok=%v), want \"yes\"", v.AsString(), ok)
+	}
+}
+
+// TestSelectPlugins covers the build-layer glue that turns a manifest's enabled
+// plugins into compiled actions: search-path assembly, discovery, selection, and
+// compilation from a real on-disk plugin directory.
+func TestSelectPlugins(t *testing.T) {
+	// Keep the global and env tiers out of the way so only the project dir resolves.
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("PEBUILD_PLUGIN_PATH", "")
+
+	dir := t.TempDir()
+	pdir := filepath.Join(dir, "demo")
+	if err := os.MkdirAll(pdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	inf := `[Version]
+Signature="$Windows NT$"
+[PEBuilder]
+Name="Demo"
+Enable=1
+[SourceDisksFiles]
+demo.exe=2,,1
+[Software.AddReg]
+0x1,"PeBuilder\Demo","Installed","yes"
+`
+	if err := os.WriteFile(filepath.Join(pdir, "demo.inf"), []byte(inf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pdir, "demo.exe"), []byte("payload"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// No enabled plugins: the base layer is the whole build.
+	if acts, origins, err := selectPlugins(&manifest.Manifest{PluginsDir: dir}, 2600); err != nil || acts != nil || origins != nil {
+		t.Fatalf("no enabled plugins: acts=%v origins=%v err=%v", acts, origins, err)
+	}
+
+	// Enabled plugin resolves to actions and an origin for its shipped file.
+	m := &manifest.Manifest{PluginsDir: dir, Plugins: []manifest.Plugin{{Name: "demo", Enabled: true}}}
+	acts, origins, err := selectPlugins(m, 2600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(acts) == 0 {
+		t.Error("expected compiled plugin actions")
+	}
+	if _, ok := origins["demo"]; !ok {
+		t.Error("origins missing entry for demo")
+	}
+
+	// An enabled plugin that is not on the search path is a clear error.
+	missing := &manifest.Manifest{PluginsDir: dir, Plugins: []manifest.Plugin{{Name: "ghost", Enabled: true}}}
+	if _, _, err := selectPlugins(missing, 2600); err == nil {
+		t.Error("enabled-but-absent plugin returned no error")
+	}
+}
+
+// TestBuildRealSource is the end-to-end check: build the real XP SP3 source
 // and diff the assembled tree (sorted path + size) against a committed golden listing.
 // It skips when the source ISO is absent, keeping CI hermetic.
 func TestBuildRealSource(t *testing.T) {
@@ -282,7 +421,7 @@ func TestAssembleCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	rep, err := assemble(ctx, backing, id, t.TempDir())
+	rep, err := assemble(ctx, backing, id, t.TempDir(), nil, nil)
 	if err == nil {
 		t.Fatalf("assemble with a cancelled context returned no error (rep=%+v)", rep)
 	}

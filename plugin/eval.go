@@ -42,7 +42,10 @@ func Actions(f *inf.File, build int) ([]action.Action, error) {
 	if err := add(dirsActions(f, build)); err != nil {
 		return nil, err
 	}
-	if err := add(copyActions(f, build)); err != nil {
+	// A copy may target a directory the plugin defines itself in [WinntDirectories]
+	// (a letter or number ID), not one the Windows source's txtsetup.sif knows, so it
+	// is resolved against the plugin's own table here rather than the source layout.
+	if err := add(copyActions(f, build, winntDirs(f, build))); err != nil {
 		return nil, err
 	}
 	for _, r := range []struct {
@@ -88,12 +91,34 @@ func dirsActions(f *inf.File, build int) ([]action.Action, error) {
 	return out, nil
 }
 
+// dirTarget is a directory a plugin defines in [WinntDirectories]: its path and
+// whether it is created from the output root rather than inside \i386.
+type dirTarget struct {
+	path     string
+	fromRoot bool
+}
+
+// winntDirs indexes the plugin's [WinntDirectories] by directory ID so a copy can
+// resolve a directory the plugin defines itself.
+func winntDirs(f *inf.File, build int) map[string]dirTarget {
+	dirs := make(map[string]dirTarget)
+	for _, l := range f.Section("WinntDirectories", build) {
+		attr, _ := l.IntField(1)
+		dirs[l.Key] = dirTarget{path: l.Field(0), fromRoot: attr&dirFromRoot != 0}
+	}
+	return dirs
+}
+
 // copyActions maps [SourceDisksFiles]: filename=directoryID[, renamed][, attribute].
-func copyActions(f *inf.File, build int) ([]action.Action, error) {
+// A directory ID the plugin defines itself (in dirs) is resolved to its path here, so
+// the copy lands there rather than being looked up — and missed — in the source
+// layout. IDs the plugin does not define (the predefined source IDs like 2=system32)
+// are left for the tree assembler to resolve against the source layout.
+func copyActions(f *inf.File, build int, dirs map[string]dirTarget) ([]action.Action, error) {
 	var out []action.Action
 	for _, l := range f.Section("SourceDisksFiles", build) {
 		attr, _ := l.IntField(2)
-		out = append(out, action.Action{
+		a := action.Action{
 			Kind:           action.CopyFile,
 			Src:            l.Key,
 			DirID:          l.Field(0),
@@ -102,7 +127,12 @@ func copyActions(f *inf.File, build int) ([]action.Action, error) {
 			NoDecompress:   attr&attrNoDecompress != 0,
 			Optional:       attr&attrOptional != 0,
 			Uppercase:      attr&attrUppercase != 0,
-		})
+		}
+		if d, ok := dirs[a.DirID]; ok {
+			a.Path = d.path
+			a.FromRoot = d.fromRoot
+		}
+		out = append(out, a)
 	}
 	return out, nil
 }

@@ -5,6 +5,7 @@ package tree
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -58,7 +59,7 @@ func TestAssemble(t *testing.T) {
 		{Kind: action.CopyFile, Src: "missing.dll", Optional: true}, // absent, optional → skipped
 	}
 
-	res, err := Assemble(context.Background(), acts, testLayout(), src, out)
+	res, err := Assemble(context.Background(), acts, testLayout(), src, nil, out)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -88,10 +89,74 @@ func TestAssemble(t *testing.T) {
 	assertFile(t, out, "i386/system32/keepcab.dl_", cab)
 }
 
+func TestAssembleOrigin(t *testing.T) {
+	src := testSource(t)
+	out := t.TempDir()
+
+	// tool.exe is shipped by the plugin (Origin set, present in the origin FS);
+	// loose.txt is a Windows-source file the plugin merely names (Origin empty).
+	origins := map[string]fs.FS{
+		"plug": fstest.MapFS{"tool.exe": {Data: []byte("plugin tool\n")}},
+	}
+	acts := []action.Action{
+		{Kind: action.CopyFile, Src: "tool.exe", DirID: "2", Origin: "plug"},
+		{Kind: action.CopyFile, Src: "loose.txt", DirID: "2"},
+	}
+
+	res, err := Assemble(context.Background(), acts, testLayout(), src, origins, out)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	if diff := cmp.Diff([]string{"i386/system32/loose.txt", "i386/system32/tool.exe"}, res.Written); diff != "" {
+		t.Errorf("Written mismatch (-want +got):\n%s", diff)
+	}
+	assertFile(t, out, "i386/system32/tool.exe", []byte("plugin tool\n"))
+	assertFile(t, out, "i386/system32/loose.txt", []byte("loose contents\n"))
+}
+
+func TestAssembleOriginMissingIsError(t *testing.T) {
+	// A file the plugin promised to ship (Origin set) but is absent from its FS is an
+	// error, not a silent fall-through to a same-named Windows-source file.
+	src := testSource(t)
+	origins := map[string]fs.FS{"plug": fstest.MapFS{}}
+	acts := []action.Action{
+		{Kind: action.CopyFile, Src: "loose.txt", DirID: "2", Origin: "plug"},
+	}
+	if _, err := Assemble(context.Background(), acts, testLayout(), src, origins, t.TempDir()); err == nil {
+		t.Fatal("Assemble placed an un-shipped Origin file from the source; want an error")
+	}
+}
+
+func TestAssemblePluginDir(t *testing.T) {
+	// A copy targeting a directory the plugin defines itself (Path carried on the copy)
+	// lands there, not in the system32 fallback. FromRoot places it at the output root.
+	out := t.TempDir()
+	origins := map[string]fs.FS{
+		"plug": fstest.MapFS{
+			"tool.exe": {Data: []byte("t")},
+			"read.me":  {Data: []byte("r")},
+		},
+	}
+	acts := []action.Action{
+		{Kind: action.CopyFile, Src: "tool.exe", Origin: "plug", DirID: "q", Path: `programs\mytool`},
+		{Kind: action.CopyFile, Src: "read.me", Origin: "plug", DirID: "r", Path: "Docs", FromRoot: true},
+	}
+	res, err := Assemble(context.Background(), acts, testLayout(), testSource(t), origins, out)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	want := []string{"Docs/read.me", "i386/programs/mytool/tool.exe"}
+	if diff := cmp.Diff(want, res.Written); diff != "" {
+		t.Errorf("Written mismatch (-want +got):\n%s", diff)
+	}
+	assertFile(t, out, "i386/programs/mytool/tool.exe", []byte("t"))
+	assertFile(t, out, "Docs/read.me", []byte("r"))
+}
+
 func TestAssembleRequiredMissing(t *testing.T) {
 	src := testSource(t)
 	acts := []action.Action{{Kind: action.CopyFile, Src: "nope.dll"}}
-	_, err := Assemble(context.Background(), acts, testLayout(), src, t.TempDir())
+	_, err := Assemble(context.Background(), acts, testLayout(), src, nil, t.TempDir())
 	if err == nil {
 		t.Fatal("Assemble with a missing required file returned no error")
 	}
@@ -104,7 +169,7 @@ func TestMkdir(t *testing.T) {
 		{Kind: action.Mkdir, DirID: "y", Path: "docs", FromRoot: true},
 		{Kind: action.Mkdir, DirID: "z", Path: `system32\config`}, // backslash nested path
 	}
-	if _, err := Assemble(context.Background(), acts, testLayout(), testSource(t), out); err != nil {
+	if _, err := Assemble(context.Background(), acts, testLayout(), testSource(t), nil, out); err != nil {
 		t.Fatal(err)
 	}
 	assertDir(t, filepath.Join(out, "i386", "programs")) // under the system root
