@@ -1,0 +1,7 @@
+; Clean-room discovery fixture: a directory whose only .inf carries no [PEBuilder]
+; section, so the directory is not a plugin and discovery skips it.
+[Version]
+Signature="$Windows NT$"
+
+[Strings]
+x="y"

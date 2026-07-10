@@ -1,0 +1,10 @@
+; Clean-room discovery fixture: a second manifest in the same bundle directory.
+[Version]
+Signature="$Windows NT$"
+
+[PEBuilder]
+Name="Bundle Extra"
+Enable=1
+
+[Software.AddReg]
+0x1,"Bundle","Extra","1"

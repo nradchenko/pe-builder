@@ -179,22 +179,3 @@ func TestBuildNoAffectsActions(t *testing.T) {
 		t.Error("xp-widget.sys present at build 3790")
 	}
 }
-
-func TestDiscover(t *testing.T) {
-	plugins, err := Discover("testdata/drop", 2600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var order []string
-	for _, p := range plugins {
-		order = append(order, p.Name)
-	}
-	// '!first' sorts before 'sample', 'z_last' sorts last.
-	want := "!first,sample,z_last"
-	if strings.Join(order, ",") != want {
-		t.Errorf("discovery order = %q, want %q", order, want)
-	}
-	if plugins[2].Update.Parent != "sample" {
-		t.Errorf("z_last parent = %q, want sample", plugins[2].Update.Parent)
-	}
-}

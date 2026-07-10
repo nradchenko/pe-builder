@@ -1,0 +1,10 @@
+; Clean-room discovery fixture: a plain, enabled single-manifest plugin.
+[Version]
+Signature="$Windows NT$"
+
+[PEBuilder]
+Name="Alpha"
+Enable=1
+
+[Software.AddReg]
+0x1,"Alpha","Key","value"

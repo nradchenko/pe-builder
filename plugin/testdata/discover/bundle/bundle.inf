@@ -1,0 +1,13 @@
+; Clean-room discovery fixture: the main manifest of a multi-.inf bundle.
+[Version]
+Signature="$Windows NT$"
+
+[PEBuilder]
+Name="Bundle Main"
+Enable=1
+
+[Update]
+id=bundle
+
+[Software.AddReg]
+0x1,"Bundle","Main","1"

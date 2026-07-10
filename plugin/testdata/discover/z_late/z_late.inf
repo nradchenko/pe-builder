@@ -1,0 +1,12 @@
+; Clean-room discovery fixture: a 'z_'-prefixed plugin, disabled by default, that
+; sorts last in load order and declares a parent for [Update] association.
+[Version]
+Signature="$Windows NT$"
+
+[PEBuilder]
+Name="Late"
+Enable=0
+
+[Update]
+id=late
+parent=alpha

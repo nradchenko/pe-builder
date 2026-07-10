@@ -1,0 +1,7 @@
+; Clean-room discovery fixture: a shipped support .inf with no [PEBuilder] section.
+; Discovery must treat it as a data file, not a plugin manifest unit.
+[Version]
+Signature="$Windows NT$"
+
+[Strings]
+label="support"

@@ -1,0 +1,7 @@
+; Clean-room discovery fixture: a '!'-prefixed plugin that sorts first in load order.
+[Version]
+Signature="$Windows NT$"
+
+[PEBuilder]
+Name="Early"
+Enable=1

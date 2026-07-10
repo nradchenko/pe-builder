@@ -6,41 +6,134 @@ package plugin
 import (
 	"fmt"
 	"io/fs"
-	"os"
-	"path/filepath"
+	"path"
 	"sort"
 	"strings"
 
+	"github.com/nradchenko/pe-builder/action"
 	"github.com/nradchenko/pe-builder/inf"
 )
 
-// ParseFS parses a plugin from its own directory, as returned by a Source.Resolve.
-// It selects the main .inf — the one named after the plugin if present, else the
-// alphabetically first — reads it, and parses it for the given build. name is the
-// plugin's identifier (its directory name).
-func ParseFS(fsys fs.FS, name string, build int) (*Plugin, error) {
-	main, ok := mainInfFS(fsys, name)
-	if !ok {
-		return nil, fmt.Errorf("plugin %q: no .inf found", name)
-	}
-	data, err := fs.ReadFile(fsys, main)
-	if err != nil {
-		return nil, err
-	}
-	f, err := inf.Parse(data)
-	if err != nil {
-		return nil, fmt.Errorf("parse %s: %w", main, err)
-	}
-	return Parse(name, f, build)
+// Discovered is a plugin found on the search path: its canonical name (the on-disk
+// directory name), the provenance of the source it came from, and its parsed INF
+// unit(s). A plugin is a directory; a directory may hold more than one plugin-manifest
+// .inf (a bundle, like XPE), in which case every manifest is a unit — the one named
+// after the directory first, the rest in name order. Non-manifest .inf files in the
+// directory (shipped support files without a [PEBuilder] section) are not units.
+type Discovered struct {
+	// Name is the canonical directory name.
+	Name string
+	// Source is the provenance label of the resolving source (e.g. "project").
+	Source string
+	// Units are the parsed plugin manifests, main first.
+	Units []*Plugin
 }
 
-// mainInfFS returns the main .inf within a plugin's fs.FS: the one named after the
-// plugin if present, otherwise the alphabetically first. It returns ok=false if the
-// directory holds no .inf.
-func mainInfFS(fsys fs.FS, name string) (string, bool) {
+// Main returns the primary unit — the manifest named after the directory, or the
+// first in name order — whose [PEBuilder]/[Update] metadata represents the plugin.
+func (d *Discovered) Main() *Plugin {
+	if len(d.Units) == 0 {
+		return nil
+	}
+	return d.Units[0]
+}
+
+// Enabled reports the plugin's default enabled state, taken from the main unit's
+// [PEBuilder] Enable. The manifest's plugin block overrides this at selection time.
+func (d *Discovered) Enabled() bool {
+	m := d.Main()
+	return m != nil && m.Enabled
+}
+
+// Update returns the main unit's [Update] section (id/depends/parent).
+func (d *Discovered) Update() Update {
+	m := d.Main()
+	if m == nil {
+		return Update{}
+	}
+	return m.Update
+}
+
+// Actions returns every unit's compiled actions concatenated in unit order — the
+// plugin's full contribution to the build.
+func (d *Discovered) Actions() []action.Action {
+	var out []action.Action
+	for _, u := range d.Units {
+		out = append(out, u.Actions...)
+	}
+	return out
+}
+
+// Discover scans the search path and returns every available plugin, de-duplicated
+// by name with search-path precedence (a more specific source shadows a less
+// specific one), in name order. build selects .BuildNo section variants.
+//
+// A directory that holds .inf files but no plugin manifest (no [PEBuilder] section)
+// is not a plugin and is skipped. A manifest that fails to parse is collected into
+// the returned error; the plugins that parsed cleanly are still returned, so one
+// broken plugin does not hide the rest.
+func Discover(sp SearchPath, build int) ([]*Discovered, error) {
+	var (
+		out  []*Discovered
+		errs []string
+	)
+	for _, a := range sp.List() {
+		fsys, canonical, ok := a.Source.Resolve(a.Name)
+		if !ok {
+			// Listed by the source but no longer resolvable (a race); skip it.
+			continue
+		}
+		units, err := parseUnits(fsys, canonical, build)
+		if err != nil {
+			errs = append(errs, err.Error())
+			continue
+		}
+		if len(units) == 0 {
+			// .inf(s) present but none is a plugin manifest — not a plugin.
+			continue
+		}
+		out = append(out, &Discovered{Name: canonical, Source: a.Source.Name(), Units: units})
+	}
+	if len(errs) > 0 {
+		return out, fmt.Errorf("%d plugin(s) failed to parse:\n%s", len(errs), strings.Join(errs, "\n"))
+	}
+	return out, nil
+}
+
+// Select returns the discovered plugins named in enabled, matched by case-insensitive
+// name and kept in the given order (the manifest's declaration order). It errors,
+// naming every unmatched entry, if an enabled plugin is not among the discovered set —
+// no silent skip. Call Order afterward to apply the load-order convention.
+func Select(discovered []*Discovered, enabled []string) ([]*Discovered, error) {
+	byName := make(map[string]*Discovered, len(discovered))
+	for _, d := range discovered {
+		byName[strings.ToLower(d.Name)] = d
+	}
+	var (
+		out     []*Discovered
+		missing []string
+	)
+	for _, name := range enabled {
+		if d, ok := byName[strings.ToLower(name)]; ok {
+			out = append(out, d)
+			continue
+		}
+		missing = append(missing, name)
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("enabled plugin(s) not found on the search path: %s", strings.Join(missing, ", "))
+	}
+	return out, nil
+}
+
+// parseUnits parses every plugin-manifest .inf in a plugin's directory into a unit,
+// the manifest named after the directory first and the rest in name order. A .inf
+// without a [PEBuilder] section is a shipped support file, not a manifest, and is
+// skipped; a malformed manifest is an error.
+func parseUnits(fsys fs.FS, name string, build int) ([]*Plugin, error) {
 	entries, err := fs.ReadDir(fsys, ".")
 	if err != nil {
-		return "", false
+		return nil, err
 	}
 	var infs []string
 	for _, e := range entries {
@@ -48,92 +141,67 @@ func mainInfFS(fsys fs.FS, name string) (string, bool) {
 			infs = append(infs, e.Name())
 		}
 	}
-	if len(infs) == 0 {
-		return "", false
-	}
 	sort.Strings(infs)
-	preferred := name + ".inf"
-	for _, n := range infs {
-		if strings.EqualFold(n, preferred) {
-			return n, true
-		}
-	}
-	return infs[0], true
-}
 
-// ParseFile parses a single plugin .inf at path. The plugin name is the file's
-// base name without extension.
-func ParseFile(path string, build int) (*Plugin, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	f, err := inf.Parse(data)
-	if err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
-	}
-	name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-	return Parse(name, f, build)
-}
-
-// Discover finds and parses the plugins in a drop-in directory. It follows the
-// original tool's layout — one folder per plugin, the main .inf conventionally
-// named after the folder — and also accepts bare .inf files placed directly in the
-// directory. Results are returned in the alphabetical folder/name order the
-// original processes plugins in (so a '!' prefix sorts first and 'z'/'zz' last).
-//
-// A plugin whose .inf fails to parse is reported in the returned error list but
-// does not stop discovery of the rest.
-func Discover(dir string, build int) ([]*Plugin, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	var paths []string // main .inf per plugin
-	for _, e := range entries {
-		if e.IsDir() {
-			if main := mainInf(filepath.Join(dir, e.Name()), e.Name()); main != "" {
-				paths = append(paths, main)
-			}
-			continue
-		}
-		if isINF(e.Name()) {
-			paths = append(paths, filepath.Join(dir, e.Name()))
-		}
-	}
-	sort.Strings(paths)
-
-	var (
-		plugins []*Plugin
-		errs    []string
-	)
-	for _, p := range paths {
-		pl, err := ParseFile(p, build)
+	var units []*Plugin
+	for _, n := range mainFirst(infs, name) {
+		data, err := fs.ReadFile(fsys, n)
 		if err != nil {
-			errs = append(errs, err.Error())
+			return nil, err
+		}
+		f, err := inf.Parse(data)
+		if err != nil {
+			return nil, fmt.Errorf("plugin %q: parse %s: %w", name, n, err)
+		}
+		if !f.HasSection("PEBuilder") {
+			// A shipped support .inf, not a plugin manifest.
 			continue
 		}
-		plugins = append(plugins, pl)
+		unitName := strings.TrimSuffix(n, path.Ext(n))
+		p, err := Parse(unitName, f, build)
+		if err != nil {
+			return nil, fmt.Errorf("plugin %q: %w", name, err)
+		}
+		units = append(units, p)
 	}
-	if len(errs) > 0 {
-		return plugins, fmt.Errorf("%d plugin(s) failed to parse:\n%s", len(errs), strings.Join(errs, "\n"))
+	return units, nil
+}
+
+// mainFirst reorders infs so the .inf named after the plugin (matched
+// case-insensitively) is first, keeping the remaining names in their existing order.
+// If none matches the plugin name, infs is returned unchanged, so the alphabetically
+// first .inf leads.
+func mainFirst(infs []string, name string) []string {
+	preferred := name + ".inf"
+	for i, n := range infs {
+		if strings.EqualFold(n, preferred) {
+			ordered := make([]string, 0, len(infs))
+			ordered = append(ordered, n)
+			ordered = append(ordered, infs[:i]...)
+			ordered = append(ordered, infs[i+1:]...)
+			return ordered
+		}
 	}
-	return plugins, nil
+	return infs
+}
+
+// ParseFS parses a single plugin from its own directory, as returned by
+// Source.Resolve, and returns its main manifest unit. name is the plugin's canonical
+// directory name. It shares parseUnits with Discover, so it selects the main .inf and
+// skips shipped support .inf files identically; a directory with no plugin manifest
+// is an error. Used by `plugins info`.
+func ParseFS(fsys fs.FS, name string, build int) (*Plugin, error) {
+	units, err := parseUnits(fsys, name, build)
+	if err != nil {
+		return nil, err
+	}
+	if len(units) == 0 {
+		return nil, fmt.Errorf("plugin %q: no plugin manifest (.inf with a [PEBuilder] section) found", name)
+	}
+	return units[0], nil
 }
 
 // isINF reports whether name has a .inf extension (case-insensitive).
 func isINF(name string) bool {
-	return strings.EqualFold(filepath.Ext(name), ".inf")
-}
-
-// mainInf returns the path to the main .inf of a plugin folder — the one named
-// after the folder if present, otherwise the alphabetically first — or "" if the
-// folder holds no .inf. It is the on-disk-path form of mainInfFS.
-func mainInf(folder, name string) string {
-	n, ok := mainInfFS(os.DirFS(folder), name)
-	if !ok {
-		return ""
-	}
-	return filepath.Join(folder, n)
+	return strings.EqualFold(path.Ext(name), ".inf")
 }
