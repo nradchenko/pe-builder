@@ -201,6 +201,34 @@ func TestDefaultSearchPathExplicitDirErrors(t *testing.T) {
 	}
 }
 
+func TestManagementSearchPathLocalTier(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv(EnvVar, "")
+
+	// A build's path excludes the local ./plugins tier; the management path includes it.
+	build, err := DefaultSearchPath("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range build {
+		if s.Name() == "local" {
+			t.Error("DefaultSearchPath (build) must not include the local ./plugins tier")
+		}
+	}
+
+	mgmt, err := ManagementSearchPath("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var labels []string
+	for _, s := range mgmt {
+		labels = append(labels, s.Name())
+	}
+	if want := []string{"local", "global", BuiltinLabel}; !reflect.DeepEqual(labels, want) {
+		t.Errorf("management path = %v, want %v", labels, want)
+	}
+}
+
 func TestGlobalDirXDG(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", "/data/home")
 	if got, want := GlobalDir(), filepath.Join("/data/home", "pe-builder", "plugins"); got != want {

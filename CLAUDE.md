@@ -30,7 +30,8 @@ over it.
     base layer and plugins compile to.
   - `inifile/` — apply the text/INI edit actions (e.g. the `txtsetup.sif` boot edits)
     to files in the assembled tree.
-  - `plugin/` — plugin discovery, parsing, and evaluation into actions.
+  - `plugin/` — plugin discovery, parsing, evaluation into actions, and installing
+    plugins from `.cab`/`.zip` archives (`plugins add`).
   - `base/` — the clean-room base layer (`base.inf` plus boot-driver and locale
     derivation from the source).
   - `tree/` — assemble the output file tree (resolve → decompress → place).

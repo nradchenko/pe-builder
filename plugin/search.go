@@ -67,21 +67,46 @@ func (sp SearchPath) List() []Available {
 	return out
 }
 
-// DefaultSearchPath assembles the standard plugin search path in precedence order:
-// the project plugins_dir (projectDir, if set), the PEBUILD_PLUGIN_PATH entries,
-// the per-user global dir, and the embedded built-ins.
+// LocalPluginsDir is the conventional project-local plugins directory (cwd-relative)
+// the example manifests use as plugins_dir. The interactive plugin-management commands
+// include it in their search path (see ManagementSearchPath); a build does not — a
+// build resolves plugins only from its declared inputs (the manifest plugins_dir or an
+// explicit dir), so its output does not silently depend on the current directory, and
+// a plugin's [Build] command is never picked up implicitly.
+const LocalPluginsDir = "plugins"
+
+// DefaultSearchPath assembles the plugin search path a build resolves from, in
+// precedence order: the project plugins_dir (projectDir, if set), the
+// PEBUILD_PLUGIN_PATH entries, the per-user global dir, and the embedded built-ins.
+// It deliberately does not include the local ./plugins dir — see ManagementSearchPath.
 //
 // Explicitly named directories — projectDir and each PEBUILD_PLUGIN_PATH entry —
 // must exist and be readable; a missing or unreadable one is a clear error, since
 // naming it is direct user intent. The global dir and built-ins are implicit and
 // stay lenient: a missing global dir is simply skipped.
 func DefaultSearchPath(projectDir string) (SearchPath, error) {
+	return searchPath(projectDir, false)
+}
+
+// ManagementSearchPath is DefaultSearchPath plus a lenient local ./plugins tier
+// (skipped if absent), placed just below an explicit project dir. It is for the
+// interactive `plugins list`/`info` commands, so a plugin installed with
+// `plugins add --local` is visible; it is not used for builds.
+func ManagementSearchPath(projectDir string) (SearchPath, error) {
+	return searchPath(projectDir, true)
+}
+
+func searchPath(projectDir string, includeLocal bool) (SearchPath, error) {
 	var sp SearchPath
 	if projectDir != "" {
 		if err := validateDir(projectDir); err != nil {
 			return nil, fmt.Errorf("plugins dir %q: %w", projectDir, err)
 		}
 		sp = append(sp, DirSource{Root: projectDir, Label: "project"})
+	}
+	if includeLocal && projectDir != LocalPluginsDir {
+		// Lenient: a missing ./plugins is simply not a source (unlike an explicit dir).
+		sp = append(sp, DirSource{Root: LocalPluginsDir, Label: "local"})
 	}
 	for _, d := range envDirs() {
 		if err := validateDir(d); err != nil {
