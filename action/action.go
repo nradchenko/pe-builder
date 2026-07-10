@@ -87,6 +87,10 @@ type Action struct {
 	// assembler is given a map from this key to the backing fs.FS, and consults it
 	// before the Windows source.
 	Origin string
+	// Dest, when set, is the literal output-tree-relative (forward-slash) path a copy
+	// is written to, bypassing directory-ID/layout resolution. Manifest include/inject
+	// overrides use it, since they name their target path directly.
+	Dest string
 
 	// Mkdir fields ([WinntDirectories]).
 	Path         string // directory name/path

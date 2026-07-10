@@ -98,7 +98,7 @@ func TestAssemblePipeline(t *testing.T) {
 	}
 
 	out := t.TempDir()
-	rep, err := assemble(context.Background(), backing, id, out, nil, nil)
+	rep, err := assemble(context.Background(), backing, id, out, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,8 @@ func TestAssembleWithPlugin(t *testing.T) {
 		backing["i386/"+a.Src] = &fstest.MapFile{Data: []byte("stub:" + a.Src)}
 	}
 
-	// A plugin that ships demo.exe and adds a SOFTWARE registry value.
+	// A plugin that ships demo.exe and adds a SOFTWARE registry value, plus a manifest
+	// override that sets a second SOFTWARE value.
 	demo := &plugin.Discovered{
 		Name: "demo",
 		FS:   fstest.MapFS{"demo.exe": &fstest.MapFile{Data: []byte("demo payload\n")}},
@@ -156,10 +157,21 @@ func TestAssembleWithPlugin(t *testing.T) {
 				ValueName: "Installed", RegType: action.RegSZ, Data: "yes", HasValue: true},
 		}}},
 	}
-	pluginActs, origins := plugin.Compile([]*plugin.Discovered{demo})
+	// A local file for the inject override.
+	injDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(injDir, "hello.cmd"), []byte("@echo hi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	selected := []plugin.Selected{{
+		Plugin: demo,
+		Override: plugin.Override{
+			RegSet: map[string]string{`HKLM\SOFTWARE\PeBuilder\Demo\Extra`: "ovr"},
+			Inject: []plugin.Inject{{From: filepath.Join(injDir, "hello.cmd"), To: "i386/system32/hello.cmd"}},
+		},
+	}}
 
 	out := t.TempDir()
-	rep, err := assemble(context.Background(), backing, id, out, pluginActs, origins)
+	rep, err := assemble(context.Background(), backing, id, out, selected)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,6 +203,18 @@ func TestAssembleWithPlugin(t *testing.T) {
 	}
 	if v, ok := k.Value("Installed"); !ok || v.AsString() != "yes" {
 		t.Errorf("Installed value = %q (ok=%v), want \"yes\"", v.AsString(), ok)
+	}
+	// The manifest override's registry.set value landed too.
+	if v, ok := k.Value("Extra"); !ok || v.AsString() != "ovr" {
+		t.Errorf("override Extra value = %q (ok=%v), want \"ovr\"", v.AsString(), ok)
+	}
+	// The injected local file was placed at its target path.
+	inj, err := os.ReadFile(filepath.Join(out, "i386", "system32", "hello.cmd"))
+	if err != nil {
+		t.Fatalf("injected file not placed: %v", err)
+	}
+	if string(inj) != "@echo hi\n" {
+		t.Errorf("injected file = %q, want the local file contents", inj)
 	}
 }
 
@@ -225,26 +249,28 @@ demo.exe=2,,1
 	}
 
 	// No enabled plugins: the base layer is the whole build.
-	if acts, origins, err := selectPlugins(&manifest.Manifest{PluginsDir: dir}, 2600); err != nil || acts != nil || origins != nil {
-		t.Fatalf("no enabled plugins: acts=%v origins=%v err=%v", acts, origins, err)
+	if sel, err := selectPlugins(&manifest.Manifest{PluginsDir: dir}, 2600); err != nil || sel != nil {
+		t.Fatalf("no enabled plugins: sel=%v err=%v", sel, err)
 	}
 
-	// Enabled plugin resolves to actions and an origin for its shipped file.
-	m := &manifest.Manifest{PluginsDir: dir, Plugins: []manifest.Plugin{{Name: "demo", Enabled: true}}}
-	acts, origins, err := selectPlugins(m, 2600)
+	// Enabled plugin resolves to a selection carrying its override layer.
+	m := &manifest.Manifest{PluginsDir: dir, Plugins: []manifest.Plugin{
+		{Name: "demo", Enabled: true, Files: manifest.Files{Exclude: []string{"i386/system32/gone.dll"}}},
+	}}
+	sel, err := selectPlugins(m, 2600)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(acts) == 0 {
-		t.Error("expected compiled plugin actions")
+	if len(sel) != 1 || sel[0].Plugin.Name != "demo" {
+		t.Fatalf("selection = %+v, want one plugin 'demo'", sel)
 	}
-	if _, ok := origins["demo"]; !ok {
-		t.Error("origins missing entry for demo")
+	if got := sel[0].Override.Exclude; len(got) != 1 || got[0] != "i386/system32/gone.dll" {
+		t.Errorf("override.Exclude = %v, want the manifest exclude carried through", got)
 	}
 
 	// An enabled plugin that is not on the search path is a clear error.
 	missing := &manifest.Manifest{PluginsDir: dir, Plugins: []manifest.Plugin{{Name: "ghost", Enabled: true}}}
-	if _, _, err := selectPlugins(missing, 2600); err == nil {
+	if _, err := selectPlugins(missing, 2600); err == nil {
 		t.Error("enabled-but-absent plugin returned no error")
 	}
 }
@@ -421,7 +447,7 @@ func TestAssembleCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	rep, err := assemble(ctx, backing, id, t.TempDir(), nil, nil)
+	rep, err := assemble(ctx, backing, id, t.TempDir(), nil)
 	if err == nil {
 		t.Fatalf("assemble with a cancelled context returned no error (rep=%+v)", rep)
 	}

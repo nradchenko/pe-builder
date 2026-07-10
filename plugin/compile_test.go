@@ -10,7 +10,16 @@ import (
 	"github.com/nradchenko/pe-builder/action"
 )
 
-func TestCompile(t *testing.T) {
+// byName resolves a copy action's "output path" for tests as its target name, enough
+// to exercise files.exclude matching without a real source layout.
+func byTarget(a action.Action) string {
+	if a.Rename != "" {
+		return a.Rename
+	}
+	return a.Src
+}
+
+func TestCompileOriginStamping(t *testing.T) {
 	// "a" ships a.exe (ShipWithPlugin) and also copies winfile.dll from the Windows
 	// source (no ShipWithPlugin). "b" ships no files (nil FS).
 	a := &Discovered{
@@ -23,16 +32,16 @@ func TestCompile(t *testing.T) {
 		}}},
 	}
 	b := &Discovered{
-		Name: "b",
-		Units: []*Plugin{{Name: "b", Actions: []action.Action{
-			{Kind: action.AddReg, Hive: action.HiveSoftware, Subkey: "B"},
-		}}},
+		Name:  "b",
+		Units: []*Plugin{{Name: "b", Actions: []action.Action{{Kind: action.AddReg, Hive: action.HiveSoftware, Subkey: "B"}}}},
 	}
 
-	acts, origins := Compile([]*Discovered{a, b})
+	acts, origins, err := Compile([]Selected{{Plugin: a}, {Plugin: b}}, byTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	// Actions flatten in plugin order; only the ShipWithPlugin copy is stamped with an
-	// Origin — the source copy and the registry actions keep an empty Origin.
+	// Only the ShipWithPlugin copy is stamped with an Origin.
 	want := []struct {
 		kind   action.Kind
 		origin string
@@ -51,12 +60,65 @@ func TestCompile(t *testing.T) {
 				i, acts[i].Kind, acts[i].Origin, w.kind, w.origin)
 		}
 	}
-
-	// The plugin that ships files has an origin entry; the one that ships none does not.
 	if _, ok := origins["a"]; !ok {
 		t.Error("origins missing entry for a")
 	}
 	if _, ok := origins["b"]; ok {
 		t.Error("origins has an entry for b, which ships no files")
+	}
+}
+
+func TestCompileExcludeSuppresses(t *testing.T) {
+	d := &Discovered{
+		Name: "p",
+		FS:   fstest.MapFS{"keep.exe": &fstest.MapFile{Data: []byte("k")}, "drop.exe": &fstest.MapFile{Data: []byte("d")}},
+		Units: []*Plugin{{Name: "p", Actions: []action.Action{
+			{Kind: action.CopyFile, Src: "keep.exe", DirID: "2", ShipWithPlugin: true},
+			{Kind: action.CopyFile, Src: "drop.exe", DirID: "2", ShipWithPlugin: true},
+		}}},
+	}
+	sel := []Selected{{Plugin: d, Override: Override{Exclude: []string{"drop.exe"}}}}
+
+	acts, _, err := Compile(sel, byTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(acts) != 1 || acts[0].Src != "keep.exe" {
+		t.Fatalf("acts = %+v, want only keep.exe (drop.exe excluded)", acts)
+	}
+}
+
+func TestCompileOverrideAdditions(t *testing.T) {
+	d := &Discovered{Name: "p", Units: []*Plugin{{Name: "p"}}}
+	sel := []Selected{{Plugin: d, Override: Override{
+		Include:   []string{"i386/system32/extra.dll"},
+		RegSet:    map[string]string{`HKLM\SOFTWARE\Foo\Bar`: "baz"},
+		RegDelete: []string{`HKLM\SYSTEM\Setup\Old`},
+	}}}
+
+	acts, _, err := Compile(sel, byTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var gotInclude, gotSet, gotDelete bool
+	for _, a := range acts {
+		switch {
+		case a.Kind == action.CopyFile && a.Src == "extra.dll" && a.Dest == "i386/system32/extra.dll":
+			gotInclude = true
+		case a.Kind == action.AddReg && a.Hive == action.HiveSoftware && a.Subkey == "Foo" && a.ValueName == "Bar" && a.Data == "baz":
+			gotSet = true
+		case a.Kind == action.DelReg && a.Hive == action.HiveSystem && a.Subkey == "Setup" && a.ValueName == "Old":
+			gotDelete = true
+		}
+	}
+	if !gotInclude {
+		t.Error("include did not produce the expected source copy")
+	}
+	if !gotSet {
+		t.Error("registry.set did not produce the expected AddReg")
+	}
+	if !gotDelete {
+		t.Error("registry.delete did not produce the expected DelReg")
 	}
 }

@@ -13,9 +13,9 @@ package build
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/nradchenko/pe-builder/action"
 	"github.com/nradchenko/pe-builder/base"
@@ -75,7 +75,7 @@ func Build(ctx context.Context, m *manifest.Manifest) (*Report, error) {
 		}
 	}
 
-	pluginActs, origins, err := selectPlugins(m, id.Build)
+	selected, err := selectPlugins(m, id.Build)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func Build(ctx context.Context, m *manifest.Manifest) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	rep, err := assemble(ctx, src.Backing(), id, outDir, pluginActs, origins)
+	rep, err := assemble(ctx, src.Backing(), id, outDir, selected)
 	if err != nil {
 		return nil, err
 	}
@@ -112,11 +112,12 @@ func Build(ctx context.Context, m *manifest.Manifest) (*Report, error) {
 // runs here — not gated on the media target — so the produced tree is a complete PE
 // tree regardless of whether an ISO is then mastered from it.
 //
-// pluginActs are the enabled plugins' compiled actions in load order (empty when no
-// plugin is enabled); they apply after the base layer, last-writer-wins. origins maps
-// each plugin's name to its directory so the tree assembler reads a file the plugin
-// ships from the plugin rather than the Windows source.
-func assemble(ctx context.Context, backing source.Backing, id source.Identity, outDir string, pluginActs []action.Action, origins map[string]fs.FS) (*Report, error) {
+// selected are the enabled plugins in load order (empty when none is enabled), paired
+// with their manifest override layer. They are compiled to actions here — where the
+// source layout is available, so files.exclude can match a copy by its resolved output
+// path — and apply after the base layer, last-writer-wins. Their file origins let the
+// tree assembler read a file a plugin ships from the plugin rather than the source.
+func assemble(ctx context.Context, backing source.Backing, id source.Identity, outDir string, selected []plugin.Selected) (*Report, error) {
 	l, err := layout.Parse(backing, id)
 	if err != nil {
 		return nil, fmt.Errorf("read source layout: %w", err)
@@ -126,7 +127,15 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 		return nil, fmt.Errorf("evaluate base layer: %w", err)
 	}
 	// The base layer is not a plugin; the enabled plugins layer on top of it, in load
-	// order, so a later plugin's write wins over the base and earlier plugins.
+	// order, so a later plugin's write wins over the base and earlier plugins. Plugin
+	// copies resolve their output path through the same layout the tree uses, so a
+	// manifest exclude can suppress one by its destination.
+	pluginActs, origins, err := plugin.Compile(selected, func(a action.Action) string {
+		return tree.OutputPath(a, l)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("evaluate plugins: %w", err)
+	}
 	acts = append(acts, pluginActs...)
 
 	res, err := tree.Assemble(ctx, acts, l, backing, origins, outDir)
@@ -177,15 +186,15 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 // is one the manifest enabled: Select errors clearly when an enabled plugin is
 // missing (whether absent or unparseable), and an unrelated broken plugin is only
 // warned about.
-func selectPlugins(m *manifest.Manifest, build int) ([]action.Action, map[string]fs.FS, error) {
+func selectPlugins(m *manifest.Manifest, build int) ([]plugin.Selected, error) {
 	enabled := m.EnabledPlugins()
 	if len(enabled) == 0 {
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	sp, err := plugin.DefaultSearchPath(m.PluginsDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	discovered, discErr := plugin.Discover(sp, build)
 
@@ -198,20 +207,46 @@ func selectPlugins(m *manifest.Manifest, build int) ([]action.Action, map[string
 		// An enabled plugin is missing. If some plugins also failed to parse, the
 		// cause may be one of them, so include that detail.
 		if discErr != nil {
-			return nil, nil, fmt.Errorf("%w (%v)", err, discErr)
+			return nil, fmt.Errorf("%w (%v)", err, discErr)
 		}
-		return nil, nil, err
+		return nil, err
 	}
 	if discErr != nil {
 		slog.Warn("some plugins in the search path failed to parse; enabled plugins are unaffected", "error", discErr)
 	}
 
 	plugin.Order(selected)
+	if err := plugin.ValidateDepends(selected); err != nil {
+		return nil, err
+	}
 	warnUnappliedAppends(selected)
 
-	acts, origins := plugin.Compile(selected)
-	slog.Info("evaluated plugins", "count", len(selected), "actions", len(acts))
-	return acts, origins, nil
+	// Pair each selected plugin with its manifest override layer (by name).
+	overrides := make(map[string]manifest.Plugin, len(enabled))
+	for _, p := range enabled {
+		overrides[strings.ToLower(p.Name)] = p
+	}
+	out := make([]plugin.Selected, len(selected))
+	for i, d := range selected {
+		out[i] = plugin.Selected{Plugin: d, Override: overrideLayer(overrides[strings.ToLower(d.Name)])}
+	}
+	slog.Info("selected plugins", "count", len(out))
+	return out, nil
+}
+
+// overrideLayer maps a manifest plugin block's file/registry overrides to the plugin
+// engine's Override type.
+func overrideLayer(p manifest.Plugin) plugin.Override {
+	ov := plugin.Override{
+		Include:   p.Files.Include,
+		Exclude:   p.Files.Exclude,
+		RegSet:    p.Registry.Set,
+		RegDelete: p.Registry.Delete,
+	}
+	for _, in := range p.Files.Inject {
+		ov.Inject = append(ov.Inject, plugin.Inject{From: in.From, To: in.To})
+	}
+	return ov
 }
 
 // warnUnappliedAppends warns for each enabled plugin that uses [Append] (the Nu2Menu

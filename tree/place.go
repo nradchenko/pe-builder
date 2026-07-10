@@ -59,7 +59,12 @@ func placeFile(a action.Action, l *layout.Layout, src source.Backing, cabs *cabi
 		slog.Warn("cannot keep file compressed; source has no packed archive form", "file", name)
 	}
 
-	rel := outputPath(a, l, outName)
+	// A manifest include/inject override names its target path directly; otherwise the
+	// directory is resolved from the action's ID/path and the source layout.
+	rel := a.Dest
+	if rel == "" {
+		rel = outputPath(a, l, outName)
+	}
 	full := filepath.Join(outRoot, filepath.FromSlash(rel))
 	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 		return "", "", fmt.Errorf("create dir for %q: %w", name, err)
@@ -127,6 +132,18 @@ func targetName(a action.Action, name string) string {
 		return strings.ToLower(a.Rename)
 	}
 	return name
+}
+
+// OutputPath returns the output-tree-relative (forward-slash) path a copy action
+// resolves to — the same path Assemble writes it to. It lets a caller match a copy
+// against a target path (e.g. a manifest exclude entry) without re-deriving the
+// placement rules. A copy that names its destination directly (Dest) returns it
+// verbatim.
+func OutputPath(a action.Action, l *layout.Layout) string {
+	if a.Dest != "" {
+		return a.Dest
+	}
+	return outputPath(a, l, targetName(a, strings.ToLower(a.Src)))
 }
 
 // outputPath computes the output-relative (forward-slash) path for a placed file:

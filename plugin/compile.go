@@ -4,35 +4,125 @@
 package plugin
 
 import (
+	"fmt"
 	"io/fs"
+	"log/slog"
+	"os"
+	"strings"
 
 	"github.com/nradchenko/pe-builder/action"
 )
 
+// Selected pairs a discovered plugin (in load order) with the manifest override layer
+// applied to it.
+type Selected struct {
+	Plugin   *Discovered
+	Override Override
+}
+
 // Compile flattens the selected plugins, in the given (load) order, into a single
 // action list plus the file-origin map the tree assembler needs. It is the seam
-// between plugin discovery and the build: the returned actions slot into the
-// combined build action list after the base layer.
+// between plugin discovery and the build: the returned actions slot into the combined
+// build action list after the base layer.
 //
-// A copy action for a file the plugin ships itself (the ShipWithPlugin attribute) is
-// tagged with the plugin's name as its Origin, and origins[name] is the plugin's
-// directory, so those bytes are read from the plugin. A copy of a file the plugin
-// merely names from the Windows source (no ShipWithPlugin) keeps an empty Origin and
-// resolves from the source — including its driver cabinets. Non-copy actions
-// (registry, text edits) pass through unchanged; they carry no origin.
-func Compile(selected []*Discovered) ([]action.Action, map[string]fs.FS) {
+// For each plugin, in order: its own actions (a shipped copy tagged with the plugin
+// name as Origin so its bytes are read from the plugin; a copy the manifest excludes
+// dropped), then the override additions — include/inject copies and registry
+// set/delete. resolveTarget returns a copy action's output-tree path; the caller
+// supplies it (it needs the source layout) so files.exclude can match a plugin copy
+// by its resolved destination.
+func Compile(selected []Selected, resolveTarget func(action.Action) string) ([]action.Action, map[string]fs.FS, error) {
 	var acts []action.Action
 	origins := make(map[string]fs.FS)
-	for _, d := range selected {
+
+	for _, s := range selected {
+		d := s.Plugin
 		if d.FS != nil {
 			origins[d.Name] = d.FS
 		}
-		for _, a := range d.Actions() {
-			if a.Kind == action.CopyFile && a.ShipWithPlugin {
-				a.Origin = d.Name
-			}
-			acts = append(acts, a)
+
+		own := applyExcludes(d, s.Override.Exclude, resolveTarget)
+		acts = append(acts, own...)
+
+		ovActs, ovOrigins, err := overrideAdditions(s.Override, d.Name)
+		if err != nil {
+			return nil, nil, fmt.Errorf("plugin %q: %w", d.Name, err)
+		}
+		acts = append(acts, ovActs...)
+		for k, v := range ovOrigins {
+			origins[k] = v
 		}
 	}
-	return acts, origins
+	return acts, origins, nil
+}
+
+// applyExcludes returns a plugin's own actions with its shipped copies origin-stamped
+// and the copies whose resolved output path matches a files.exclude entry dropped. A
+// non-matching exclude is warned about. resolveTarget maps a copy to its output-tree
+// path (needs the source layout, so the caller supplies it); it is only consulted
+// when the plugin has excludes.
+func applyExcludes(d *Discovered, exclude []string, resolveTarget func(action.Action) string) []action.Action {
+	want := make(map[string]bool, len(exclude))
+	for _, e := range exclude {
+		want[strings.ToLower(normalizeTreePath(e))] = true
+	}
+	matched := make(map[string]bool, len(want))
+
+	var out []action.Action
+	for _, a := range d.Actions() {
+		if a.Kind == action.CopyFile {
+			if len(want) > 0 {
+				if key := strings.ToLower(normalizeTreePath(resolveTarget(a))); want[key] {
+					matched[key] = true
+					continue // suppressed by files.exclude
+				}
+			}
+			if a.ShipWithPlugin {
+				a.Origin = d.Name
+			}
+		}
+		out = append(out, a)
+	}
+	for e := range want {
+		if !matched[e] {
+			slog.Warn("plugin files.exclude matched no file", "plugin", d.Name, "path", e)
+		}
+	}
+	return out
+}
+
+// overrideAdditions builds the actions a plugin's override layer adds (include,
+// inject, registry set/delete) and the origins its injected local files read from.
+func overrideAdditions(ov Override, plugin string) ([]action.Action, map[string]fs.FS, error) {
+	if ov.empty() {
+		return nil, nil, nil
+	}
+	var acts []action.Action
+	origins := make(map[string]fs.FS)
+
+	for _, inc := range ov.Include {
+		acts = append(acts, includeAction(inc))
+	}
+	for i, inj := range ov.Inject {
+		a, dir, err := injectAction(inj, fmt.Sprintf("inject:%s:%d", plugin, i))
+		if err != nil {
+			return nil, nil, err
+		}
+		origins[a.Origin] = os.DirFS(dir)
+		acts = append(acts, a)
+	}
+
+	setActs, err := regSetActions(ov.RegSet)
+	if err != nil {
+		return nil, nil, err
+	}
+	acts = append(acts, setActs...)
+
+	delActs, err := regDeleteActions(ov.RegDelete)
+	if err != nil {
+		return nil, nil, err
+	}
+	acts = append(acts, delActs...)
+
+	return acts, origins, nil
 }
