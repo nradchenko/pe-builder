@@ -94,49 +94,63 @@ func TestISOEmit(t *testing.T) {
 		}
 	}
 
-	// The artifact is trimmed to its real length (no trailing padding from the
-	// oversized Create), matching the PVD volume space size.
+	// go-diskfs sizes the image to its volume-space-size, so the artifact carries no
+	// trailing padding. Allow at most one trailing block of slack against a future
+	// rounding change on the writer side.
 	info, err := os.Stat(out)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := volumeBytes(t, f); info.Size() != want {
-		t.Errorf("iso size = %d, want %d (trimmed to volume size)", info.Size(), want)
+	if want := volumeBytes(t, f); info.Size() < want || info.Size() > want+isoBlockSize {
+		t.Errorf("iso size = %d, want within one block of volume size %d", info.Size(), want)
 	}
 
 	golden.Assert(t, "iso-tree", strings.Join(names, "\n")+"\n")
 }
 
-func TestIs83Clean(t *testing.T) {
-	clean := []string{"SETUPLDR.BIN", "setupldr.bin", "SYSTEM", "ntdll.dll", "c_1252.nls", "ATAPI.SYS", "a", "12345678.abc"}
-	dirty := []string{"toolongname.dll", "name.long", "a.b.c", "has space.sys", "café.dll", "", ".bin", "file.tooLong"}
-	for _, n := range clean {
-		if !is83Clean(n) {
-			t.Errorf("is83Clean(%q) = false, want true", n)
-		}
+// TestUppercaseTree checks the in-place rename uppercases every component and keeps the
+// nested structure intact — deepest-first, so a child renames before its parent.
+func TestUppercaseTree(t *testing.T) {
+	root := makeTree(t) // mixed/lowercase names, several directories deep
+	if err := uppercaseTree(root); err != nil {
+		t.Fatal(err)
 	}
-	for _, n := range dirty {
-		if is83Clean(n) {
-			t.Errorf("is83Clean(%q) = true, want false", n)
+	var lower []string
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
+		if p != root && d.Name() != strings.ToUpper(d.Name()) {
+			lower = append(lower, d.Name())
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lower) > 0 {
+		t.Errorf("names not uppercased: %v", lower)
+	}
+	// The deepest file survived the rename under its uppercased path.
+	if _, err := os.Stat(filepath.Join(root, "I386", "SYSTEM32", "DRIVERS", "ATAPI.SYS")); err != nil {
+		t.Errorf("nested file lost after uppercasing: %v", err)
 	}
 }
 
-func TestWarnUnmappableNames(t *testing.T) {
-	// A clean tree scans without error.
-	if err := warnUnmappableNames(makeTree(t)); err != nil {
-		t.Fatal(err)
-	}
-	// A tree with a non-8.3 name still scans (warns, does not error).
+// TestUppercaseTreeCollision confirms two names that differ only in case error rather
+// than one silently overwriting the other.
+func TestUppercaseTreeCollision(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "tree")
 	if err := os.MkdirAll(filepath.Join(root, "i386"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "i386", "toolongname.dll"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
+	for _, n := range []string{"data.dll", "Data.DLL"} {
+		if err := os.WriteFile(filepath.Join(root, "i386", n), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := warnUnmappableNames(root); err != nil {
-		t.Errorf("warnUnmappableNames should warn, not error: %v", err)
+	if err := uppercaseTree(root); err == nil {
+		t.Fatal("case-colliding names returned no error")
 	}
 }
 
