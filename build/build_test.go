@@ -458,6 +458,17 @@ func TestBuildWin32GUIClosure(t *testing.T) {
 			t.Errorf("win32-gui [Closure] did not place %s: %v", f, err)
 		}
 	}
+	// The [SourcePaths] Common-Controls 6.0 side-by-side assembly lands in WinSxS: the v6
+	// comctl32 and its manifest, at the exact hash-encoded paths the loader resolves.
+	asm := "x86_Microsoft.Windows.Common-Controls_6595b64144ccf1df_6.0.0.0_x-ww_1382d70a"
+	for _, p := range []string{
+		filepath.Join("i386", "WinSxS", asm, "comctl32.dll"),
+		filepath.Join("i386", "WinSxS", "Manifests", asm+".manifest"),
+	} {
+		if _, err := os.Stat(filepath.Join(out, p)); err != nil {
+			t.Errorf("win32-gui [SourcePaths] did not stage the WinSxS assembly file %s: %v", p, err)
+		}
+	}
 }
 
 // TestBuildISO is the end-to-end media check: build the real XP SP3 source with the
