@@ -7,6 +7,7 @@ import (
 	"github.com/nradchenko/pe-builder/action"
 	"github.com/nradchenko/pe-builder/layout"
 	"github.com/nradchenko/pe-builder/pewalk"
+	"github.com/nradchenko/pe-builder/plugin"
 )
 
 // closureSeed is the set of load roots the import closure grows from: the modules a
@@ -43,43 +44,16 @@ var closureSeed = []string{
 	"print.exe", "shutdown.exe",
 }
 
-// ClosureActions computes the base file set's import-derivable half: it walks the
-// static PE import graph (transitively) from the load roots plus the source's own boot
-// drivers, and returns a copy action for every dependency the walk discovers in the
-// source. Delay-load imports are skipped — they resolve lazily at runtime and mostly
-// never load in a minimal PE, so following them transitively over-includes; the
-// runtime/delay dependencies a minimal PE does need are carried by the seed. The roots themselves are placed by the base manifest and
-// driver derivation, so only their transitive dependencies are emitted here.
-//
-// A module the walk cannot resolve in the source is a red herring under the
-// source-self-sufficiency principle — anything a minimal boot truly needs is on the
-// media — so it is returned separately (for reporting), never copied. Each emitted
-// copy is optional: a resolved module that a later read cannot place is recorded as
-// skipped rather than failing the build, consistent with the base's never-fatal
-// handling of an absent file. The 0-net-missing regression test is the real guard.
-func ClosureActions(pw *pewalk.Source, l *layout.Layout) (acts []action.Action, redHerrings []string, err error) {
+// ClosureActions computes the base file set's import-derivable half: the static import
+// closure of the load roots plus the source's own boot drivers. The roots themselves are
+// placed by the base manifest and driver derivation (which own their renames and target
+// directories), so only their transitive dependencies are emitted. It delegates to the
+// shared plugin.ClosureActions engine — the same computation a plugin's [Closure] section
+// drives — differing only in how the seeds are gathered.
+func ClosureActions(pw *pewalk.Source, l *layout.Layout) ([]action.Action, []string, error) {
 	seeds := append([]string(nil), closureSeed...)
 	seeds = append(seeds, l.BootDrivers()...)
-
-	// Static imports only: a module's static imports are loaded with it and must be
-	// present, while its delay imports load lazily and usually never do in a minimal
-	// PE — following them transitively pulls in large runtime subsystems the boot set
-	// does not need.
-	res, err := pewalk.WalkWith(pw, pewalk.Options{StaticOnly: true}, seeds...)
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, name := range res.Order {
-		n := res.Nodes[name]
-		switch {
-		case n.Status == pewalk.StatusMissing:
-			redHerrings = append(redHerrings, name)
-		case n.Seed:
-			// A load root (or boot driver): placed by the base manifest / driver
-			// derivation, which owns its rename and target directory.
-		default:
-			acts = append(acts, action.Action{Kind: action.CopyFile, Src: name, Optional: true})
-		}
-	}
-	return acts, redHerrings, nil
+	// The roots are placed by the base manifest and driver derivation, so the closure
+	// emits only their dependencies.
+	return plugin.ClosureActions(pw, seeds, false)
 }

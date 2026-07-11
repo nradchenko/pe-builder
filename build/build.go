@@ -151,7 +151,7 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 	// order, so a later plugin's write wins over the base and earlier plugins. Plugin
 	// copies resolve their output path through the same layout the tree uses, so a
 	// manifest exclude can suppress one by its destination.
-	pluginActs, origins, err := plugin.Compile(selected, func(a action.Action) string {
+	pluginActs, origins, err := plugin.Compile(selected, pw, func(a action.Action) string {
 		return tree.OutputPath(a, l)
 	})
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/nradchenko/pe-builder/action"
+	"github.com/nradchenko/pe-builder/pewalk"
 )
 
 // Selected pairs a discovered plugin (in load order) with the manifest override layer
@@ -28,13 +29,20 @@ type Selected struct {
 // between plugin discovery and the build: the returned actions slot into the combined
 // build action list after the base layer.
 //
-// For each plugin, in order: its own actions (a shipped copy tagged with the plugin
-// name as Origin so its bytes are read from the plugin; a copy the manifest excludes
-// dropped), then the override additions — include/inject copies and registry
-// set/delete. resolveTarget returns a copy action's output-tree path; the caller
-// supplies it (it needs the source layout) so files.exclude can match a plugin copy
-// by its resolved destination.
-func Compile(selected []Selected, resolveTarget func(action.Action) string) ([]action.Action, map[string]fs.FS, error) {
+// For each plugin, in order: the [Closure] section's computed copies (the static import
+// closure of its seed modules, read from the Windows source), then its own actions (a
+// shipped copy tagged with the plugin name as Origin so its bytes are read from the
+// plugin; a copy the manifest excludes dropped), then the override additions —
+// include/inject copies and registry set/delete. The closure is placed first so the
+// plugin's own [SourceDisksFiles] seed stays authoritative for any file it handles
+// specially. resolveTarget returns a copy action's output-tree path; the caller supplies
+// it (it needs the source layout) so files.exclude can match a plugin copy by its
+// resolved destination.
+//
+// pw is the indexed source the [Closure] computation walks; passing nil skips closure
+// computation (a plugin with no [Closure] is unaffected, and one with a [Closure] is
+// then reduced to its explicit files — used by tests with no real source to index).
+func Compile(selected []Selected, pw *pewalk.Source, resolveTarget func(action.Action) string) ([]action.Action, map[string]fs.FS, error) {
 	var acts []action.Action
 	origins := make(map[string]fs.FS)
 
@@ -47,7 +55,25 @@ func Compile(selected []Selected, resolveTarget func(action.Action) string) ([]a
 			origins[buildOrigin(d.Name)] = s.Built.Dir
 		}
 
-		own := applyExcludes(d, s.Override.Exclude, s.Built, resolveTarget)
+		// The [Closure] section's computed copies come from the Windows source (no
+		// plugin Origin), placed before the plugin's own actions so its explicit seed
+		// wins on conflict. Excludes and origin-stamping then apply to the whole set.
+		ownActs := d.Actions()
+		if seeds := d.ClosureSeeds(); len(seeds) > 0 && pw != nil {
+			// A plugin's [Closure] seeds are files the plugin provides, so place them
+			// too (emitSeeds), not just their dependencies.
+			closureActs, redHerrings, err := ClosureActions(pw, seeds, true)
+			if err != nil {
+				return nil, nil, fmt.Errorf("plugin %q: compute [Closure]: %w", d.Name, err)
+			}
+			if len(redHerrings) > 0 {
+				slog.Debug("plugin [Closure] red herrings (absent from source, not copied)",
+					"plugin", d.Name, "count", len(redHerrings))
+			}
+			ownActs = append(closureActs, ownActs...)
+		}
+
+		own := applyExcludes(ownActs, d, s.Override.Exclude, s.Built, resolveTarget)
 		acts = append(acts, own...)
 
 		ovActs, ovOrigins, err := overrideAdditions(s.Override, d.Name)
@@ -62,13 +88,15 @@ func Compile(selected []Selected, resolveTarget func(action.Action) string) ([]a
 	return acts, origins, nil
 }
 
-// applyExcludes returns a plugin's own actions with its copies origin-stamped and the
-// copies whose resolved output path matches a files.exclude entry dropped. A copy of a
-// file the plugin's [Build] produced is served from the build output; a copy of a file
-// the plugin ships is served from the plugin directory. A non-matching exclude is
-// warned about. resolveTarget maps a copy to its output-tree path (needs the source
-// layout, so the caller supplies it); it is only consulted when the plugin has excludes.
-func applyExcludes(d *Discovered, exclude []string, built *Built, resolveTarget func(action.Action) string) []action.Action {
+// applyExcludes returns acts (a plugin's own actions plus any computed [Closure] copies)
+// with its copies origin-stamped and the copies whose resolved output path matches a
+// files.exclude entry dropped. A copy of a file the plugin's [Build] produced is served
+// from the build output; a copy of a file the plugin ships is served from the plugin
+// directory; a [Closure]-computed copy carries neither stamp and is read from the
+// Windows source. A non-matching exclude is warned about. resolveTarget maps a copy to
+// its output-tree path (needs the source layout, so the caller supplies it); it is only
+// consulted when the plugin has excludes.
+func applyExcludes(acts []action.Action, d *Discovered, exclude []string, built *Built, resolveTarget func(action.Action) string) []action.Action {
 	want := make(map[string]bool, len(exclude))
 	for _, e := range exclude {
 		want[strings.ToLower(normalizeTreePath(e))] = true
@@ -76,7 +104,7 @@ func applyExcludes(d *Discovered, exclude []string, built *Built, resolveTarget 
 	matched := make(map[string]bool, len(want))
 
 	var out []action.Action
-	for _, a := range d.Actions() {
+	for _, a := range acts {
 		if a.Kind == action.CopyFile {
 			if len(want) > 0 {
 				if key := strings.ToLower(normalizeTreePath(resolveTarget(a))); want[key] {

@@ -36,7 +36,7 @@ func TestCompileOriginStamping(t *testing.T) {
 		Units: []*Plugin{{Name: "b", Actions: []action.Action{{Kind: action.AddReg, Hive: action.HiveSoftware, Subkey: "B"}}}},
 	}
 
-	acts, origins, err := Compile([]Selected{{Plugin: a}, {Plugin: b}}, byTarget)
+	acts, origins, err := Compile([]Selected{{Plugin: a}, {Plugin: b}}, nil, byTarget)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestCompileBuiltPlugin(t *testing.T) {
 		Dir:      fstest.MapFS{"tool.exe": &fstest.MapFile{Data: []byte("bin")}},
 		Produces: map[string]bool{"tool.exe": true},
 	}
-	acts, origins, err := Compile([]Selected{{Plugin: d, Built: built}}, byTarget)
+	acts, origins, err := Compile([]Selected{{Plugin: d, Built: built}}, nil, byTarget)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestCompileExcludeSuppresses(t *testing.T) {
 	}
 	sel := []Selected{{Plugin: d, Override: Override{Exclude: []string{"drop.exe"}}}}
 
-	acts, _, err := Compile(sel, byTarget)
+	acts, _, err := Compile(sel, nil, byTarget)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestCompileOverrideAdditions(t *testing.T) {
 		RegDelete: []string{`HKLM\SYSTEM\Setup\Old`},
 	}}}
 
-	acts, _, err := Compile(sel, byTarget)
+	acts, _, err := Compile(sel, nil, byTarget)
 	if err != nil {
 		t.Fatal(err)
 	}

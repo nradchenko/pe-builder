@@ -1,0 +1,21 @@
+; Copyright 2026 Nikita Radchenko
+; SPDX-License-Identifier: Apache-2.0
+;
+; win32-gui — the shared Win32 GUI runtime the Explorer shell and GUI apps depend on.
+; The file set is computed: [Closure] names the shared GUI roots and pebuild walks their
+; static import closure against the source. Off by default; auto-enabled by dependents.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "Win32 GUI runtime"
+Enable = 0
+
+[Closure]
+shell32.dll
+comctl32.dll
+shlwapi.dll
+comdlg32.dll
+ole32.dll
+oleaut32.dll

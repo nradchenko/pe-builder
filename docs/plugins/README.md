@@ -116,6 +116,28 @@ Built-in plugins build automatically. A build-capable plugin from a drop-in dire
 runs an arbitrary command, so it is refused unless you opt in with
 `build.allow_plugin_builds = true` (or `pebuild build --allow-plugin-builds`).
 
+**Compute a file set instead of listing it.** When a plugin needs a Windows component
+and everything that component depends on — a GUI runtime, a subsystem — listing every
+DLL by hand is brittle. A `[Closure]` section names a few *seed* modules; pebuild walks
+their **static PE import graph** against the source and places the seeds plus every
+dependency it finds, so you name the roots and the dependencies come for free:
+
+```ini
+[Closure]
+; one seed module per line; its static import closure is computed from the source
+shell32.dll
+comctl32.dll
+ole32.dll
+```
+
+A module the source does not carry is dropped (anything genuinely needed is on the
+media). Only **static** imports are followed — delay-load imports resolve lazily at
+runtime and mostly never do, so following them would pull in large subsystems a minimal
+environment never uses; a genuinely-needed runtime load goes in `[SourceDisksFiles]` as
+the plugin's own seed. `[Closure]` only reads import tables (no code runs), so unlike
+`[Build]` it needs no opt-in. It is purely additive: a plugin with no `[Closure]` behaves
+exactly as before. See `plugins/win32-gui/` for the reference.
+
 To share a plugin, zip or cab its directory; users install it with `pebuild plugins
 add`. To propose one for bundling with pe-builder, see
 [`inclusion-policy.md`](inclusion-policy.md).

@@ -428,6 +428,38 @@ func TestBuildRealSource(t *testing.T) {
 	golden.Assert(t, "real-tree", summary)
 }
 
+// TestBuildWin32GUIClosure exercises a plugin's [Closure] section end-to-end: enabling
+// win32-gui computes the shared GUI runtime from the source's own import graph, so the
+// seed roots and their static dependencies all land in the tree — none hand-listed.
+func TestBuildWin32GUIClosure(t *testing.T) {
+	if _, err := os.Stat(cacheISO); err != nil {
+		t.Skip("real source ISO not present under .cache; skipping")
+	}
+	out := t.TempDir()
+	m := &manifest.Manifest{
+		Source:  manifest.Source{Path: cacheISO, Type: "auto"},
+		Output:  manifest.Output{Target: manifest.TargetNone},
+		Build:   manifest.Build{WorkDir: out, KeepWork: true},
+		Plugins: []manifest.Plugin{{Name: "win32-gui", Enabled: true}},
+	}
+	rep, err := Build(context.Background(), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Errors) != 0 {
+		t.Fatalf("build reported per-file errors: %v", rep.Errors)
+	}
+	// The [Closure] seed roots (placed because a plugin owns its seeds) and a
+	// representative computed dependency all reach system32.
+	for _, f := range []string{
+		"shell32.dll", "comctl32.dll", "shlwapi.dll", "comdlg32.dll", "ole32.dll", "oleaut32.dll",
+	} {
+		if _, err := os.Stat(filepath.Join(out, "i386", "system32", f)); err != nil {
+			t.Errorf("win32-gui [Closure] did not place %s: %v", f, err)
+		}
+	}
+}
+
 // TestBuildISO is the end-to-end media check: build the real XP SP3 source with the
 // iso target and confirm the produced image is bootable (El Torito boot record) and
 // carries the boot chain — the loader at \I386, txtsetup.sif switched to /minint, and

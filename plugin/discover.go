@@ -77,6 +77,16 @@ func (d *Discovered) Actions() []action.Action {
 	return out
 }
 
+// ClosureSeeds returns every unit's [Closure] seed modules concatenated in unit order.
+// Their static import closure is computed into the plugin's file set at build time.
+func (d *Discovered) ClosureSeeds() []string {
+	var out []string
+	for _, u := range d.Units {
+		out = append(out, u.Closure...)
+	}
+	return out
+}
+
 // Discover scans the search path and returns every available plugin, de-duplicated
 // by name with search-path precedence (a more specific source shadows a less
 // specific one), in name order. build selects .BuildNo section variants.

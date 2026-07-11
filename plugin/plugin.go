@@ -36,6 +36,9 @@ type Plugin struct {
 	// Build holds the [Build] section; its Present field reports whether the plugin
 	// compiles its own payload from source at build time.
 	Build BuildSpec
+	// Closure holds the [Closure] section's pewalk seed modules, whose static import
+	// closure the engine computes into the plugin's file set at build time.
+	Closure []string
 	// Actions is the compiled build-IR for the selected build.
 	Actions []action.Action
 }
@@ -93,6 +96,7 @@ func Parse(name string, f *inf.File, build int) (*Plugin, error) {
 
 	p.Update = parseUpdate(f, build)
 	p.Build = parseBuild(f, build)
+	p.Closure = parseClosure(f, build)
 
 	actions, err := Actions(f, build)
 	if err != nil {
