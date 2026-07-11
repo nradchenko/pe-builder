@@ -5,6 +5,7 @@ package plugin
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/nradchenko/pe-builder/action"
@@ -46,6 +47,9 @@ func Actions(f *inf.File, build int) ([]action.Action, error) {
 	// (a letter or number ID), not one the Windows source's txtsetup.sif knows, so it
 	// is resolved against the plugin's own table here rather than the source layout.
 	if err := add(copyActions(f, build, winntDirs(f, build))); err != nil {
+		return nil, err
+	}
+	if err := add(sourcePathActions(f, build)); err != nil {
 		return nil, err
 	}
 	for _, r := range []struct {
@@ -133,6 +137,29 @@ func copyActions(f *inf.File, build int, dirs map[string]dirTarget) ([]action.Ac
 			a.FromRoot = d.fromRoot
 		}
 		out = append(out, a)
+	}
+	return out, nil
+}
+
+// sourcePathActions maps [SourcePaths]: sourcePath = outputTreePath. Each entry copies a
+// file from the Windows source addressed by its exact path — relative to the source's
+// install folder (i386) — to a literal output-tree path. It reaches files whose basename
+// is not unique in the source (nested side-by-side assemblies, duplicate names) that
+// [SourceDisksFiles]'s name lookup cannot resolve; the compressed .??_ form is handled
+// like any source copy. A line missing either side is skipped.
+func sourcePathActions(f *inf.File, build int) ([]action.Action, error) {
+	var out []action.Action
+	for _, l := range f.Section("SourcePaths", build) {
+		src := normalizeTreePath(l.Key)
+		dest := normalizeTreePath(l.Field(0))
+		if src == "" || dest == "" {
+			// These are deliberate, exact entries; a half-written one is a typo, and a
+			// silent skip would surface far downstream (the copy just never happens).
+			slog.Warn("[SourcePaths] entry needs both a source and a destination path; skipping",
+				"source", src, "dest", dest)
+			continue
+		}
+		out = append(out, action.Action{Kind: action.CopyFile, SrcPath: src, Dest: dest})
 	}
 	return out, nil
 }

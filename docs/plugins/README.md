@@ -138,6 +138,22 @@ the plugin's own seed. `[Closure]` only reads import tables (no code runs), so u
 `[Build]` it needs no opt-in. It is purely additive: a plugin with no `[Closure]` behaves
 exactly as before. See `plugins/win32-gui/` for the reference.
 
+**Copy a source file by its exact path.** `[SourceDisksFiles]` names files by basename,
+which the source resolves through its layout. When a file's basename is not unique — a
+nested side-by-side assembly, a duplicate name in another folder — name it by its exact
+path with `[SourcePaths]`, one `sourcePath = outputTreePath` per line:
+
+```ini
+[SourcePaths]
+; path within the source's install folder = literal output-tree path
+ASMS\6000\MSFT\WINDOWS\COMMON\CONTROLS\COMCTL32.DLL = i386\WinSxS\<assembly>\comctl32.dll
+```
+
+The left path is relative to the source's install folder (`i386`); the right is the
+literal destination in the output tree. It addresses **loose or compressed** (`.??_`)
+source files by path; a cab-packed file has no filesystem path, so reach those with
+`[SourceDisksFiles]` by basename instead.
+
 To share a plugin, zip or cab its directory; users install it with `pebuild plugins
 add`. To propose one for bundling with pe-builder, see
 [`inclusion-policy.md`](inclusion-policy.md).

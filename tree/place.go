@@ -35,6 +35,11 @@ func placeFile(a action.Action, l *layout.Layout, src source.Backing, cabs *cabi
 		if a.Origin != "" {
 			return "", "", fmt.Errorf("plugin %q does not ship required file %q", a.Origin, a.Src)
 		}
+		// A [SourcePaths] copy addresses the source by an exact path (Src is empty), so
+		// name it by that path rather than the empty basename.
+		if a.SrcPath != "" {
+			return "", "", fmt.Errorf("required source file %q not found", a.SrcPath)
+		}
 		return "", "", fmt.Errorf("required source file %q not found", name)
 	}
 
@@ -89,6 +94,12 @@ func readFile(a action.Action, origins map[string]fs.FS, src source.Backing, cab
 			}
 		}
 		return nil, false, false
+	}
+	// A [SourcePaths] copy names an exact source path (a file whose basename is not
+	// unique): read it directly, still honoring the compressed .??_ form, rather than
+	// resolving a basename that would find the wrong file.
+	if a.SrcPath != "" {
+		return layout.ReadSourceFile(src, a.SrcPath)
 	}
 	return readSource(src, cabs, name)
 }

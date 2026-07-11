@@ -91,6 +91,12 @@ type Action struct {
 	// is written to, bypassing directory-ID/layout resolution. Manifest include/inject
 	// overrides use it, since they name their target path directly.
 	Dest string
+	// SrcPath, when set, is the exact source path (relative to the source's install
+	// folder, forward-slash) a copy reads from, bypassing basename/layout resolution.
+	// It addresses a file whose basename is not unique in the source (a nested assembly,
+	// a duplicate name) that [SourceDisksFiles]'s name lookup cannot reach; the
+	// [SourcePaths] section compiles to it, paired with a literal Dest.
+	SrcPath string
 
 	// Mkdir fields ([WinntDirectories]).
 	Path         string // directory name/path

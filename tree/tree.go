@@ -65,7 +65,9 @@ func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src s
 	// out of the cabinet search.
 	want := make(map[string]bool)
 	for _, a := range acts {
-		if a.Kind == action.CopyFile && a.Origin == "" {
+		// A [SourcePaths] copy (SrcPath set) reads an exact path, not a cabinet member,
+		// so it is left out of the cabinet search.
+		if a.Kind == action.CopyFile && a.Origin == "" && a.SrcPath == "" {
 			want[strings.ToLower(a.Src)] = true
 		}
 	}

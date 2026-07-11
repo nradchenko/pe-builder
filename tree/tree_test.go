@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -159,6 +160,58 @@ func TestAssembleRequiredMissing(t *testing.T) {
 	_, err := Assemble(context.Background(), acts, testLayout(), src, nil, t.TempDir())
 	if err == nil {
 		t.Fatal("Assemble with a missing required file returned no error")
+	}
+}
+
+// TestAssembleSourcePath checks a [SourcePaths] copy (SrcPath + literal Dest): it reads
+// the exact nested source path — not a basename that would resolve a different file — and
+// writes it verbatim to the given output path, decompressing a .??_ source form.
+func TestAssembleSourcePath(t *testing.T) {
+	out := t.TempDir()
+	cab, err := os.ReadFile(filepath.Join("testdata", "lzx-single.cab"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A same-basename decoy at the system root: SrcPath must reach the nested file, not it.
+	src := fstest.MapFS{
+		"i386/comctl32.dll":                    {Data: []byte("v5 system32 decoy\n")},
+		"i386/asms/6000/controls/comctl32.dll": {Data: []byte("v6 assembly\n")},
+		"i386/asms/6000/controls/controls.ma_": {Data: cab}, // compressed source form (.man → .ma_)
+	}
+	acts := []action.Action{
+		{Kind: action.CopyFile, SrcPath: "asms/6000/controls/comctl32.dll", Dest: "i386/WinSxS/asm/comctl32.dll"},
+		{Kind: action.CopyFile, SrcPath: "asms/6000/controls/controls.man", Dest: "i386/WinSxS/Manifests/asm.manifest"},
+	}
+	res, err := Assemble(context.Background(), acts, testLayout(), src, nil, out)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	want := []string{"i386/WinSxS/Manifests/asm.manifest", "i386/WinSxS/asm/comctl32.dll"}
+	if diff := cmp.Diff(want, res.Written); diff != "" {
+		t.Errorf("Written mismatch (-want +got):\n%s", diff)
+	}
+	// The exact nested file was copied verbatim (not the system32 decoy).
+	assertFile(t, out, "i386/WinSxS/asm/comctl32.dll", []byte("v6 assembly\n"))
+	// The .??_ source form was decompressed to the known plaintext.
+	hello, err := os.ReadFile(filepath.Join("testdata", "hello.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFile(t, out, "i386/WinSxS/Manifests/asm.manifest", hello)
+}
+
+// TestAssembleSourcePathMissing checks that an absent [SourcePaths] source errors by its
+// exact path, not the empty basename.
+func TestAssembleSourcePathMissing(t *testing.T) {
+	acts := []action.Action{
+		{Kind: action.CopyFile, SrcPath: "asms/6000/controls/comctl32.dll", Dest: "i386/WinSxS/asm/comctl32.dll"},
+	}
+	_, err := Assemble(context.Background(), acts, testLayout(), fstest.MapFS{}, nil, t.TempDir())
+	if err == nil {
+		t.Fatal("missing [SourcePaths] source returned no error")
+	}
+	if !strings.Contains(err.Error(), "asms/6000/controls/comctl32.dll") {
+		t.Errorf("error %q should name the missing source path", err)
 	}
 }
 
