@@ -41,20 +41,24 @@ func TestBaseHivesFromSource(t *testing.T) {
 		}
 	}
 
-	// CLASSES is built on request (not one of the pipeline hives): HKCR maps
-	// directly to the root.
-	classes, err := BaseClasses(b)
-	if err != nil {
-		t.Fatalf("BaseClasses: %v", err)
+	// The machine classes graft onto HKLM\SOFTWARE\Classes on request (not part of the
+	// bare pipeline hives): hivecls.inf's HKCR lines map onto the \Classes subkey.
+	if err := hives.GraftClasses(b); err != nil {
+		t.Fatalf("GraftClasses: %v", err)
 	}
-	if classes.Root.Child("*") == nil {
-		t.Error("CLASSES missing the '*' key")
+	classes := hives.Software.Root.Child("Classes")
+	if classes == nil {
+		t.Fatal("SOFTWARE\\Classes missing after GraftClasses")
 	}
-	if classes.Root.Child("CLSID") == nil {
-		t.Error("CLASSES missing CLSID")
+	if classes.Child("*") == nil {
+		t.Error("SOFTWARE\\Classes missing the '*' key")
+	}
+	if classes.Child("CLSID") == nil {
+		t.Error("SOFTWARE\\Classes missing CLSID")
 	}
 
-	// Every base hive must serialize and pass independent validation.
+	// Every base hive must serialize and pass independent validation. The software
+	// hive now carries the grafted classes, so serializing it validates them too.
 	hivexml, _ := exec.LookPath("hivexml")
 	for _, h := range []struct {
 		name string
@@ -63,7 +67,6 @@ func TestBaseHivesFromSource(t *testing.T) {
 		{"system", hives.System},
 		{"software", hives.Software},
 		{"default", hives.Default},
-		{"classes", classes},
 	} {
 		data, err := WriteHive(h.hive)
 		if err != nil {

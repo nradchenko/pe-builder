@@ -180,7 +180,7 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 	// pipeline-fatal step: a build with no loadable SYSTEM hive cannot boot. It also
 	// honors cancellation, so a build cancelled just as tree assembly finished does
 	// not run the full hive read/serialize/write and report success.
-	hives, err := buildHives(ctx, backing, l, acts, outDir)
+	hives, err := buildHives(ctx, backing, l, acts, needsMachineClasses(selected), outDir)
 	if err != nil {
 		return nil, fmt.Errorf("build registry hives: %w", err)
 	}
@@ -197,6 +197,24 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 		return nil, fmt.Errorf("copy identity markers: %w", err)
 	}
 	return rep, nil
+}
+
+// guiRuntimePlugin is the bundled shared GUI runtime whose presence in a build means
+// the build hosts the Explorer shell or GUI apps — the trigger for grafting the
+// source's machine classes into HKLM\SOFTWARE\Classes (see hive.GraftClasses).
+const guiRuntimePlugin = "win32-gui"
+
+// needsMachineClasses reports whether the resolved plugin set includes the shared GUI
+// runtime, i.e. the build runs the shell or GUI apps that resolve COM classes and browse
+// the shell namespace through HKLM\SOFTWARE\Classes. A bare cmd.exe build has none, and
+// skips the large classes tree.
+func needsMachineClasses(selected []plugin.Selected) bool {
+	for _, s := range selected {
+		if strings.EqualFold(s.Plugin.Name, guiRuntimePlugin) {
+			return true
+		}
+	}
+	return false
 }
 
 // selectPlugins resolves the manifest's enabled plugins into their compiled actions

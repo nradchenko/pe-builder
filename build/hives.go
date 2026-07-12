@@ -33,13 +33,21 @@ const configFallback = "system32/config"
 // SOFTWARE and the default-user hive go in config, where the session/logon chain
 // loads them. The CLASSES hive the engine also builds is not written — a bare boot
 // to cmd.exe does not need HKCR.
-func buildHives(ctx context.Context, backing source.Backing, l *layout.Layout, acts []action.Action, outDir string) ([]string, error) {
+func buildHives(ctx context.Context, backing source.Backing, l *layout.Layout, acts []action.Action, includeClasses bool, outDir string) ([]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	hives, err := hive.BaseHives(backing)
 	if err != nil {
 		return nil, fmt.Errorf("build base hives: %w", err)
+	}
+	// A build that runs the Explorer shell needs the source's machine classes under
+	// HKLM\SOFTWARE\Classes so the shell can resolve its COM objects; graft them before
+	// the registry actions overlay, so a plugin can still override an individual class.
+	if includeClasses {
+		if err := hives.GraftClasses(backing); err != nil {
+			return nil, fmt.Errorf("graft machine classes: %w", err)
+		}
 	}
 	if err := hives.Apply(acts); err != nil {
 		return nil, fmt.Errorf("apply registry actions: %w", err)

@@ -13,8 +13,9 @@ import (
 
 // Hives are the base registry hives the build writes, constructed from the
 // source's own material before any base-manifest or plugin registry actions are
-// applied. HKCR (from hivecls.inf) is built separately by BaseClasses when needed,
-// not here — a bare boot to a shell does not load it.
+// applied. The source's machine classes (hivecls.inf) are not loaded here — a bare
+// boot to cmd.exe does not need HKCR; a build that runs the Explorer shell grafts
+// them into Software under \Classes via GraftClasses.
 type Hives struct {
 	System   *Hive // from the pre-built setupreg.hiv
 	Software *Hive // HKLM\SOFTWARE, from hivesft.inf
@@ -31,12 +32,11 @@ type baseINF struct {
 	stripHead string // subkey prefix mapped onto the hive root
 }
 
-// The CLASSES tree is built standalone here (HKCR maps to its root). On a real
-// XP system machine classes live under HKLM\SOFTWARE\Classes rather than in a
-// separate hive file; grafting this tree there is an integration-time decision,
-// left until the hives are assembled into the output config. The lone
-// HKLM,"SOFTWARE\Classes" anchor line in hivecls.inf is not an HKCR line and is
-// ignored while building the standalone tree.
+// On a real XP system the machine classes live under HKLM\SOFTWARE\Classes rather
+// than in a separate hive file, so hivecls.inf's registrations are grafted there
+// (GraftClasses) rather than built into a standalone hive. Its lines carry the HKCR
+// root token, which maps onto the \Classes graft point; the lone
+// HKLM,"SOFTWARE\Classes" anchor line is not an HKCR line and is ignored.
 var (
 	softwareINF = baseINF{"hivesft.inf", "$$$PROTO.HIV", "HKLM", "SOFTWARE"}
 	defaultINF  = baseINF{"hivedef.inf", "$$$PROTO.HIV", "HKCU", ""}
@@ -68,12 +68,26 @@ func BaseHives(b source.Backing) (*Hives, error) {
 	return &Hives{System: system, Software: software, Default: def}, nil
 }
 
-// BaseClasses builds the standalone CLASSES hive (HKCR) from the source's
-// hivecls.inf. The build pipeline does not write it — a bare boot to a shell does
-// not load HKCR — so it is built only on request (e.g. to graft into
-// HKLM\SOFTWARE\Classes once that is wired).
-func BaseClasses(b source.Backing) (*Hive, error) {
-	return buildFromINF(b, classesINF)
+// GraftClasses populates HKLM\SOFTWARE\Classes in the Software hive from the
+// source's hivecls.inf — the CD's own machine-class registrations (the shell's
+// CLSID/ProgID registry the Explorer shell resolves its COM objects through, and
+// the common file dialogs browse the namespace through). On a real XP system these
+// classes live under SOFTWARE\Classes, so grafting them onto that subkey is what
+// wires HKCR for the running shell. hivesft.inf may already have created a minimal
+// \Classes; hivecls.inf's fuller set merges over it, last writer wins per key.
+//
+// It is applied only when the build runs a shell: a bare cmd.exe boot does not need
+// HKCR, and the classes tree is large (thousands of registrations).
+func (h *Hives) GraftClasses(b source.Backing) error {
+	data, err := readI386(b, classesINF.name)
+	if err != nil {
+		return err
+	}
+	classes := h.Software.Root.EnsureChild("Classes")
+	if err := ApplyHiveINF(classes, data, classesINF.wantRoot, classesINF.stripHead); err != nil {
+		return fmt.Errorf("hive: process %s: %w", classesINF.name, err)
+	}
+	return nil
 }
 
 // buildFromINF creates a fresh hive and populates it from its hive-population INF.
