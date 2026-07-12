@@ -45,7 +45,14 @@ PE dependencies.
     `pewalk`-based import-closure scanner that computes the import-derivable half of the
     boot file set from the source's own PE dependency graph (so it is not hand-listed).
   - `tree/` — assemble the output file tree (resolve → decompress → place).
-  - `hive/` — build the Windows registry hives (pure-Go `regf` read/write).
+  - `hive/` — build the Windows registry hives (pure-Go `regf` read/write). The SYSTEM hive
+    starts from the source's text-setup `setupreg.hiv` and then has the source's `hivesys.inf`
+    (the full GUI-mode system config) folded onto it — mapping `CurrentControlSet` to the real
+    `ControlSet001`, preserving the text-setup boot config, and keeping win32-service start
+    values while leaving boot-driver starts to `txtsetup.sif` — so the Service Control Manager
+    has the standard config it needs to start the Win32 services. SOFTWARE and DEFAULT are built
+    from `hivesft.inf`/`hivedef.inf`, and the shell build grafts the machine classes from
+    `hivecls.inf` into SOFTWARE\Classes.
   - `target/` — output targets (e.g. a bootable ISO).
   - `build/` — the orchestrator that wires the pipeline together.
 - `pewalk/` — the "ldd for PE" library: computes the transitive PE import closure

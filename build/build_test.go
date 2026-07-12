@@ -73,6 +73,7 @@ func TestAssemblePipeline(t *testing.T) {
 		"i386/setupreg.hiv": {Data: sysHive},
 		"i386/hivesft.inf":  {Data: []byte(minimalHiveINF)},
 		"i386/hivedef.inf":  {Data: []byte(minimalHiveINF)},
+		"i386/hivesys.inf":  {Data: []byte(minimalHiveINF)},
 		"i386/hivecls.inf":  {Data: []byte(minimalHiveINF)},
 	}
 
@@ -128,6 +129,7 @@ func TestAssembleWithPlugin(t *testing.T) {
 		"i386/setupreg.hiv": {Data: sysHive},
 		"i386/hivesft.inf":  {Data: []byte(minimalHiveINF)},
 		"i386/hivedef.inf":  {Data: []byte(minimalHiveINF)},
+		"i386/hivesys.inf":  {Data: []byte(minimalHiveINF)},
 		"i386/hivecls.inf":  {Data: []byte(minimalHiveINF)},
 	}
 	l, err := layout.Parse(backing, id)
@@ -369,6 +371,7 @@ func TestAssembleBuiltPlugin(t *testing.T) {
 		"i386/setupreg.hiv": {Data: sysHive},
 		"i386/hivesft.inf":  {Data: []byte(minimalHiveINF)},
 		"i386/hivedef.inf":  {Data: []byte(minimalHiveINF)},
+		"i386/hivesys.inf":  {Data: []byte(minimalHiveINF)},
 		"i386/hivecls.inf":  {Data: []byte(minimalHiveINF)},
 	}
 	l, err := layout.Parse(backing, id)

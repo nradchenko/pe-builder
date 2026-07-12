@@ -5,6 +5,7 @@ package hive
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/nradchenko/pe-builder/compress"
 	"github.com/nradchenko/pe-builder/layout"
@@ -43,6 +44,21 @@ var (
 	classesINF  = baseINF{"hivecls.inf", "$$$PROTO.HIV", "HKCR", ""}
 )
 
+// remapCurrentControlSet rewrites a leading "CurrentControlSet" path component to
+// "ControlSet001". hivesys.inf writes under SYSTEM\CurrentControlSet, but an offline
+// hive has no CurrentControlSet symlink (the kernel builds it from Select\Current at
+// boot), so its config must land in the real control set ControlSet001.
+func remapCurrentControlSet(path string) string {
+	const ccs = "CurrentControlSet"
+	if strings.EqualFold(path, ccs) {
+		return "ControlSet001"
+	}
+	if len(path) > len(ccs) && path[len(ccs)] == '\\' && strings.EqualFold(path[:len(ccs)], ccs) {
+		return "ControlSet001" + path[len(ccs):]
+	}
+	return path
+}
+
 // BaseHives builds the base hives the pipeline writes from a Windows installation
 // source: SYSTEM is read from the pre-built setupreg.hiv; SOFTWARE and DEFAULT
 // start empty and are populated from hivesft.inf and hivedef.inf.
@@ -54,6 +70,22 @@ func BaseHives(b source.Backing) (*Hives, error) {
 	system, err := ReadHive(sysData)
 	if err != nil {
 		return nil, fmt.Errorf("hive: read setupreg.hiv: %w", err)
+	}
+
+	// Fold the full GUI-mode system config from hivesys.inf onto the minimal text-setup
+	// SETUPREG.HIV. The text-setup hive carries only what text-mode setup needs; the Service
+	// Control Manager needs the standard system config (Control\Nls, the full service table,
+	// the standard Control subkeys) to complete startup and bring up the Win32 services — without
+	// it the SCM parks before auto-start and no services run. ApplySystemINF maps the INF's
+	// SYSTEM\CurrentControlSet paths onto the real ControlSet001, preserves the text-setup boot
+	// config (global no-clobber), and keeps win32-service Starts while dropping driver Starts
+	// (which load via txtsetup.sif). base.inf's /minint overrides still apply afterward.
+	sysINF, err := readI386(b, "hivesys.inf")
+	if err != nil {
+		return nil, fmt.Errorf("hive: read hivesys.inf: %w", err)
+	}
+	if err := ApplySystemINF(system.Root, sysINF, remapCurrentControlSet); err != nil {
+		return nil, fmt.Errorf("hive: apply hivesys.inf: %w", err)
 	}
 
 	software, err := buildFromINF(b, softwareINF)

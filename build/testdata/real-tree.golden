@@ -20,7 +20,7 @@ i386/biosinfo.inf 48046
 i386/bootfix.bin 1024
 i386/ntdetect.com 47564
 i386/setupldr.bin 261392
-i386/system32/SETUPREG.HIV 94208
+i386/system32/SETUPREG.HIV 401408
 i386/system32/activeds.dll 193536
 i386/system32/adsldpc.dll 143360
 i386/system32/advapi32.dll 687616
