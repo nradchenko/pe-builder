@@ -24,6 +24,7 @@ package pewalk
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"path"
 	"strings"
@@ -121,9 +122,12 @@ func (m *parsedModule) imports(includeDelay bool) []string {
 }
 
 // Open indexes fsys and returns a Source. It walks the tree once, recording every
-// file by name and enumerating the members of every *.cab cabinet (whose framing
-// is parsed, but not decoded, up front). Compressed-loose files are resolved
-// lazily by name, so they are not decoded during indexing.
+// file by name and enumerating the members of every *.cab cabinet from just the
+// cabinet's directory — its header and file table — without reading the far larger
+// compressed data, which is read lazily on first extraction. Compressed-loose files
+// are likewise resolved (and decoded) lazily by name. So indexing a source touches
+// only kilobytes of each multi-megabyte cabinet, and a build whose file set is all
+// loose never reads a cabinet's data at all.
 func Open(fsys fs.FS) (*Source, error) {
 	s := &Source{
 		fsys:    fsys,
@@ -168,18 +172,38 @@ func Open(fsys fs.FS) (*Source, error) {
 // members were therefore left out of the index. It is empty for a clean source.
 func (s *Source) Warnings() []string { return s.warnings }
 
-// indexCabinet parses a cabinet's framing and records each member name, keeping
-// the parsed cabinet for later extraction.
+// cabProbeSize is the initial bounded read used to locate a cabinet's directory: it
+// only needs to span the CFHEADER and CFFOLDER table (a handful of bytes per folder),
+// so 64 KiB comfortably covers any real cabinet's header before the directory's exact
+// length is known.
+//
+// The CFFILE table that follows may run past this probe (DRIVER.CAB's is ~122 KiB);
+// readCabinetDir handles that with a continuation read. Only the CFHEADER + CFFOLDER
+// table must fit within the probe, since CabinetDirSize needs the whole folder table
+// to compute the directory length. A cabinet whose folder table alone exceeds 64 KiB
+// — thousands of folders, not seen on real install media — cannot be sized: it is
+// skipped with a warning and its members resolve as Missing, the same safe
+// degradation as any unreadable cabinet, never a crash. Widen the probe (or make
+// CabinetDirSize signal "need more") if such a cabinet ever turns up.
+const cabProbeSize = 64 << 10
+
+// indexCabinet records each member name of the cabinet at p without reading its data
+// payloads: it reads just the directory region (header, folders, file entries) and
+// parses that. The cabinet's compressed data is read lazily by cabinet() on the first
+// extraction, so a source whose file set never resolves to a cabinet member pays only
+// the small directory read here.
 func (s *Source) indexCabinet(p string) error {
-	data, err := fs.ReadFile(s.fsys, p)
+	dir, err := s.readCabinetDir(p)
 	if err != nil {
 		return err
 	}
-	c, err := compress.ReadCabinet(data)
+	// ReadCabinet over just the directory enumerates members; Data is never called on
+	// this cabinet, so the absent payloads do not matter. Extraction goes through
+	// cabinet(), which reads the whole file on demand.
+	c, err := compress.ReadCabinet(dir)
 	if err != nil {
 		return err
 	}
-	s.cabined[p] = c
 	for _, f := range c.Files() {
 		name := strings.ToLower(f.Name)
 		if _, ok := s.cab[name]; !ok {
@@ -187,6 +211,46 @@ func (s *Source) indexCabinet(p string) error {
 		}
 	}
 	return nil
+}
+
+// readCabinetDir returns the directory region (header, folders, file entries; up to
+// the first CFDATA block) of the cabinet at p. It opens the file once: it reads a
+// probe covering the header, learns the directory's exact length, and — only if the
+// directory runs past the probe — continues reading from the same handle. Opening a
+// file resolves a path (not free on an ISO backing), so this pays that cost once
+// while still reading only kilobytes of a multi-megabyte cabinet.
+func (s *Source) readCabinetDir(p string) ([]byte, error) {
+	f, err := s.fsys.Open(p)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	buf := make([]byte, cabProbeSize)
+	n, err := io.ReadFull(f, buf)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return nil, err
+	}
+	buf = buf[:n]
+
+	dirLen, err := compress.CabinetDirSize(buf)
+	if err != nil {
+		return nil, err
+	}
+	if dirLen > len(buf) {
+		// Continue from where the probe left off — the handle is positioned right
+		// after it — rather than reopening the file.
+		rest := make([]byte, dirLen-len(buf))
+		m, err := io.ReadFull(f, rest)
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			return nil, err
+		}
+		buf = append(buf, rest[:m]...)
+	}
+	if len(buf) < dirLen {
+		return nil, fmt.Errorf("truncated cabinet directory (%d of %d bytes)", len(buf), dirLen)
+	}
+	return buf[:dirLen], nil
 }
 
 // Has reports whether name resolves to a module in the source.

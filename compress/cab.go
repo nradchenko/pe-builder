@@ -67,14 +67,21 @@ func IsCabinet(b []byte) bool {
 	return bytes.HasPrefix(b, cabMagic)
 }
 
-// ReadCabinet parses the framing of an MSCF cabinet. The backing slice is
-// retained and read from lazily during extraction, so it must not be mutated.
-func ReadCabinet(data []byte) (*Cabinet, error) {
-	if !IsCabinet(data) {
-		return nil, errors.New("not an MSCF cabinet")
-	}
-	r := &cursor{b: data}
-	r.skip(4)            // signature (validated above)
+// cabHeader holds the CFHEADER fields that both full parsing and directory sizing
+// need, read up to the start of the CFFOLDER table.
+type cabHeader struct {
+	coffFiles     uint32 // offset of the first CFFILE
+	cFolders      uint16
+	cFiles        uint16
+	folderReserve int // per-CFFOLDER reserved bytes (cbCFFolder)
+	dataReserve   int // per-CFDATA reserved bytes (cbCFData)
+}
+
+// parseCabHeader reads the CFHEADER from r — through any reserve area and the
+// optional previous/next cabinet name pairs — leaving r positioned at the first
+// CFFOLDER entry.
+func parseCabHeader(r *cursor) (cabHeader, error) {
+	r.skip(4)            // signature
 	r.skip(4)            // reserved1
 	r.u32()              // cbCabinet (total size)
 	r.skip(4)            // reserved2
@@ -87,15 +94,14 @@ func ReadCabinet(data []byte) (*Cabinet, error) {
 	r.skip(2)            // setID
 	r.skip(2)            // iCabinet
 	if r.err != nil {
-		return nil, fmt.Errorf("cabinet header: %w", r.err)
+		return cabHeader{}, fmt.Errorf("cabinet header: %w", r.err)
 	}
 
-	folderReserve := 0
-	dataReserve := 0
+	h := cabHeader{coffFiles: coffFiles, cFolders: cFolders, cFiles: cFiles}
 	if flags&cfhdrReservePresent != 0 {
 		cbCFHeader := int(r.u16())
-		folderReserve = int(r.u8())
-		dataReserve = int(r.u8())
+		h.folderReserve = int(r.u8())
+		h.dataReserve = int(r.u8())
 		r.skip(cbCFHeader) // abReserve
 	}
 	// Optional previous/next cabinet name pairs (multi-cabinet chains).
@@ -108,27 +114,46 @@ func ReadCabinet(data []byte) (*Cabinet, error) {
 		r.asciiz()
 	}
 	if r.err != nil {
-		return nil, fmt.Errorf("cabinet header reserve: %w", r.err)
+		return cabHeader{}, fmt.Errorf("cabinet header reserve: %w", r.err)
+	}
+	return h, nil
+}
+
+// ReadCabinet parses the framing of an MSCF cabinet. The backing slice is
+// retained and read from lazily during extraction, so it must not be mutated.
+//
+// data need not hold the whole cabinet: only the header, CFFOLDER table, and CFFILE
+// entries are read here (the trailing CFDATA payloads are read lazily by Data). A
+// caller that only needs the member list may pass just the directory region — see
+// CabinetDirSize — and never call Data.
+func ReadCabinet(data []byte) (*Cabinet, error) {
+	if !IsCabinet(data) {
+		return nil, errors.New("not an MSCF cabinet")
+	}
+	r := &cursor{b: data}
+	h, err := parseCabHeader(r)
+	if err != nil {
+		return nil, err
 	}
 
-	c := &Cabinet{data: data, dataReserve: dataReserve, decoded: map[int][]byte{}}
+	c := &Cabinet{data: data, dataReserve: h.dataReserve, decoded: map[int][]byte{}}
 
-	c.folders = make([]cabFolder, cFolders)
+	c.folders = make([]cabFolder, h.cFolders)
 	for i := range c.folders {
 		c.folders[i] = cabFolder{
 			coffCabStart: r.u32(),
 			blocks:       r.u16(),
 			typeCompress: r.u16(),
 		}
-		r.skip(folderReserve) // abReserve
+		r.skip(h.folderReserve) // abReserve
 	}
 	if r.err != nil {
 		return nil, fmt.Errorf("cabinet folders: %w", r.err)
 	}
 
-	r.pos = int(coffFiles)
-	c.files = make([]CabinetFile, 0, cFiles)
-	for i := 0; i < int(cFiles); i++ {
+	r.pos = int(h.coffFiles)
+	c.files = make([]CabinetFile, 0, h.cFiles)
+	for i := 0; i < int(h.cFiles); i++ {
 		size := r.u32()
 		offset := r.u32()
 		folder := r.u16()
@@ -149,6 +174,46 @@ func ReadCabinet(data []byte) (*Cabinet, error) {
 		})
 	}
 	return c, nil
+}
+
+// CabinetDirSize returns the byte length of an MSCF cabinet's directory region — the
+// offset of its first CFDATA block — parsed from head, a prefix of the cabinet that
+// must cover at least the CFHEADER and CFFOLDER table. Reading exactly that many
+// bytes yields the header, folders, and CFFILE entries, which is all ReadCabinet
+// needs to enumerate members, without the far larger CFDATA payloads. It lets a
+// caller index a multi-megabyte cabinet's members from only a few kilobytes.
+func CabinetDirSize(head []byte) (int, error) {
+	if !IsCabinet(head) {
+		return 0, errors.New("not an MSCF cabinet")
+	}
+	r := &cursor{b: head}
+	h, err := parseCabHeader(r)
+	if err != nil {
+		return 0, err
+	}
+	if h.cFolders == 0 {
+		return 0, errors.New("cabinet has no folders")
+	}
+	// The first CFDATA block starts where the directory ends; the folders may list
+	// their data offsets in any order, so take the minimum.
+	minStart := uint32(0xffffffff)
+	for i := 0; i < int(h.cFolders); i++ {
+		start := r.u32()
+		r.skip(2) // blocks
+		r.skip(2) // typeCompress
+		r.skip(h.folderReserve)
+		if start < minStart {
+			minStart = start
+		}
+	}
+	if r.err != nil {
+		return 0, fmt.Errorf("cabinet folders: %w", r.err)
+	}
+	if minStart <= uint32(r.pos) {
+		// A data offset that overlaps the directory we just read is malformed.
+		return 0, fmt.Errorf("cabinet first-data offset %d overlaps its directory", minStart)
+	}
+	return int(minStart), nil
 }
 
 // Files returns the cabinet's member files in archive order.

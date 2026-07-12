@@ -164,6 +164,55 @@ func TestCabinetMultiFolderRouting(t *testing.T) {
 	}
 }
 
+func TestCabinetDirSizeIndexesWithoutData(t *testing.T) {
+	b := &cabBuilder{}
+	b.addFolder(
+		cabBuildFile{name: "alpha.txt", data: []byte("the first file")},
+		cabBuildFile{name: "beta.bin", data: bytes.Repeat([]byte{0xAB}, 50000)},
+	)
+	b.addFolder(cabBuildFile{name: "gamma.dat", data: bytes.Repeat([]byte("g"), 20000)})
+	full := b.build()
+
+	dirLen, err := CabinetDirSize(full)
+	if err != nil {
+		t.Fatalf("CabinetDirSize: %v", err)
+	}
+	// The directory must be a small fraction of the whole: the 70 KB of payload is
+	// excluded, which is the entire point of indexing from the prefix.
+	if dirLen >= len(full) {
+		t.Fatalf("dirLen = %d, want well under the full %d bytes", dirLen, len(full))
+	}
+
+	// Parsing only the directory prefix must enumerate exactly the same members as
+	// parsing the whole cabinet — proving members can be indexed without the data.
+	dirOnly, err := ReadCabinet(full[:dirLen])
+	if err != nil {
+		t.Fatalf("ReadCabinet(prefix): %v", err)
+	}
+	full2, err := ReadCabinet(full)
+	if err != nil {
+		t.Fatalf("ReadCabinet(full): %v", err)
+	}
+	if got, want := len(dirOnly.Files()), len(full2.Files()); got != want {
+		t.Fatalf("prefix files = %d, full files = %d", got, want)
+	}
+	for _, f := range full2.Files() {
+		if _, ok := dirOnly.Find(f.Name); !ok {
+			t.Errorf("member %q missing from directory-only parse", f.Name)
+		}
+	}
+}
+
+func TestCabinetDirSizeRejectsNonCabinet(t *testing.T) {
+	if _, err := CabinetDirSize([]byte("NOPE just some bytes, not a cabinet")); err == nil {
+		t.Error("expected an error for non-cabinet input")
+	}
+	// A header that ends before the folder table is short — must error, not panic.
+	if _, err := CabinetDirSize([]byte("MSCF\x00\x00\x00\x00")); err == nil {
+		t.Error("expected an error for a truncated header")
+	}
+}
+
 func TestCabinetReserveFields(t *testing.T) {
 	// A cabinet with RESERVE_PRESENT and non-zero per-folder and per-data
 	// reserve sizes must still parse: the reserved bytes are skipped.

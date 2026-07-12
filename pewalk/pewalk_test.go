@@ -6,6 +6,7 @@ package pewalk
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -235,6 +236,36 @@ func TestImportTablesMalformedDoesNotPanic(t *testing.T) {
 				t.Errorf("importTables(%s) = %v/%v, nil; want an error", name, static, delay)
 			}
 		})
+	}
+}
+
+// TestIndexLargeCabinetDirectory covers directory-only indexing when a cabinet's
+// directory is larger than the probe read: the members past the probe must still be
+// enumerated, exercising readCabinetDir's single-Open continuation.
+func TestIndexLargeCabinetDirectory(t *testing.T) {
+	// ~3000 members put the CFFILE table well past the 64 KiB probe (each entry is
+	// ~29 bytes), so the last member is only reachable via the continuation read.
+	const n = 3000
+	members := make([]cabMember, n)
+	for i := range members {
+		members[i] = cabMember{name: fmt.Sprintf("mod%05d.dll", i), data: []byte{0}}
+	}
+	fsys := fstest.MapFS{
+		"i386/big.cab": {Data: writeCabinet(members)},
+	}
+	s, err := Open(fsys)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if len(s.Warnings()) != 0 {
+		t.Fatalf("unexpected indexing warnings: %v", s.Warnings())
+	}
+	// The first and last members bracket the directory; both being indexed proves the
+	// whole directory — well beyond the probe — was read from the single Open.
+	for _, name := range []string{"mod00000.dll", fmt.Sprintf("mod%05d.dll", n-1)} {
+		if !s.Has(name) {
+			t.Errorf("Has(%q) = false, want true (directory past the probe not indexed)", name)
+		}
 	}
 }
 
