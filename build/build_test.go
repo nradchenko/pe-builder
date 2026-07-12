@@ -328,20 +328,29 @@ func TestRunPluginBuildsTrustGate(t *testing.T) {
 	}
 }
 
-func TestRunPluginBuildsCreatesWorkDir(t *testing.T) {
-	// A configured work_dir that does not exist yet is created; the pre-pass does not
-	// fail on MkdirTemp under an absent parent.
-	workDir := filepath.Join(t.TempDir(), "work") // not created yet
+func TestRunPluginBuildsScratchOutsideWorkDir(t *testing.T) {
+	// The work_dir doubles as the output tree the media stage masters wholesale, so the
+	// plugin-build scratch directory must not land inside it, or it would leak into the
+	// ISO root. It builds in a system temp directory instead, leaving work_dir untouched.
+	workDir := t.TempDir()
 	selected := []plugin.Selected{buildCapable(t, plugin.BuiltinLabel)}
 	m := &manifest.Manifest{Build: manifest.Build{WorkDir: workDir}}
 
 	cleanup, err := runPluginBuilds(context.Background(), selected, m)
 	if err != nil {
-		t.Fatalf("runPluginBuilds with an absent work_dir errored: %v", err)
+		t.Fatalf("runPluginBuilds errored: %v", err)
 	}
 	defer cleanup()
 	if selected[0].Built == nil {
 		t.Error("build produced no result")
+	}
+	// While the build is live (before cleanup), nothing has appeared under work_dir.
+	ents, err := os.ReadDir(workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ents) != 0 {
+		t.Errorf("work_dir holds %d entries, want none; build scratch leaked into the output tree: %v", len(ents), ents)
 	}
 }
 

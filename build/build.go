@@ -87,9 +87,9 @@ func Build(ctx context.Context, m *manifest.Manifest) (*Report, error) {
 	}
 
 	// Compile the build-capable plugins' payloads before assembly, so their produced
-	// files are available as origins when the tree is placed. This runs after workDir,
-	// which creates a configured work_dir the plugin build directories nest under. The
-	// build directories are cleaned up once the tree (which reads them) is assembled.
+	// files are available as origins when the tree is placed. The builds run in a scratch
+	// directory outside the output tree (so they are never mastered into the ISO), cleaned
+	// up once the tree — which reads their produced files as origins — is assembled.
 	cleanupBuilds, err := runPluginBuilds(ctx, selected, m)
 	if err != nil {
 		return nil, err
@@ -291,14 +291,12 @@ func runPluginBuilds(ctx context.Context, selected []plugin.Selected, m *manifes
 				"set build.allow_plugin_builds = true to allow user-supplied plugin builds", d.Name)
 		}
 		if buildRoot == "" {
-			// A configured work_dir may not exist yet; create it so the temp build root
-			// nests under it regardless of call order.
-			if m.Build.WorkDir != "" {
-				if err := os.MkdirAll(m.Build.WorkDir, 0o755); err != nil {
-					return nil, err
-				}
-			}
-			root, err := os.MkdirTemp(m.Build.WorkDir, "pebuild-plugin-builds-*")
+			// The scratch root lives in a system temp directory, never under the output
+			// tree (the manifest work_dir doubles as the tree dir): the media stage masters
+			// the tree wholesale, so a build directory nested there would leak into the ISO.
+			// Produced files reach the tree through the plugin's file origins, so the scratch
+			// directory is purely transient and is removed by the returned cleanup.
+			root, err := os.MkdirTemp("", "pebuild-plugin-builds-*")
 			if err != nil {
 				return nil, err
 			}
