@@ -112,25 +112,28 @@ func WalkWith(s *Source, opts Options, seeds ...string) (*Result, error) {
 		queue = queue[1:]
 		node := r.Nodes[item.name]
 
-		data, origin, err := s.Read(item.name)
-		if err != nil {
+		// At the depth cap a module is a leaf: its imports are neither recorded nor
+		// enqueued, which keeps every edge pointing at a discovered node — so its PE
+		// need not be parsed, only located.
+		atCap := opts.MaxDepth > 0 && item.depth >= opts.MaxDepth
+
+		m := s.resolveModule(item.name, !atCap)
+		if m.status == StatusMissing {
 			node.Status = StatusMissing
 			continue
 		}
 		node.Status = StatusResolved
-		node.Origin = origin
+		node.Origin = m.origin
 
-		// At the depth cap a module is a leaf: its imports are neither recorded
-		// nor enqueued, which keeps every edge pointing at a discovered node.
-		if opts.MaxDepth > 0 && item.depth >= opts.MaxDepth {
+		if atCap {
 			continue
 		}
 
-		imports, err := importsOf(data, !opts.StaticOnly)
-		if err != nil {
-			node.ParseError = err.Error()
+		if m.parseError != "" {
+			node.ParseError = m.parseError
 			continue
 		}
+		imports := m.imports(!opts.StaticOnly)
 		node.Imports = imports
 
 		for _, imp := range imports {

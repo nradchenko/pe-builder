@@ -87,6 +87,37 @@ type Source struct {
 
 	mu      sync.Mutex
 	cabined map[string]*compress.Cabinet // cabinet path -> parsed framing (lazy)
+	// parsed caches a module's resolution and parse by canonical name, so a module
+	// is read, decompressed, and PE-parsed at most once per Source even when many
+	// overlapping closure walks (the base layer plus each [Closure] plugin) traverse
+	// the same shared subgraph. Populated lazily on the first walk to touch a module.
+	parsed map[string]*parsedModule
+}
+
+// parsedModule is the cached, walk-mode-independent result of resolving a module
+// once: its resolution status and origin, and — once its imports have been parsed —
+// its import tables split into static and delay-load name sets (each sorted and
+// de-duplicated). Imports are depth-independent, so one cache entry serves walks with
+// any depth cap or import mode.
+//
+// parsed distinguishes a resolved module whose PE has been parsed for imports from
+// one that was only located (its status and origin are known, but the import parse
+// was skipped because the module was first reached at a depth cap and its imports
+// were not needed). A later walk that does need its imports re-reads and parses it.
+type parsedModule struct {
+	status     Status
+	origin     Origin
+	parsed     bool
+	static     []string
+	delay      []string
+	parseError string
+}
+
+// imports returns the module's import names for a walk mode: static only, or the
+// static-plus-delay union. Each call returns a fresh slice the caller owns. Only valid
+// once the module has been parsed (m.parsed).
+func (m *parsedModule) imports(includeDelay bool) []string {
+	return mergeImports(m.static, m.delay, includeDelay)
 }
 
 // Open indexes fsys and returns a Source. It walks the tree once, recording every
@@ -99,6 +130,7 @@ func Open(fsys fs.FS) (*Source, error) {
 		files:   map[string]string{},
 		cab:     map[string]string{},
 		cabined: map[string]*compress.Cabinet{},
+		parsed:  map[string]*parsedModule{},
 	}
 	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -191,6 +223,66 @@ func (s *Source) Read(name string) ([]byte, Origin, error) {
 		return s.readCabMember(cabPath, name)
 	}
 	return nil, Origin{}, fmt.Errorf("resolve %q: %w", name, fs.ErrNotExist)
+}
+
+// resolveModule reads and (when needImports is set) PE-parses a module once, caching
+// the result on the Source so overlapping closure walks reuse it instead of repeating
+// the work. A module absent from the source is cached as a Missing entry, so a red
+// herring is not re-attempted per walk. It is the read path WalkWith uses in place of
+// a bare Read plus parse.
+//
+// needImports lets the caller skip the import parse for a module it will not expand —
+// a leaf at the walk's depth cap needs only status and origin. A cached but unparsed
+// entry is upgraded (re-read and parsed) if a later walk does need its imports; the
+// common unbounded walk always needs them and parses on first touch.
+func (s *Source) resolveModule(name string, needImports bool) *parsedModule {
+	key := moduleName(name)
+
+	s.mu.Lock()
+	if m, ok := s.parsed[key]; ok && cacheServes(m, needImports) {
+		s.mu.Unlock()
+		return m
+	}
+	s.mu.Unlock()
+
+	// Do the I/O and parse without holding the lock: Read may itself parse a cabinet
+	// (which takes the same mutex), and the decompress/parse is expensive enough that
+	// serializing it would defeat any concurrent walk.
+	m := &parsedModule{}
+	data, origin, err := s.Read(name)
+	if err != nil {
+		m.status = StatusMissing
+	} else {
+		m.status = StatusResolved
+		m.origin = origin
+		if needImports {
+			m.parsed = true
+			if static, delay, perr := importTables(data); perr != nil {
+				m.parseError = perr.Error()
+			} else {
+				m.static, m.delay = static, delay
+			}
+		}
+	}
+
+	s.mu.Lock()
+	// A concurrent resolveModule may have populated the entry while we worked. Keep it
+	// if it already serves this request; otherwise our entry is at least as complete
+	// (we parsed, it did not), so it wins. Either way an entry is never downgraded.
+	if existing, ok := s.parsed[key]; ok && cacheServes(existing, needImports) {
+		m = existing
+	} else {
+		s.parsed[key] = m
+	}
+	s.mu.Unlock()
+	return m
+}
+
+// cacheServes reports whether a cached entry satisfies a resolveModule request: a
+// missing module is final, and a resolved one serves unless imports are needed but
+// were not parsed.
+func cacheServes(m *parsedModule, needImports bool) bool {
+	return m.status == StatusMissing || m.parsed || !needImports
 }
 
 // readFile returns the bytes of a resolved on-disk file, decompressing it when

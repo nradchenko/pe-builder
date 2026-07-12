@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"testing/fstest"
 
@@ -216,10 +217,10 @@ func TestWalkDirectoryBacking(t *testing.T) {
 	}
 }
 
-// TestImportsOfMalformedDoesNotPanic feeds importsOf inputs that are not valid
-// PE images (including ones that have tripped saferwall panics) and asserts it
+// TestImportTablesMalformedDoesNotPanic feeds importTables inputs that are not
+// valid PE images (including ones that have tripped saferwall panics) and asserts it
 // returns an error instead of panicking — so one bad module never aborts a walk.
-func TestImportsOfMalformedDoesNotPanic(t *testing.T) {
+func TestImportTablesMalformedDoesNotPanic(t *testing.T) {
 	cases := map[string][]byte{
 		"empty":        {},
 		"tiny":         []byte("MZ"),
@@ -229,9 +230,9 @@ func TestImportsOfMalformedDoesNotPanic(t *testing.T) {
 	}
 	for name, data := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, err := importsOf(data, true)
+			static, delay, err := importTables(data)
 			if err == nil {
-				t.Errorf("importsOf(%s) = %v, nil; want an error", name, got)
+				t.Errorf("importTables(%s) = %v/%v, nil; want an error", name, static, delay)
 			}
 		})
 	}
@@ -292,6 +293,141 @@ func TestMalformedModuleYieldsCleanOutput(t *testing.T) {
 	var decoded jsonResult
 	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
 		t.Fatalf("JSON output is not valid: %v\n%s", err, buf.String())
+	}
+}
+
+// countingFS wraps an fs.FS and counts how many times each path is opened. Embedding
+// the FS as the bare fs.FS interface (not the concrete MapFS) hides MapFS's
+// ReadFileFS/ReadDirFS fast paths, so every fs.ReadFile the Source performs is forced
+// through Open and thus counted.
+type countingFS struct {
+	fs.FS
+	mu    sync.Mutex
+	opens map[string]int
+}
+
+func (c *countingFS) Open(name string) (fs.File, error) {
+	c.mu.Lock()
+	c.opens[name]++
+	c.mu.Unlock()
+	return c.FS.Open(name)
+}
+
+func (c *countingFS) reset() {
+	c.mu.Lock()
+	c.opens = map[string]int{}
+	c.mu.Unlock()
+}
+
+func (c *countingFS) count(name string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.opens[name]
+}
+
+// TestWalkCachesModuleReads confirms the per-Source parse cache collapses the read
+// amplification that overlapping closure walks would otherwise incur: with the base
+// layer plus every [Closure] plugin each running its own walk over a shared subgraph,
+// a module must still be read and decompressed from the backing at most once per
+// build, not once per walk.
+func TestWalkCachesModuleReads(t *testing.T) {
+	base := fstest.MapFS{
+		"i386/app.exe": {Data: buildPE([]string{"gui.dll", "leaf.dll"}, nil, false)},
+		"i386/gui.dl_": {Data: writeCabinet([]cabMember{
+			{name: "gui.dll", data: buildPE([]string{"leaf.dll"}, nil, true)},
+		})},
+		"i386/leaf.dll": {Data: buildPE(nil, nil, true)},
+	}
+	cfs := &countingFS{FS: base, opens: map[string]int{}}
+	s, err := Open(cfs)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	// Isolate the walks' reads from the one-time indexing reads Open performs.
+	cfs.reset()
+
+	// Three overlapping walks, as a build runs: the base closure plus several
+	// [Closure] plugins, all seeded on the same shared modules.
+	for i := 0; i < 3; i++ {
+		res, err := WalkWith(s, Options{StaticOnly: true}, "app.exe", "gui.dll")
+		if err != nil {
+			t.Fatalf("walk %d: %v", i, err)
+		}
+		if got := res.Nodes["leaf.dll"].Status; got != StatusResolved {
+			t.Fatalf("walk %d: leaf.dll status = %v, want resolved", i, got)
+		}
+	}
+
+	// Each module's backing file is opened exactly once across all three walks; the
+	// cache serves the rest. Without it, each walk re-reads, giving three opens apiece.
+	for _, p := range []string{"i386/app.exe", "i386/gui.dl_", "i386/leaf.dll"} {
+		if got := cfs.count(p); got != 1 {
+			t.Errorf("opens[%s] = %d across three walks, want 1 (cache should absorb the rest)", p, got)
+		}
+	}
+}
+
+// TestNodeImportsNotAliasedAcrossWalks guards that a node's Imports slice is the
+// caller's own copy, never a reference into the shared parse cache: mutating one
+// walk's result must not affect a later walk over the same (cached) Source.
+func TestNodeImportsNotAliasedAcrossWalks(t *testing.T) {
+	s := fixtureSource(t)
+	res1, err := Walk(s, "app.exe")
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	imps1 := res1.Nodes["gui.dll"].Imports
+	if len(imps1) == 0 {
+		t.Fatalf("expected gui.dll to have imports")
+	}
+	orig := imps1[0]
+	imps1[0] = "MUTATED.dll" // scribble on the first walk's slice
+
+	res2, err := Walk(s, "app.exe")
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	if got := res2.Nodes["gui.dll"].Imports[0]; got != orig {
+		t.Errorf("second walk gui.dll imports[0] = %q, want %q — the cache was aliased by the first walk's slice", got, orig)
+	}
+}
+
+// TestWalkDepthCapDefersParse confirms a module first reached at the depth cap is
+// located but not parsed (its imports are not recorded), and that a later unbounded
+// walk over the same Source upgrades the deferred entry — re-reading and parsing it —
+// so modules only reachable through it are still discovered.
+func TestWalkDepthCapDefersParse(t *testing.T) {
+	s := fixtureSource(t)
+
+	// Depth 1 reaches gui.dll but does not expand it: its imports stay unparsed, so
+	// cabmod.dll (only reachable through gui.dll) is not discovered.
+	capped, err := WalkWith(s, Options{MaxDepth: 1}, "app.exe")
+	if err != nil {
+		t.Fatalf("capped walk: %v", err)
+	}
+	if _, ok := capped.Nodes["cabmod.dll"]; ok {
+		t.Errorf("cabmod.dll discovered at depth 1, want it bounded out")
+	}
+	if imports := capped.Nodes["gui.dll"].Imports; imports != nil {
+		t.Errorf("gui.dll imports = %v at the cap, want none recorded", imports)
+	}
+
+	// An unbounded walk over the same Source must upgrade gui.dll's deferred entry and
+	// discover cabmod.dll through its now-parsed imports.
+	full, err := WalkWith(s, Options{}, "app.exe")
+	if err != nil {
+		t.Fatalf("full walk: %v", err)
+	}
+	cab, ok := full.Nodes["cabmod.dll"]
+	if !ok {
+		t.Fatalf("cabmod.dll not discovered after the unbounded walk — deferred parse was not upgraded")
+	}
+	if cab.Status != StatusResolved {
+		t.Errorf("cabmod.dll status = %v, want resolved", cab.Status)
+	}
+	if full.Nodes["gui.dll"].Imports == nil {
+		t.Errorf("gui.dll imports still nil after the unbounded walk — deferred entry not re-parsed")
 	}
 }
 
