@@ -90,7 +90,14 @@ go build -o pewalk ./cmd/pewalk
 
 # just the modules that are missing from the source
 ./pewalk --iso win.iso --missing-only ntoskrnl.exe win32k.sys
+
+# only the static imports — the modules that must be present for the seed to load
+./pewalk --iso win.iso --static-only ntoskrnl.exe
 ```
+
+Delay-load imports resolve lazily at runtime and often never load in a minimal
+environment, so `--static-only` narrows the closure to the static import graph — the
+boot-necessary set — dropping the delay-only branches the default walk follows.
 
 Output is a dependency tree by default, or `--format dot` (Graphviz) / `--format json`.
 The closure is reported at DLL granularity — which modules a binary imports, not which

@@ -29,6 +29,7 @@ func newRootCmd() *cobra.Command {
 		format     string
 		missingOnE bool
 		maxDepth   int
+		staticOnly bool
 	)
 
 	cmd := &cobra.Command{
@@ -44,6 +45,10 @@ func newRootCmd() *cobra.Command {
 			"The closure is DLL-granular: it records which modules a binary imports (static\n" +
 			"and delay-load), not which functions — a resolved module does not imply every\n" +
 			"symbol it exports is present.\n\n" +
+			"By default it follows both static and delay-load imports. Delay imports load\n" +
+			"lazily at runtime and often never do in a minimal environment, so --static-only\n" +
+			"restricts the walk to the static import graph — the modules that must be present\n" +
+			"for the seeds to load (the boot-necessary closure).\n\n" +
 			"A full closure is large and densely connected, so `--format dot | dot` alone\n" +
 			"produces an unreadable canvas. For a legible graph, bound it with --max-depth or\n" +
 			"reduce it with Graphviz's `tred` first; the text and json formats scale freely.\n\n" +
@@ -51,6 +56,7 @@ func newRootCmd() *cobra.Command {
 			"  pewalk --dir ./i386 explorer.exe\n" +
 			"  pewalk --iso win.iso --max-depth 2 explorer.exe --format dot | dot -Tsvg -o deps.svg\n" +
 			"  pewalk --iso win.iso explorer.exe --format dot | tred | dot -Tsvg -o deps.svg\n" +
+			"  pewalk --iso win.iso --static-only ntoskrnl.exe\n" +
 			"  pewalk --iso win.iso --missing-only ntoskrnl.exe win32k.sys",
 		Args:          cobra.MinimumNArgs(1),
 		Version:       buildinfo.Version,
@@ -94,7 +100,7 @@ func newRootCmd() *cobra.Command {
 				fmt.Fprintln(cmd.ErrOrStderr(), "pewalk: warning:", warn)
 			}
 
-			res, err := pewalk.WalkWith(pw, pewalk.Options{MaxDepth: maxDepth}, args...)
+			res, err := pewalk.WalkWith(pw, pewalk.Options{MaxDepth: maxDepth, StaticOnly: staticOnly}, args...)
 			if err != nil {
 				return err
 			}
@@ -109,6 +115,7 @@ func newRootCmd() *cobra.Command {
 	f.StringVar(&format, "format", "text", "output format: text, dot, or json")
 	f.BoolVar(&missingOnE, "missing-only", false, "show only unresolved modules (text format)")
 	f.IntVar(&maxDepth, "max-depth", 0, "bound recursion depth (0 = unbounded)")
+	f.BoolVar(&staticOnly, "static-only", false, "follow only static imports, skipping delay-load imports (the boot-necessary closure)")
 	return cmd
 }
 
