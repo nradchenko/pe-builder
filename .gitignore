@@ -6,6 +6,9 @@
 # Local, developer-specific instructions
 CLAUDE.local.md
 
+# IDE / editor project files
+.idea/
+
 # Internal working documents
 docs/internal/
 
