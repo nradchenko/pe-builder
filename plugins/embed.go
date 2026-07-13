@@ -17,4 +17,5 @@ import "embed"
 //
 //go:embed poweroff/poweroff.inf poweroff/poweroff.c poweroff/Makefile
 //go:embed win32-gui/win32-gui.inf
+//go:embed storage-pnp/storage-pnp.inf
 var FS embed.FS

@@ -1,0 +1,65 @@
+; Copyright 2026 Nikita Radchenko
+; SPDX-License-Identifier: Apache-2.0
+;
+; storage-pnp — make data disks and volumes enumerate and receive drive letters in the
+; /minint PE. The text-setup SYSTEM hive has an empty Enum\Root, so the partition/volume
+; stack (partmgr -> ftdisk -> volume -> mountmgr letter) never comes up for non-boot disks.
+; This reconstructs the minimal PnP root device tree: partmgr and volsnap as root-enumerated
+; legacy-driver nodes, boot-started (disk.sys/fastfat.sys already load via txtsetup), and
+; gives ftdisk and mountmgr their load-order tags within the System Bus Extender group.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "Storage PnP enablement"
+Enable = 0
+
+; --- SYSTEM hive: storage service config + the PnP root device tree ---
+[SetupReg.AddReg]
+; PartMgr — the partition manager: turns disk partitions into volume devices. Boot-start,
+; System Bus Extender group, and a Root\LEGACY_PARTMGR PnP node so it loads without a real
+; PnP install pass.
+0x4,"ControlSet001\Services\PartMgr","Start",0x0
+0x4,"ControlSet001\Services\PartMgr","Type",0x1
+0x4,"ControlSet001\Services\PartMgr","ErrorControl",0x1
+0x1,"ControlSet001\Services\PartMgr","Group","System Bus Extender"
+0x4,"ControlSet001\Services\PartMgr","Tag",0x5
+0x1,"ControlSet001\Services\PartMgr","DisplayName","PartMgr"
+0x1,"ControlSet001\Services\PartMgr\Enum","0","Root\LEGACY_PARTMGR\0000"
+0x4,"ControlSet001\Services\PartMgr\Enum","Count",0x1
+0x4,"ControlSet001\Services\PartMgr\Enum","NextInstance",0x1
+0x1,"ControlSet001\Enum\Root\LEGACY_PARTMGR\0000","Service","PartMgr"
+0x4,"ControlSet001\Enum\Root\LEGACY_PARTMGR\0000","Legacy",0x1
+0x4,"ControlSet001\Enum\Root\LEGACY_PARTMGR\0000","ConfigFlags",0x20
+0x1,"ControlSet001\Enum\Root\LEGACY_PARTMGR\0000","Class","LegacyDriver"
+0x1,"ControlSet001\Enum\Root\LEGACY_PARTMGR\0000","ClassGUID","{8ECC055D-047F-11D1-A537-0000F8753ED1}"
+0x1,"ControlSet001\Enum\Root\LEGACY_PARTMGR\0000","DeviceDesc","PartMgr"
+0x4,"ControlSet001\Enum\Root\LEGACY_PARTMGR\0000","Capabilities",0x0
+0x1,"ControlSet001\Enum\Root\LEGACY_PARTMGR\0000","Driver","{8ECC055D-047F-11D1-A537-0000F8753ED1}\0020"
+0x1,"ControlSet001\Enum\Root\LEGACY_PARTMGR\0000\Control","ActiveService","PartMgr"
+0x4,"ControlSet001\Enum\Root\LEGACY_PARTMGR","NextInstance",0x1
+; VolSnap — the volume snapshot filter, likewise boot-started + root-enumerated.
+0x4,"ControlSet001\Services\VolSnap","Start",0x0
+0x4,"ControlSet001\Services\VolSnap","Type",0x1
+0x4,"ControlSet001\Services\VolSnap","ErrorControl",0x1
+0x1,"ControlSet001\Services\VolSnap","Group","System Bus Extender"
+0x1,"ControlSet001\Services\VolSnap\Enum","0","Root\LEGACY_VOLSNAP\0000"
+0x4,"ControlSet001\Services\VolSnap\Enum","Count",0x1
+0x4,"ControlSet001\Services\VolSnap\Enum","NextInstance",0x1
+0x1,"ControlSet001\Enum\Root\LEGACY_VOLSNAP\0000","Service","VolSnap"
+0x4,"ControlSet001\Enum\Root\LEGACY_VOLSNAP\0000","Legacy",0x1
+0x4,"ControlSet001\Enum\Root\LEGACY_VOLSNAP\0000","ConfigFlags",0x20
+0x1,"ControlSet001\Enum\Root\LEGACY_VOLSNAP\0000","Class","LegacyDriver"
+0x1,"ControlSet001\Enum\Root\LEGACY_VOLSNAP\0000","ClassGUID","{8ECC055D-047F-11D1-A537-0000F8753ED1}"
+0x1,"ControlSet001\Enum\Root\LEGACY_VOLSNAP\0000","DeviceDesc","VolSnap"
+0x4,"ControlSet001\Enum\Root\LEGACY_VOLSNAP\0000","Capabilities",0x0
+0x1,"ControlSet001\Enum\Root\LEGACY_VOLSNAP\0000","Driver","{8ECC055D-047F-11D1-A537-0000F8753ED1}\0000"
+0x1,"ControlSet001\Enum\Root\LEGACY_VOLSNAP\0000\Control","ActiveService","VolSnap"
+0x4,"ControlSet001\Enum\Root\LEGACY_VOLSNAP","NextInstance",0x1
+; ftdisk (volume manager) and mountmgr (mount-point/drive-letter manager) load as boot
+; drivers via txtsetup; ensure their load-order tags within the group match the reference.
+0x1,"ControlSet001\Services\ftdisk","Group","System Bus Extender"
+0x4,"ControlSet001\Services\ftdisk","Tag",0x9
+0x1,"ControlSet001\Services\mountmgr","Group","System Bus Extender"
+0x4,"ControlSet001\Services\mountmgr","Tag",0x8
