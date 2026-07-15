@@ -99,9 +99,8 @@ smss.exe    =
 basesrv.dll =
 winsrv.dll  =
 
-; The System File Checker's protected-file list and the protected-storage base DLL,
-; each loaded by name (not as a static import), so not reached by the import closure.
-sfcfiles.dll =
+; The protected-storage base DLL, loaded by name (not as a static import), so not
+; reached by the import closure.
 psbase.dll   = 2
 
 ; Session, logon, and service host — the chain that reaches the shell.
@@ -186,10 +185,9 @@ imm32.dll    = 2
 lpk.dll      = 2
 usp10.dll    = 2
 
-; Further DLLs user32/gdi32 reference by name (image blit, power profile, OpenGL).
+; Further DLLs user32/gdi32 reference by name (image blit, power profile).
 msimg32.dll  = 2
 powrprof.dll = 2
-opengl32.dll = 2
 
 ; DLLs the loader itself pulls in during process init (not as static imports): the
 ; application-compatibility shim engine and the side-by-side/manifest resolver.
@@ -229,7 +227,6 @@ msgina.dll =
 msls31.dll =
 msprivs.dll =
 msv1_0.dll =
-netplwiz.dll =
 odbc32.dll =
 olesvr.dll =
 peer.exe =

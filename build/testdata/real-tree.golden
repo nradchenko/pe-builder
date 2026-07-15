@@ -1,5 +1,5 @@
 identity: winxp build 2600 (i386)
-written: 258
+written: 255
 skipped: 
 
 BOOTFONT.BIN 4952
@@ -201,14 +201,12 @@ i386/system32/msvcrt.dll 343040
 i386/system32/ncobjapi.dll 36352
 i386/system32/nddeapi.dll 18432
 i386/system32/netapi32.dll 337408
-i386/system32/netplwiz.dll 877056
 i386/system32/ntdll.dll 710144
 i386/system32/ntdsapi.dll 67072
 i386/system32/ntoskrnl.exe 2147328
 i386/system32/odbc32.dll 249856
 i386/system32/ole32.dll 1287168
 i386/system32/olesvr.dll 24064
-i386/system32/opengl32.dll 713728
 i386/system32/peer.exe 108057
 i386/system32/pentnt.exe 15360
 i386/system32/portmon.exe 149020
@@ -228,7 +226,6 @@ i386/system32/schannel.dll 144384
 i386/system32/secur32.dll 56320
 i386/system32/services.exe 109056
 i386/system32/setupapi.dll 991744
-i386/system32/sfcfiles.dll 1571840
 i386/system32/shell32.dll 8478208
 i386/system32/shlwapi.dll 474112
 i386/system32/shutdown.exe 19968

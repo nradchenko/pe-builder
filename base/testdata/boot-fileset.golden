@@ -84,7 +84,6 @@ ncobjapi.dll
 nddeapi.dll
 ndis.sys
 netapi32.dll
-netplwiz.dll
 npfs.sys
 ntdetect.com
 ntdll.dll
@@ -94,7 +93,6 @@ null.sys
 odbc32.dll
 ole32.dll
 olesvr.dll
-opengl32.dll
 oprghdlr.sys
 pciidex.sys
 peer.exe
@@ -120,7 +118,6 @@ services.exe
 setupapi.dll
 setupdd.sys
 setupldr.bin
-sfcfiles.dll
 shell32.dll
 shlwapi.dll
 shutdown.exe

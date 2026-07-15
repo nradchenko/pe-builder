@@ -25,7 +25,6 @@ copy csrss.exe dir="" rename="" flags=-
 copy smss.exe dir="" rename="" flags=-
 copy basesrv.dll dir="" rename="" flags=-
 copy winsrv.dll dir="" rename="" flags=-
-copy sfcfiles.dll dir="" rename="" flags=-
 copy psbase.dll dir="2" rename="" flags=-
 copy services.exe dir="" rename="" flags=-
 copy winlogon.exe dir="" rename="" flags=-
@@ -63,7 +62,6 @@ copy lpk.dll dir="2" rename="" flags=-
 copy usp10.dll dir="2" rename="" flags=-
 copy msimg32.dll dir="2" rename="" flags=-
 copy powrprof.dll dir="2" rename="" flags=-
-copy opengl32.dll dir="2" rename="" flags=-
 copy apphelp.dll dir="2" rename="" flags=-
 copy sxs.dll dir="2" rename="" flags=-
 copy activeds.dll dir="" rename="" flags=-
@@ -89,7 +87,6 @@ copy msgina.dll dir="" rename="" flags=-
 copy msls31.dll dir="" rename="" flags=-
 copy msprivs.dll dir="" rename="" flags=-
 copy msv1_0.dll dir="" rename="" flags=-
-copy netplwiz.dll dir="" rename="" flags=-
 copy odbc32.dll dir="" rename="" flags=-
 copy olesvr.dll dir="" rename="" flags=-
 copy peer.exe dir="" rename="" flags=-
