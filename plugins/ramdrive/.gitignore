@@ -1,0 +1,3 @@
+# ramdrive.sys is compiled from ramdrive.c at build time (or by `make` here for
+# local testing); it is never committed — the plugin ships source, not a binary.
+ramdrive.sys

@@ -1,0 +1,72 @@
+; Copyright 2026 Nikita Radchenko
+; SPDX-License-Identifier: Apache-2.0
+;
+; ramdrive — the RAM-drive plugin manifest: builds ramdrive.sys from source and
+; registers it as a root PnP device so it loads at boot and its FAT16 volume gets a
+; drive letter. Depends on storage-pnp (the volume/Mount Manager stack). See README.md.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "RAM drive"
+Enable = 0
+
+; Needs the partition/volume/mount-manager stack up (partmgr -> ftdisk -> volume ->
+; mountmgr) so mountmgr can letter the registered volume interface.
+[Update]
+depends = storage-pnp
+
+[Build]
+Requires = i686-w64-mingw32-gcc make
+Produces = ramdrive.sys
+
+; Stage the built driver into system32\drivers (directory id 4).
+[SourceDisksFiles]
+ramdrive.sys = 4
+
+; --- SYSTEM hive: the driver registered as a root PnP device ---
+; In /minint a bare Start=1 service is never loaded; a driver loads only when the PnP
+; manager enumerates a device node bound to it. So register ramdrive as a fully-installed
+; root PnP device: a Root\RAMDRIVE devnode with a HardwareID, bound (via Driver +
+; Control\Class) to a demand-start service. The kernel PnP root enumeration loads
+; ramdrive.sys at boot and calls its AddDevice, which starts the volume cleanly.
+[SetupReg.AddReg]
+; The driver's device class + the installed-driver instance the devnode binds to.
+0x1,"ControlSet001\Control\Class\{D9F4E1A2-3B6C-4E5D-8A7F-1C2B3D4E5F60}","","PE RAM Drive"
+0x1,"ControlSet001\Control\Class\{D9F4E1A2-3B6C-4E5D-8A7F-1C2B3D4E5F60}","Class","RamDrive"
+0x1,"ControlSet001\Control\Class\{D9F4E1A2-3B6C-4E5D-8A7F-1C2B3D4E5F60}\0000","ProviderName","pe-builder"
+0x1,"ControlSet001\Control\Class\{D9F4E1A2-3B6C-4E5D-8A7F-1C2B3D4E5F60}\0000","MatchingDeviceId","ramdrive"
+0x1,"ControlSet001\Control\Class\{D9F4E1A2-3B6C-4E5D-8A7F-1C2B3D4E5F60}\0000","DriverDesc","PE RAM Drive"
+; The service — demand-start (3): the PnP manager starts it when it enumerates the devnode.
+0x4,"ControlSet001\Services\ramdrive","Type",0x1
+0x4,"ControlSet001\Services\ramdrive","Start",0x3
+0x4,"ControlSet001\Services\ramdrive","ErrorControl",0x1
+0x1,"ControlSet001\Services\ramdrive","DisplayName","PE RAM Drive"
+0x1,"ControlSet001\Services\ramdrive","ImagePath","system32\drivers\ramdrive.sys"
+; Per-device parameters the driver reads on start. DiskSize is in bytes (8 MB) — kept
+; modest because the backing store is a flat non-paged pool allocation, which is scarce
+; early in boot. DriveLetter pins the mount point; drop it to let mountmgr auto-assign.
+0x4,"ControlSet001\Services\ramdrive\Parameters","DiskSize",0x800000
+0x1,"ControlSet001\Services\ramdrive\Parameters","DriveLetter","R:"
+0x1,"ControlSet001\Services\ramdrive\Enum","0","Root\RAMDRIVE\0000"
+0x4,"ControlSet001\Services\ramdrive\Enum","Count",0x1
+0x4,"ControlSet001\Services\ramdrive\Enum","NextInstance",0x1
+; The Root\RAMDRIVE devnode the PnP manager enumerates at boot to load the driver.
+0x1,"ControlSet001\Enum\Root\RAMDRIVE\0000","ClassGUID","{D9F4E1A2-3B6C-4E5D-8A7F-1C2B3D4E5F60}"
+0x1,"ControlSet001\Enum\Root\RAMDRIVE\0000","Class","RamDrive"
+; ConfigFlags=0: the node is fully installed (Driver linkage + ActiveService below), so
+; PnP binds the driver and calls AddDevice at boot with nothing left to do. Do NOT use
+; CONFIGFLAG_FINISH_INSTALL (0x20) here: it marks the install incomplete and holds the
+; device pending a usermode finish-install pass that never runs in a PE, so a demand-start
+; (Start=3) driver is never loaded — the service reads NEVER_STARTED (1077) and no device
+; appears. storage-pnp can use 0x20 only because its drivers are boot-start (Start=0) and
+; load independently of that gate.
+0x4,"ControlSet001\Enum\Root\RAMDRIVE\0000","ConfigFlags",0x0
+0x1,"ControlSet001\Enum\Root\RAMDRIVE\0000","Mfg","pe-builder"
+0x7,"ControlSet001\Enum\Root\RAMDRIVE\0000","HardwareID","ramdrive"
+0x1,"ControlSet001\Enum\Root\RAMDRIVE\0000","Service","ramdrive"
+0x1,"ControlSet001\Enum\Root\RAMDRIVE\0000","DeviceDesc","PE RAM Drive"
+0x4,"ControlSet001\Enum\Root\RAMDRIVE\0000","Capabilities",0x0
+0x1,"ControlSet001\Enum\Root\RAMDRIVE\0000","Driver","{D9F4E1A2-3B6C-4E5D-8A7F-1C2B3D4E5F60}\0000"
+0x1,"ControlSet001\Enum\Root\RAMDRIVE\0000\Control","ActiveService","ramdrive"
