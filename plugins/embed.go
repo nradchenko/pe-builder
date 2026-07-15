@@ -19,4 +19,5 @@ import "embed"
 //go:embed win32-gui/win32-gui.inf
 //go:embed storage-pnp/storage-pnp.inf
 //go:embed ramdrive/ramdrive.inf ramdrive/ramdrive.c ramdrive/Makefile
+//go:embed explorer-shell/explorer-shell.inf explorer-shell/peshell.c explorer-shell/peshut.c explorer-shell/Makefile
 var FS embed.FS

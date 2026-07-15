@@ -1,0 +1,245 @@
+; Copyright 2026 Nikita Radchenko
+; SPDX-License-Identifier: Apache-2.0
+;
+; explorer-shell — boot to a working Windows Explorer desktop instead of a bare command
+; prompt. Ships peshell.exe (built from source) as the Setup\CmdLine shell: it self-registers
+; the shell/COM components at runtime (their own DllInstall, the sequence Explorer needs to
+; initialize), sets up a writable profile, applies a classic no-frills desktop, and launches
+; explorer. The [Closure] stages Explorer plus the shell handler/resource DLLs and a minimal
+; Control Panel set (System, Display, Mouse, Keyboard). Needs the shared GUI runtime and a
+; writable lettered volume, so it depends on win32-gui, storage-pnp, and ramdrive (the
+; RAM-backed scratch volume that gives the profile a writable home with no attached disk).
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "Explorer shell"
+Enable = 0
+
+[Update]
+depends = win32-gui, storage-pnp, ramdrive
+
+[Build]
+Requires = i686-w64-mingw32-gcc make
+Produces = peshell.exe peshut.dll
+
+; Seed each module so its static import closure is staged (explorer for the shell itself). The
+; control-panel applets are loaded by name at runtime (never in an import closure), so each is
+; its own seed to stage the applet + its dependency DLLs.
+[Closure]
+explorer.exe
+shell32.dll
+browseui.dll
+shdocvw.dll
+urlmon.dll
+linkinfo.dll
+; Registration targets for the self-registration pass (NOT Control Panel items): inetcpl's
+; DllInstall + ie4uinit are part of the sequence that initializes the shell.
+inetcpl.cpl
+ie4uinit.exe
+; Minimal control-panel set: System (sysdm), Display (desk), Mouse+Keyboard (main).
+sysdm.cpl
+desk.cpl
+main.cpl
+; Shell UI resources + namespace/handler DLLs the shell loads at runtime (never in an import
+; closure). browselc/shdoclc = the browseui/shdocvw UI resources (the Explorer menu+toolbar);
+; mydocs/zipfldr/cabview/shimgvw/fontext = namespace/view handlers; deskadp/deskmon/themeui =
+; Display Properties; actxprxy/comcat/mlang/shfolder = shell COM infrastructure.
+browselc.dll
+shdoclc.dll
+mydocs.dll
+zipfldr.dll
+cabview.dll
+shimgvw.dll
+fontext.dll
+deskadp.dll
+deskmon.dll
+themeui.dll
+actxprxy.dll
+comcat.dll
+mlang.dll
+shfolder.dll
+
+[SourceDisksFiles]
+peshell.exe = 2
+peshut.dll = 2
+; ie4uinit reads this inf chain (part of the self-registration pass).
+ieuinit.inf = 2
+homepage.inf = 2
+iereset.inf = 20
+; Control-panel applets are launched as `rundll32 shell32,Control_RunDLL <applet>.cpl`, and
+; control.exe opens the Control Panel folder — neither is in any import closure, so stage them.
+rundll32.exe = 2
+control.exe = 2
+; winver (About Windows) reads the license text from system32\eula.txt. notepad is the .txt
+; handler that About dialogs / winver invoke to show eula.txt (missing it = "application not
+; found"). Both are generally-useful shell tools.
+eula.txt = 2
+winver.exe = 2
+notepad.exe = 2
+; Calculator — a handy Start-menu item.
+calc.exe = 2
+; peshell loads its boot-splash banner from msgina.dll. Required by peshell.
+msgina.dll = 2
+
+[SetupReg.AddReg]
+0x1,"Setup","CmdLine","peshell.exe"
+; Auto-start the COM/DCOM + shell notification services the desktop needs: the setup-mode SCM
+; only starts services on its Setup\AllowStart whitelist, and the base lists just the LSA/RPC
+; core. RpcSs is already whitelisted by the base.
+0x1,"Setup\AllowStart\DcomLaunch"
+0x1,"Setup\AllowStart\CryptSvc"
+0x1,"Setup\AllowStart\EventSystem"
+0x1,"Setup\AllowStart\SENS"
+0x1,"Setup\AllowStart\ShellHWDetection"
+; No audio hardware/device in the PE. Disable the Windows Audio service: it otherwise auto-
+; starts and hangs in START_PENDING (slowing boot), and WINMM's waveOut waits on it — so a
+; system sound (e.g. the Explorer navigation click on folder-open) blocks the shell's tray
+; thread in WINMM, cascading every folder window into "Not Responding". Disabled -> waveOut
+; fails fast instead of blocking.
+0x4,"ControlSet001\Services\AudioSrv","Start",0x4
+; Desktop resolution — the boot VGA driver's default display mode. 1024x768x32
+; (0x400 x 0x300, 32bpp). Edit these values to change it.
+;
+; win32k reads the active mode from the video device instance under Control\Video\{GUID}\0000
+; (reached via HARDWARE\DEVICEMAP\VIDEO -> \Device\Video0), NOT from Services\VgaSave\Device0 —
+; the base populates those two keys separately (they are not linked in this PE). So the mode has
+; to be set on the Control\Video instance; the Services\Device0 copy is the persistent store.
+; {23A77BF7-...} is the VgaSave VideoID the base assigns (base.inf).
+0x4,"ControlSet001\Services\VgaSave\Device0","DefaultSettings.XResolution",0x400
+0x4,"ControlSet001\Services\VgaSave\Device0","DefaultSettings.YResolution",0x300
+0x4,"ControlSet001\Services\VgaSave\Device0","DefaultSettings.BitsPerPel",0x20
+0x4,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\0000","DefaultSettings.XResolution",0x400
+0x4,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\0000","DefaultSettings.YResolution",0x300
+0x4,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\0000","DefaultSettings.BitsPerPel",0x20
+
+[Software.AddReg]
+0x1,"Microsoft\Windows NT\CurrentVersion\Winlogon","Shell","Explorer.exe"
+; Load peshut.dll into shell processes so its ExitWindowsEx hook powers the machine off when the
+; user picks Turn Off / Restart — /minint has no winlogon to carry out a normal shutdown.
+0x1,"Microsoft\Windows NT\CurrentVersion\Windows","AppInit_DLLs","peshut.dll"
+0x4,"Microsoft\Windows NT\CurrentVersion\Windows","LoadAppInit_DLLs",0x1
+; Top-level Start-menu items — peshell reads these at boot and creates a shortcut in the Start
+; Menu root for each (value name = label, data = target, %vars% expanded). Add/remove lines here
+; to manage the menu with no code change. Keeping a couple also props the classic menu up to the
+; height shell32 needs to draw its side banner.
+0x2,"pe-builder\StartMenu","Command Prompt","%SystemRoot%\system32\cmd.exe"
+0x2,"pe-builder\StartMenu","Calculator","%SystemRoot%\system32\calc.exe"
+; Machine-wide "Take a tour of Windows XP" balloon off (companion to the per-user Tour count).
+0x4,"Microsoft\Windows\CurrentVersion\Applets\Tour","RunCount",0x0
+; Common (All Users) shell folders — explorer builds the common Start Menu/Desktop from these.
+0x2,"Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Common Desktop","%ALLUSERSPROFILE%\Desktop"
+0x2,"Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Common Start Menu","%ALLUSERSPROFILE%\Start Menu"
+0x2,"Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Common Programs","%ALLUSERSPROFILE%\Start Menu\Programs"
+0x2,"Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Common Startup","%ALLUSERSPROFILE%\Start Menu\Programs\Startup"
+0x2,"Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Common AppData","%ALLUSERSPROFILE%\Application Data"
+0x2,"Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Common Documents","%ALLUSERSPROFILE%\Documents"
+
+; Prune the folder/drive shell-extension handlers whose DLLs we don't ship and which need
+; services we don't run: Sharing (ntshrui -> LanmanServer), Security (rshx32 -> SAM/SECURITY),
+; disk quota (dskquoui), disk copy (diskcopy). The grafted source Classes register these; the
+; shell would try to load them on right-click/Properties and fail or block. Register only what
+; we can satisfy.
+[Software.DelReg]
+"Classes\Directory\shellex\ContextMenuHandlers\Sharing"
+"Classes\Directory\shellex\PropertySheetHandlers\Sharing"
+"Classes\Directory\shellex\CopyHookHandlers\Sharing"
+"Classes\Directory\shellex\PropertySheetHandlers\{1F2E5C40-9550-11CE-99D2-00AA006E086C}"
+"Classes\Drive\shellex\ContextMenuHandlers\Sharing"
+"Classes\Drive\shellex\ContextMenuHandlers\{59099400-57FF-11CE-BD94-0020AF85B590}"
+"Classes\Drive\shellex\PropertySheetHandlers\Sharing"
+"Classes\Drive\shellex\PropertySheetHandlers\{1F2E5C40-9550-11CE-99D2-00AA006E086C}"
+"Classes\Drive\shellex\PropertySheetHandlers\{7988B573-EC89-11cf-9C00-00AA00A14F56}"
+; Remove the SysTray notification-area object (stobject.dll): its volume/network/power icons
+; are useless in an audio-less, network-less PE, and its volume module pokes WINMM.
+"Microsoft\Windows\CurrentVersion\ShellServiceObjectDelayLoad","SysTray"
+; Two ghost (nameless) Control Panel items: these .cpls are registered but not staged.
+"Microsoft\Windows\CurrentVersion\Control Panel\Cpls","Internet Connection Firewall"
+"Microsoft\Windows\CurrentVersion\Control Panel\Cpls","NetSetupWizard"
+; Briefcase (folder sync, handled by syncui.dll which we don't ship) is useless in a PE.
+; Removing its folder class drops the "New > Briefcase" desktop entry, which otherwise errors
+; "cannot find syncui.dll".
+"Classes\Briefcase"
+"Classes\CLSID\{85BBD920-42A0-1069-A2E4-08002B30309D}"
+
+; No wav files or audio device are staged, so any PlaySound — the Explorer "Navigating" click
+; fires on folder-open — blocks in WINMM waveOut and hangs the shell's tray thread, cascading
+; every folder window into "Not Responding". Remove all sound-event bindings so the shell never
+; opens the wave device. (Companion to disabling AudioSrv in [SetupReg.AddReg].)
+[Default.DelReg]
+"AppEvents\Schemes\Apps"
+
+[Default.AddReg]
+0x2,"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Desktop","%USERPROFILE%\Desktop"
+0x2,"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Start Menu","%USERPROFILE%\Start Menu"
+0x2,"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Programs","%USERPROFILE%\Start Menu\Programs"
+0x2,"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Startup","%USERPROFILE%\Start Menu\Programs\Startup"
+0x2,"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","AppData","%USERPROFILE%\Application Data"
+0x2,"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Personal","%USERPROFILE%\My Documents"
+0x2,"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Local AppData","%USERPROFILE%\Local Settings\Application Data"
+
+; --- Visual effects: the classic no-frills look (no animations / fades / shadows) ---
+; UserPreferencesMask packs the effect flags (high byte 0x80 = UI-effects master, cleared -> off);
+; MinAnimate is the min/max window animation. These "off" values only stick because of the
+; VisualEffects DefaultApplied block below — without it XP's shell-init pass recomputes the
+; machine-recommended effects and turns them back on. See README.md § Visual effects.
+0x3,"Control Panel\Desktop","UserPreferencesMask",90,12,00,00
+0x1,"Control Panel\Desktop\WindowMetrics","MinAnimate","0"
+0x1,"Control Panel\Desktop","DragFullWindows","0"
+0x1,"Control Panel\Desktop","FontSmoothing","0"
+0x1,"Control Panel\Desktop","MenuShowDelay","0"
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","ListviewShadow",0x0
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","ListviewAlphaSelect",0x0
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","TaskbarAnimations",0x0
+; VisualFXSetting=3 is "Custom" (use the individual values); DefaultApplied=1 per effect marks it
+; already-applied, suppressing the shell-init recompute that would clobber the values above.
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects","VisualFXSetting",0x3
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\AnimateMinMax","DefaultApplied",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\ComboBoxAnimation","DefaultApplied",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\CursorShadow","DefaultApplied",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\DragFullWindows","DefaultApplied",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\DropShadow","DefaultApplied",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\ListBoxSmoothScrolling","DefaultApplied",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\ListviewAlphaSelect","DefaultApplied",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\ListviewShadow","DefaultApplied",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\ListviewWatermark","DefaultApplied",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\MenuAnimation","DefaultApplied",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\SelectionFade","DefaultApplied",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\TaskbarAnimations","DefaultApplied",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\TooltipAnimation","DefaultApplied",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\WebView","DefaultApplied",0x1
+
+; --- Sounds: off (no wav files / audio device; also silence the PC-speaker beep). Bindings are
+; removed in [Default.DelReg]. ---
+0x1,"Control Panel\Sound","Beep","no"
+0x1,"Control Panel\Sound","ExtendedSounds","no"
+0x1,"AppEvents\Schemes","",".None"
+
+; --- First-run balloons / tooltips: off (taskbar notification balloons, the "Take a tour of
+; Windows XP" welcome balloon, the newly-installed-programs Start-menu highlight). ---
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","EnableBalloonTips",0x0
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","Start_NotifyNewApps",0x0
+0x4,"Software\Microsoft\Windows\CurrentVersion\Applets\Tour","RunCount",0x0
+
+; --- Start menu / Control Panel: classic style; drop Search and Help (nothing to search / no
+; help content in the PE). ---
+0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoSimpleStartMenu",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","ForceClassicControlPanel",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoFind",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoSMHelp",0x1
+
+; --- My Network Places: hidden. shell32 enumerates it while building the Desktop view; with no
+; network the provider enumeration blocks and hangs the desktop. NoNetHood drops it entirely. ---
+0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoNetHood",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\ClassicStartMenu","{208D2C60-3AEA-1069-A2D7-08002B30309D}",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel","{208D2C60-3AEA-1069-A2D7-08002B30309D}",0x1
+
+; --- Folder views / Active Desktop: plain listview, no Web View and no Active Desktop (both pull
+; mshtml + folder .htt templates absent from the PE and hang); folders open in the shell process,
+; not a separate `explorer /factory -Embedding` COM server (fragile in the PE). ---
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","WebView",0x0
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","ClassicViewState",0x0
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","SeparateProcess",0x0
+0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoActiveDesktop",0x1
+0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","ForceActiveDesktopOn",0x0

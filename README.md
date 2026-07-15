@@ -4,9 +4,10 @@ An open-source, cross-platform tool for building bootable **Windows PE**
 environments from a Windows installation source — a modern, Linux-first revival of
 the ideas behind the classic, discontinued **Bart's PE Builder**.
 
-> **Status: early development.** A build already produces a bootable PE that reaches
-> an interactive `cmd.exe`. Formats, commands, and structure are subject to change,
-> and there are no releases yet.
+> **Status: early development.** A build already produces a bootable PE — reaching an
+> interactive `cmd.exe`, or a minimal Windows Explorer desktop (an early proof of
+> concept) with the `explorer-shell` plugin. Formats, commands, and structure are
+> subject to change, and there are no releases yet.
 
 ## What this is
 
@@ -32,11 +33,15 @@ provide.
 
 ## Status
 
-Early development. A build currently produces a bootable PE that reaches an
-interactive `cmd.exe`, with the console locale — code pages, fonts, and keyboard —
-taken from the source's own locale. The plugin subsystem is wired up: builds apply
-the plugins a manifest enables, and pebuild ships a small set of built-ins — including
-`poweroff`, a shutdown / power-off command compiled from source at build time. See
+Early development. A build produces a bootable PE that reaches an interactive
+`cmd.exe`, with the console locale — code pages, fonts, and keyboard — taken from the
+source's own locale. The plugin subsystem is wired up: builds apply the plugins a
+manifest enables, and pebuild ships a set of built-ins. As an early proof of concept,
+the `explorer-shell` plugin boots to a minimal **Windows Explorer desktop** — Start
+menu, taskbar, and Control Panel — self-contained from CD alone, composing the shared
+`win32-gui` runtime, `storage-pnp` for drive-letter assignment, and a from-scratch
+`ramdrive` that supplies the writable profile volume with no attached disk. `poweroff`
+adds a shutdown / power-off command compiled from source at build time. See
 [`docs/plugins/`](docs/plugins/) to use or write plugins.
 
 ## Quick start
@@ -54,8 +59,17 @@ go build -o pebuild ./cmd/pebuild
 qemu-system-i386 -M pc -m 512 -cdrom out/pe.iso -boot d
 ```
 
-The ISO boots to an interactive `cmd.exe`. This is early, fast-moving work — details
-change commit to commit.
+The ISO boots to an interactive `cmd.exe`. Enable the `explorer-shell` plugin (it pulls in
+`win32-gui` and `storage-pnp`) to boot to a Windows Explorer desktop instead — a classic
+Start menu, taskbar, and Control Panel:
+
+```hcl
+plugin "explorer-shell" {
+  enabled = true
+}
+```
+
+This is early, fast-moving work — details change commit to commit.
 
 ## Inspecting dependencies with `pewalk`
 
