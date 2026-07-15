@@ -139,6 +139,10 @@ Copyright © 2026 Nikita Radchenko
 
 Licensed under the [Apache License 2.0](LICENSE).
 
+The compiled binaries statically link third-party Go modules under permissive and
+MPL-2.0 licenses; their notices are reproduced in
+[THIRD-PARTY-LICENSES](THIRD-PARTY-LICENSES), which ships with released binaries.
+
 ## Disclaimer
 
 This project is **not affiliated with, endorsed by, or derived from the code of**

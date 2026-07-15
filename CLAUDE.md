@@ -90,6 +90,9 @@ PE dependencies.
   and depends on the others.
 - `internal/` — support packages: `golden` (golden-file test helper), `buildinfo`
   (version metadata).
+- `scripts/` — repository tooling. `gen-licenses.sh` (+ its template) regenerates the
+  committed `THIRD-PARTY-LICENSES` notice from the binaries' transitive dependency closure
+  via `go-licenses`; run it through `make licenses`.
 - `docs/` — project documentation.
   - `docs/plugins/` — the plugin bundling/inclusion policy (what may ship built-in).
   - `docs/reference/` — a primary-source reference describing the **original**

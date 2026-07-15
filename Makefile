@@ -11,7 +11,7 @@ DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
 LDFLAGS := -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).Date=$(DATE)
 
-.PHONY: all build test vet lint fmt tidy clean
+.PHONY: all build test vet lint fmt tidy licenses clean
 
 all: build
 
@@ -34,6 +34,9 @@ fmt:
 
 tidy:
 	go mod tidy
+
+licenses:
+	./scripts/gen-licenses.sh
 
 clean:
 	rm -rf $(BINDIR)
