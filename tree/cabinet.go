@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/nradchenko/pe-builder/buildcache"
 	"github.com/nradchenko/pe-builder/compress"
 	"github.com/nradchenko/pe-builder/layout"
 	"github.com/nradchenko/pe-builder/source"
@@ -33,17 +34,19 @@ var cabNames = []string{"sp3.cab", "sp2.cab", "sp1.cab", "driver.cab"}
 // A malformed or truncated cabinet is skipped with a warning rather than failing
 // the build, so the loose tree still assembles.
 type cabinets struct {
-	src  source.Backing
-	want map[string]bool // lowercased member names to extract
-	once sync.Once
-	got  map[string][]byte // lowercased name -> final (decompressed) bytes
+	src   source.Backing
+	want  map[string]bool // lowercased member names to extract
+	cache *buildcache.Cache
+	once  sync.Once
+	got   map[string][]byte // lowercased name -> final (decompressed) bytes
 }
 
 // newCabinets returns a resolver that will extract the named members (lowercased)
 // on first lookup. Extraction is deferred, so a build needing no cabinet-only
-// file never opens a cabinet.
-func newCabinets(src source.Backing, want map[string]bool) *cabinets {
-	return &cabinets{src: src, want: want}
+// file never opens a cabinet. cache (nil to disable) supplies members extracted
+// on an earlier build of the same source, avoiding the LZX folder decode.
+func newCabinets(src source.Backing, want map[string]bool, cache *buildcache.Cache) *cabinets {
+	return &cabinets{src: src, want: want, cache: cache}
 }
 
 // load opens each present cabinet once, extracts the wanted members that are not
@@ -68,6 +71,13 @@ func (c *cabinets) load() {
 			slog.Warn("skipping malformed source cabinet", "cabinet", name, "err", err)
 			continue
 		}
+		// Fingerprint the directory region to key the extracted-member cache; the
+		// same key the import-closure walk uses, so both stages share one cache.
+		// A cabinet whose directory can't be sized is simply not cached.
+		fp := ""
+		if n, err := compress.CabinetDirSize(data); err == nil {
+			fp = compress.Fingerprint(data[:n])
+		}
 		for _, f := range cab.Files() {
 			ln := strings.ToLower(f.Name)
 			if !c.want[ln] {
@@ -79,6 +89,12 @@ func (c *cabinets) load() {
 			if loose[ln] || loose[strings.ToLower(layout.CompressedName(ln))] {
 				continue // resolvable loosely; the cabinet copy would go unused
 			}
+			if fp != "" {
+				if cached, ok := c.cache.Get(compress.CabinetCacheNamespace, fp+":"+ln); ok {
+					c.got[ln] = cached // reused from an earlier build; no decode.
+					continue
+				}
+			}
 			b, err := cab.Data(f)
 			if err != nil {
 				slog.Warn("skipping undecodable cabinet member", "cabinet", name, "file", f.Name, "err", err)
@@ -89,6 +105,9 @@ func (c *cabinets) load() {
 			member := make([]byte, len(b))
 			copy(member, b)
 			c.got[ln] = member
+			if fp != "" {
+				c.cache.Put(compress.CabinetCacheNamespace, fp+":"+ln, member)
+			}
 		}
 		// cab (and its decoded-folder cache and the archive bytes) becomes
 		// unreachable here and is collected before the next, larger cabinet opens.

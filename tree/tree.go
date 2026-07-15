@@ -31,6 +31,7 @@ import (
 	"strings"
 
 	"github.com/nradchenko/pe-builder/action"
+	"github.com/nradchenko/pe-builder/buildcache"
 	"github.com/nradchenko/pe-builder/layout"
 	"github.com/nradchenko/pe-builder/source"
 )
@@ -54,7 +55,7 @@ type Result struct {
 // Actions apply in order; a later write to the same path wins. Missing optional
 // files are skipped and recorded; other read/write failures are accumulated and
 // returned together so one bad file does not abort the build.
-func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src source.Backing, origins map[string]fs.FS, outRoot string) (*Result, error) {
+func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src source.Backing, origins map[string]fs.FS, outRoot string, cache *buildcache.Cache) (*Result, error) {
 	res := &Result{}
 	var errs []error
 
@@ -71,7 +72,7 @@ func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src s
 			want[strings.ToLower(a.Src)] = true
 		}
 	}
-	cabs := newCabinets(src, want)
+	cabs := newCabinets(src, want, cache)
 
 	for _, a := range acts {
 		if err := ctx.Err(); err != nil {

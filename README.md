@@ -69,6 +69,12 @@ plugin "explorer-shell" {
 }
 ```
 
+Rebuilding from the same source is faster after the first run: pebuild caches the files it
+decompresses out of the source's large driver cabinets under `~/.cache/pe-builder` and reuses
+them on later builds, so iterating on plugins and settings doesn't repeat the expensive
+extraction each time. Pass `--no-cache` to skip it, `PEBUILD_CACHE_DIR` to relocate the cache,
+or `PEBUILD_NO_CACHE=1` to disable it.
+
 This is early, fast-moving work — details change commit to commit.
 
 ## Inspecting dependencies with `pewalk`

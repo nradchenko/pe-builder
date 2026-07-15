@@ -14,9 +14,67 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/nradchenko/pe-builder/buildcache"
+	"github.com/nradchenko/pe-builder/compress"
 	"github.com/nradchenko/pe-builder/internal/golden"
 	"github.com/nradchenko/pe-builder/source"
 )
+
+// cabMemberKey is the extracted-member cache key pewalk derives for name in cab —
+// a fingerprint of the cabinet's directory region plus the member name.
+func cabMemberKey(t *testing.T, cab []byte, name string) string {
+	t.Helper()
+	n, err := compress.CabinetDirSize(cab)
+	if err != nil {
+		t.Fatalf("CabinetDirSize: %v", err)
+	}
+	return compress.Fingerprint(cab[:n]) + ":" + name
+}
+
+// TestCabMemberCacheHitAndInvalidation checks that extraction serves a cached
+// member on a hit, and — the correctness-critical property — never serves a stale
+// member once the source cabinet changes.
+func TestCabMemberCacheHitAndInvalidation(t *testing.T) {
+	cabA := writeCabinet([]cabMember{{name: "cabmod.dll", data: bytes.Repeat([]byte{0xAA}, 300)}})
+	cache := buildcache.New(t.TempDir())
+
+	// Seed a sentinel under cabA's exact key: a hit must short-circuit extraction
+	// and return it, which proves the key derivation matches between store and read.
+	cache.Put(compress.CabinetCacheNamespace, cabMemberKey(t, cabA, "cabmod.dll"), []byte("SENTINEL"))
+	sA, err := Open(fstest.MapFS{"i386/drivers.cab": {Data: cabA}}, WithCache(cache))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _, err := sA.Read("cabmod.dll"); err != nil {
+		t.Fatal(err)
+	} else if string(got) != "SENTINEL" {
+		t.Fatalf("cache hit not served: got %d bytes, want the seeded sentinel", len(got))
+	}
+
+	// A different cabinet (member resized and rewritten) fingerprints differently,
+	// so the stale sentinel is not served — the real member is decoded instead.
+	realB := bytes.Repeat([]byte{0xBB}, 512)
+	cabB := writeCabinet([]cabMember{{name: "cabmod.dll", data: realB}})
+	sB, err := Open(fstest.MapFS{"i386/drivers.cab": {Data: cabB}}, WithCache(cache))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := sB.Read("cabmod.dll")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) == "SENTINEL" {
+		t.Fatal("stale cache entry served after the source cabinet changed")
+	}
+	if !bytes.Equal(got, realB) {
+		t.Fatalf("cabmod.dll: got %d bytes, want the new member content", len(got))
+	}
+
+	// The miss populated the cache under cabB's key, so the next build reuses it.
+	if cached, ok := cache.Get(compress.CabinetCacheNamespace, cabMemberKey(t, cabB, "cabmod.dll")); !ok || !bytes.Equal(cached, realB) {
+		t.Fatalf("miss did not populate cache under the new key: ok=%v", ok)
+	}
+}
 
 // fixtureSource assembles a small closure that exercises every resolution path:
 //

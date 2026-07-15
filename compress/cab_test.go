@@ -103,6 +103,92 @@ func (b *cabBuilder) build() []byte {
 	return out.Bytes()
 }
 
+// fingerprintOf returns the fingerprint of a cabinet's directory region, the way
+// the extraction stages compute it (over head[:CabinetDirSize]).
+func fingerprintOf(t *testing.T, cab []byte) string {
+	t.Helper()
+	n, err := CabinetDirSize(cab)
+	if err != nil {
+		t.Fatalf("CabinetDirSize: %v", err)
+	}
+	return Fingerprint(cab[:n])
+}
+
+// TestFingerprintInvalidates documents what the extracted-member cache keys off:
+// a fingerprint of the cabinet's directory region (names, sizes, offsets, folder
+// layout, header). Any change a real source cabinet would carry — a member added,
+// resized, renamed, or moved — changes the fingerprint, so a stale member is never
+// served after the source changes.
+func TestFingerprintInvalidates(t *testing.T) {
+	base := func() []byte {
+		b := &cabBuilder{}
+		b.addFolder(
+			cabBuildFile{name: "mouhid.sys", data: bytes.Repeat([]byte{0x11}, 400)},
+			cabBuildFile{name: "mouclass.sys", data: bytes.Repeat([]byte{0x22}, 700)},
+		)
+		return b.build()
+	}
+	baseFP := fingerprintOf(t, base())
+
+	// Identical bytes → identical fingerprint (so the same source reuses its cache).
+	if got := fingerprintOf(t, base()); got != baseFP {
+		t.Errorf("identical cabinet: fingerprint changed\n got %s\nwant %s", got, baseFP)
+	}
+
+	cases := []struct {
+		name  string
+		build func() []byte
+	}{
+		{"resized member", func() []byte {
+			b := &cabBuilder{}
+			b.addFolder(
+				cabBuildFile{name: "mouhid.sys", data: bytes.Repeat([]byte{0x11}, 401)}, // 400 -> 401
+				cabBuildFile{name: "mouclass.sys", data: bytes.Repeat([]byte{0x22}, 700)},
+			)
+			return b.build()
+		}},
+		{"renamed member", func() []byte {
+			b := &cabBuilder{}
+			b.addFolder(
+				cabBuildFile{name: "mouhid2.sys", data: bytes.Repeat([]byte{0x11}, 400)},
+				cabBuildFile{name: "mouclass.sys", data: bytes.Repeat([]byte{0x22}, 700)},
+			)
+			return b.build()
+		}},
+		{"added member", func() []byte {
+			b := &cabBuilder{}
+			b.addFolder(
+				cabBuildFile{name: "mouhid.sys", data: bytes.Repeat([]byte{0x11}, 400)},
+				cabBuildFile{name: "mouclass.sys", data: bytes.Repeat([]byte{0x22}, 700)},
+				cabBuildFile{name: "kbdhid.sys", data: bytes.Repeat([]byte{0x33}, 200)},
+			)
+			return b.build()
+		}},
+	}
+	for _, tc := range cases {
+		if got := fingerprintOf(t, tc.build()); got == baseFP {
+			t.Errorf("%s: fingerprint did not change (%s) — a changed cabinet would serve stale members", tc.name, got)
+		}
+	}
+}
+
+// TestFingerprintPayloadOnlyLimitation records the one change the directory
+// fingerprint does NOT detect: a member's payload edited to the exact same length
+// with identical CFFILE metadata (name, size, offset, date). This is not a
+// real-source scenario — a rebuilt or patched cabinet changes member sizes and
+// timestamps — but it is a known bound of a metadata-only fingerprint, pinned here
+// so a future change to the keying is a deliberate decision.
+func TestFingerprintPayloadOnlyLimitation(t *testing.T) {
+	mk := func(payload byte) []byte {
+		b := &cabBuilder{}
+		b.addFolder(cabBuildFile{name: "mod.sys", data: bytes.Repeat([]byte{payload}, 400)})
+		return b.build()
+	}
+	if fingerprintOf(t, mk(0xAA)) != fingerprintOf(t, mk(0xBB)) {
+		t.Skip("payload-only difference now changes the fingerprint; the cache is stricter than documented")
+	}
+}
+
 func TestCabinetSingleFolderMultiFile(t *testing.T) {
 	b := &cabBuilder{}
 	b.addFolder(

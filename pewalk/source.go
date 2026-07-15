@@ -30,6 +30,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/nradchenko/pe-builder/buildcache"
 	"github.com/nradchenko/pe-builder/compress"
 )
 
@@ -82,6 +83,14 @@ type Source struct {
 	files map[string]string
 	// cab maps a lowercased cabinet-member name to its containing cabinet's path.
 	cab map[string]string
+	// cabFP maps a cabinet's path to a fingerprint of its directory region,
+	// computed once at index time. It keys the extracted-member cache so a member
+	// decompressed on an earlier build of the same source is reused rather than
+	// re-decoded (a full LZX folder decode) here.
+	cabFP map[string]string
+	// cache is the shared on-disk store of extracted cabinet members. It is nil
+	// (disabled) unless the caller passes WithCache; a nil cache always misses.
+	cache *buildcache.Cache
 	// warnings records non-fatal indexing problems (e.g. an unreadable cabinet
 	// whose members were skipped), for the caller to surface.
 	warnings []string
@@ -121,6 +130,16 @@ func (m *parsedModule) imports(includeDelay bool) []string {
 	return mergeImports(m.static, m.delay, includeDelay)
 }
 
+// Option configures a Source at Open time.
+type Option func(*Source)
+
+// WithCache attaches a shared on-disk cache of extracted cabinet members, so a
+// member decompressed on an earlier build of the same source is reused instead of
+// decoded again. A nil cache leaves caching off; the standalone CLI passes none.
+func WithCache(c *buildcache.Cache) Option {
+	return func(s *Source) { s.cache = c }
+}
+
 // Open indexes fsys and returns a Source. It walks the tree once, recording every
 // file by name and enumerating the members of every *.cab cabinet from just the
 // cabinet's directory — its header and file table — without reading the far larger
@@ -128,13 +147,17 @@ func (m *parsedModule) imports(includeDelay bool) []string {
 // are likewise resolved (and decoded) lazily by name. So indexing a source touches
 // only kilobytes of each multi-megabyte cabinet, and a build whose file set is all
 // loose never reads a cabinet's data at all.
-func Open(fsys fs.FS) (*Source, error) {
+func Open(fsys fs.FS, opts ...Option) (*Source, error) {
 	s := &Source{
 		fsys:    fsys,
 		files:   map[string]string{},
 		cab:     map[string]string{},
+		cabFP:   map[string]string{},
 		cabined: map[string]*compress.Cabinet{},
 		parsed:  map[string]*parsedModule{},
+	}
+	for _, o := range opts {
+		o(s)
 	}
 	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -204,6 +227,9 @@ func (s *Source) indexCabinet(p string) error {
 	if err != nil {
 		return err
 	}
+	// Fingerprint the directory region now, while it is in hand, so member
+	// extraction can key the cache without re-reading the cabinet.
+	s.cabFP[p] = compress.Fingerprint(dir)
 	for _, f := range c.Files() {
 		name := strings.ToLower(f.Name)
 		if _, ok := s.cab[name]; !ok {
@@ -211,6 +237,17 @@ func (s *Source) indexCabinet(p string) error {
 		}
 	}
 	return nil
+}
+
+// cabCacheKey returns the extracted-member cache key for name in the cabinet at
+// cabPath, or "" when the cabinet has no fingerprint (so the member is not
+// cacheable and extraction must decode it).
+func (s *Source) cabCacheKey(cabPath, name string) string {
+	fp := s.cabFP[cabPath]
+	if fp == "" {
+		return ""
+	}
+	return fp + ":" + strings.ToLower(name)
 }
 
 // readCabinetDir returns the directory region (header, folders, file entries; up to
@@ -366,9 +403,19 @@ func (s *Source) readFile(p string) ([]byte, Origin, error) {
 	return raw, Origin{Kind: OriginLoose, Path: p}, nil
 }
 
-// readCabMember extracts name from the cabinet at cabPath, reusing the framing
-// parsed at index time.
+// readCabMember extracts name from the cabinet at cabPath. On a cache hit it
+// returns the stored member bytes without opening or decoding the cabinet — the
+// point of the cache, since extraction otherwise decodes the whole (up to
+// hundreds of megabytes) LZX folder the member lives in. On a miss it decodes via
+// the framing parsed at index time and stores the result for the next build.
 func (s *Source) readCabMember(cabPath, name string) ([]byte, Origin, error) {
+	origin := Origin{Kind: OriginCab, Path: cabPath}
+	key := s.cabCacheKey(cabPath, name)
+	if key != "" {
+		if data, ok := s.cache.Get(compress.CabinetCacheNamespace, key); ok {
+			return data, origin, nil
+		}
+	}
 	c, err := s.cabinet(cabPath)
 	if err != nil {
 		return nil, Origin{}, err
@@ -381,7 +428,10 @@ func (s *Source) readCabMember(cabPath, name string) ([]byte, Origin, error) {
 	if err != nil {
 		return nil, Origin{}, fmt.Errorf("extract %s from %s: %w", name, cabPath, err)
 	}
-	return data, Origin{Kind: OriginCab, Path: cabPath}, nil
+	if key != "" {
+		s.cache.Put(compress.CabinetCacheNamespace, key, data)
+	}
+	return data, origin, nil
 }
 
 // cabinet returns the parsed cabinet at p, parsing (and caching) it on first use.

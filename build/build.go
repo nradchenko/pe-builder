@@ -16,10 +16,12 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/nradchenko/pe-builder/action"
 	"github.com/nradchenko/pe-builder/base"
 	"github.com/nradchenko/pe-builder/boot"
+	"github.com/nradchenko/pe-builder/buildcache"
 	"github.com/nradchenko/pe-builder/inifile"
 	"github.com/nradchenko/pe-builder/layout"
 	"github.com/nradchenko/pe-builder/manifest"
@@ -52,12 +54,31 @@ type Report struct {
 	Errors []error
 }
 
+// Option configures a build run.
+type Option func(*options)
+
+type options struct {
+	cache *buildcache.Cache
+}
+
+// WithCache supplies the on-disk cache of extracted cabinet members, reused across
+// rebuilds of the same source to skip the LZX folder decode. Omitting it (the
+// default) leaves caching off, so the library never writes to disk unbidden; the
+// CLI opts in. A nil cache is equivalent to omitting it.
+func WithCache(c *buildcache.Cache) Option {
+	return func(o *options) { o.cache = c }
+}
+
 // Build runs the pipeline for a validated manifest and returns its report. It fails
 // (returns a non-nil error) only on a pipeline-fatal problem — an unreadable source,
 // a source that is too old, or unreadable layout metadata. Per-file copy failures are
 // collected in the report instead, mirroring the original tool's "number of errors"
 // exit semantics.
-func Build(ctx context.Context, m *manifest.Manifest) (*Report, error) {
+func Build(ctx context.Context, m *manifest.Manifest, opts ...Option) (*Report, error) {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
 	src, err := source.Open(m.Source.Path)
 	if err != nil {
 		return nil, err
@@ -96,7 +117,7 @@ func Build(ctx context.Context, m *manifest.Manifest) (*Report, error) {
 	}
 	defer cleanupBuilds()
 
-	rep, err := assemble(ctx, src.Backing(), id, outDir, selected)
+	rep, err := assemble(ctx, src.Backing(), id, outDir, selected, o.cache)
 	if err != nil {
 		return nil, err
 	}
@@ -129,37 +150,46 @@ func Build(ctx context.Context, m *manifest.Manifest) (*Report, error) {
 // source layout is available, so files.exclude can match a copy by its resolved output
 // path — and apply after the base layer, last-writer-wins. Their file origins let the
 // tree assembler read a file a plugin ships from the plugin rather than the source.
-func assemble(ctx context.Context, backing source.Backing, id source.Identity, outDir string, selected []plugin.Selected) (*Report, error) {
+func assemble(ctx context.Context, backing source.Backing, id source.Identity, outDir string, selected []plugin.Selected, cache *buildcache.Cache) (*Report, error) {
+	t := time.Now()
 	l, err := layout.Parse(backing, id)
 	if err != nil {
 		return nil, fmt.Errorf("read source layout: %w", err)
 	}
+	slog.Debug("stage done", "stage", "layout", "elapsed", time.Since(t))
 	// Index the source for the base layer's import-closure scanners, so the file set is
 	// computed from the source's own PE dependency graph rather than hand-listed.
-	pw, err := pewalk.Open(backing)
+	t = time.Now()
+	pw, err := pewalk.Open(backing, pewalk.WithCache(cache))
 	if err != nil {
 		return nil, fmt.Errorf("index source: %w", err)
 	}
+	slog.Debug("stage done", "stage", "index-source", "elapsed", time.Since(t))
 	for _, warn := range pw.Warnings() {
 		slog.Warn("source index", "warning", warn)
 	}
+	t = time.Now()
 	acts, err := base.Actions(pw, l, id)
 	if err != nil {
 		return nil, fmt.Errorf("evaluate base layer: %w", err)
 	}
+	slog.Debug("stage done", "stage", "base-actions", "elapsed", time.Since(t))
 	// The base layer is not a plugin; the enabled plugins layer on top of it, in load
 	// order, so a later plugin's write wins over the base and earlier plugins. Plugin
 	// copies resolve their output path through the same layout the tree uses, so a
 	// manifest exclude can suppress one by its destination.
+	t = time.Now()
 	pluginActs, origins, err := plugin.Compile(selected, pw, func(a action.Action) string {
 		return tree.OutputPath(a, l)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("evaluate plugins: %w", err)
 	}
+	slog.Debug("stage done", "stage", "plugin-compile", "elapsed", time.Since(t))
 	acts = append(acts, pluginActs...)
 
-	res, err := tree.Assemble(ctx, acts, l, backing, origins, outDir)
+	t = time.Now()
+	res, err := tree.Assemble(ctx, acts, l, backing, origins, outDir, cache)
 	if err != nil && ctx.Err() != nil {
 		// A cancelled build is fatal — the tree is aborted mid-assembly — not a
 		// per-file error to be reported and shrugged off.
@@ -174,17 +204,20 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 	if err != nil {
 		rep.Errors = append(rep.Errors, err)
 	}
+	slog.Debug("stage done", "stage", "tree-assemble", "elapsed", time.Since(t))
 
 	// Build the registry hives from the source's base hive material overlaid with
 	// the registry actions, and place them in the tree's config folder. This is a
 	// pipeline-fatal step: a build with no loadable SYSTEM hive cannot boot. It also
 	// honors cancellation, so a build cancelled just as tree assembly finished does
 	// not run the full hive read/serialize/write and report success.
+	t = time.Now()
 	hives, err := buildHives(ctx, backing, l, acts, needsMachineClasses(selected), outDir)
 	if err != nil {
 		return nil, fmt.Errorf("build registry hives: %w", err)
 	}
 	rep.Hives = hives
+	slog.Debug("stage done", "stage", "build-hives", "elapsed", time.Since(t))
 	slog.Info("built registry hives", "count", len(hives))
 
 	if err := configure(outDir, acts, res.Written); err != nil {

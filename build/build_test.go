@@ -99,7 +99,7 @@ func TestAssemblePipeline(t *testing.T) {
 	}
 
 	out := t.TempDir()
-	rep, err := assemble(context.Background(), backing, id, out, nil)
+	rep, err := assemble(context.Background(), backing, id, out, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestAssembleWithPlugin(t *testing.T) {
 	}}
 
 	out := t.TempDir()
-	rep, err := assemble(context.Background(), backing, id, out, selected)
+	rep, err := assemble(context.Background(), backing, id, out, selected, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +398,7 @@ func TestAssembleBuiltPlugin(t *testing.T) {
 	defer cleanup()
 
 	out := t.TempDir()
-	rep, err := assemble(context.Background(), backing, id, out, selected)
+	rep, err := assemble(context.Background(), backing, id, out, selected, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -629,7 +629,7 @@ func TestAssembleCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	rep, err := assemble(ctx, backing, id, t.TempDir(), nil)
+	rep, err := assemble(ctx, backing, id, t.TempDir(), nil, nil)
 	if err == nil {
 		t.Fatalf("assemble with a cancelled context returned no error (rep=%+v)", rep)
 	}

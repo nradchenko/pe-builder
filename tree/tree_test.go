@@ -60,7 +60,7 @@ func TestAssemble(t *testing.T) {
 		{Kind: action.CopyFile, Src: "missing.dll", Optional: true}, // absent, optional → skipped
 	}
 
-	res, err := Assemble(context.Background(), acts, testLayout(), src, nil, out)
+	res, err := Assemble(context.Background(), acts, testLayout(), src, nil, out, nil)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestAssembleOrigin(t *testing.T) {
 		{Kind: action.CopyFile, Src: "loose.txt", DirID: "2"},
 	}
 
-	res, err := Assemble(context.Background(), acts, testLayout(), src, origins, out)
+	res, err := Assemble(context.Background(), acts, testLayout(), src, origins, out, nil)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestAssembleOriginMissingIsError(t *testing.T) {
 	acts := []action.Action{
 		{Kind: action.CopyFile, Src: "loose.txt", DirID: "2", Origin: "plug"},
 	}
-	if _, err := Assemble(context.Background(), acts, testLayout(), src, origins, t.TempDir()); err == nil {
+	if _, err := Assemble(context.Background(), acts, testLayout(), src, origins, t.TempDir(), nil); err == nil {
 		t.Fatal("Assemble placed an un-shipped Origin file from the source; want an error")
 	}
 }
@@ -142,7 +142,7 @@ func TestAssemblePluginDir(t *testing.T) {
 		{Kind: action.CopyFile, Src: "tool.exe", Origin: "plug", DirID: "q", Path: `programs\mytool`},
 		{Kind: action.CopyFile, Src: "read.me", Origin: "plug", DirID: "r", Path: "Docs", FromRoot: true},
 	}
-	res, err := Assemble(context.Background(), acts, testLayout(), testSource(t), origins, out)
+	res, err := Assemble(context.Background(), acts, testLayout(), testSource(t), origins, out, nil)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestAssemblePluginDir(t *testing.T) {
 func TestAssembleRequiredMissing(t *testing.T) {
 	src := testSource(t)
 	acts := []action.Action{{Kind: action.CopyFile, Src: "nope.dll"}}
-	_, err := Assemble(context.Background(), acts, testLayout(), src, nil, t.TempDir())
+	_, err := Assemble(context.Background(), acts, testLayout(), src, nil, t.TempDir(), nil)
 	if err == nil {
 		t.Fatal("Assemble with a missing required file returned no error")
 	}
@@ -182,7 +182,7 @@ func TestAssembleSourcePath(t *testing.T) {
 		{Kind: action.CopyFile, SrcPath: "asms/6000/controls/comctl32.dll", Dest: "i386/WinSxS/asm/comctl32.dll"},
 		{Kind: action.CopyFile, SrcPath: "asms/6000/controls/controls.man", Dest: "i386/WinSxS/Manifests/asm.manifest"},
 	}
-	res, err := Assemble(context.Background(), acts, testLayout(), src, nil, out)
+	res, err := Assemble(context.Background(), acts, testLayout(), src, nil, out, nil)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestAssembleSourcePathMissing(t *testing.T) {
 	acts := []action.Action{
 		{Kind: action.CopyFile, SrcPath: "asms/6000/controls/comctl32.dll", Dest: "i386/WinSxS/asm/comctl32.dll"},
 	}
-	_, err := Assemble(context.Background(), acts, testLayout(), fstest.MapFS{}, nil, t.TempDir())
+	_, err := Assemble(context.Background(), acts, testLayout(), fstest.MapFS{}, nil, t.TempDir(), nil)
 	if err == nil {
 		t.Fatal("missing [SourcePaths] source returned no error")
 	}
@@ -222,7 +222,7 @@ func TestMkdir(t *testing.T) {
 		{Kind: action.Mkdir, DirID: "y", Path: "docs", FromRoot: true},
 		{Kind: action.Mkdir, DirID: "z", Path: `system32\config`}, // backslash nested path
 	}
-	if _, err := Assemble(context.Background(), acts, testLayout(), testSource(t), nil, out); err != nil {
+	if _, err := Assemble(context.Background(), acts, testLayout(), testSource(t), nil, out, nil); err != nil {
 		t.Fatal(err)
 	}
 	assertDir(t, filepath.Join(out, "i386", "programs")) // under the system root

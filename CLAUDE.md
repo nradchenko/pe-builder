@@ -62,6 +62,14 @@ PE dependencies.
   cabinet-packed forms) and reporting missing modules as flagged red herrings. Renders
   the closure as text, Graphviz DOT, or JSON. Backs both `cmd/pewalk` and the durable
   import-walk scanners.
+- `buildcache/` — a small, generic on-disk cache (namespace + caller-supplied key →
+  bytes) shared by build stages that recompute deterministic artifacts from an unchanging
+  source. Its current use is decompressed driver-cabinet members (keyed by a fingerprint
+  of the cabinet's directory region plus the member name), which both the import-closure
+  walk and the tree assembler consult so a member decoded on an earlier build of the same
+  source is reused instead of re-running a full LZX folder decode. Enabled by default
+  (`~/.cache/pe-builder`); `--no-cache`, `PEBUILD_NO_CACHE`, and `PEBUILD_CACHE_DIR` control
+  it. A nil cache is a valid disabled cache, so a stage holds one unconditionally.
 - `plugins/` — the built-in plugins bundled with pebuild (embedded via `go:embed`),
   each a directory with an `.inf`; a build-capable one (e.g. `poweroff`) ships source
   and a `[Build]` declaration, not a prebuilt binary; a closure-computed one (e.g.

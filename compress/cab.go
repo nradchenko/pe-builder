@@ -11,7 +11,9 @@ package compress
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -174,6 +176,23 @@ func ReadCabinet(data []byte) (*Cabinet, error) {
 		})
 	}
 	return c, nil
+}
+
+// CabinetCacheNamespace is the buildcache namespace under which extracted cabinet
+// members are stored. Every stage that extracts members (the import-closure walk
+// and the tree assembler) must use it so they share one cache keyed by
+// Fingerprint(directory) + member name.
+const CabinetCacheNamespace = "cab"
+
+// Fingerprint returns a stable hex digest of a cabinet's directory region — the
+// header, folder, and file tables that ReadCabinet parses (see CabinetDirSize).
+// Two cabinets with the same members, sizes, folders, and layout hash identically,
+// so it keys a cache of extracted members off the source's own metadata without
+// hashing the far larger compressed payloads. Pass exactly the directory-region
+// bytes: the whole file for a small cabinet, or head[:CabinetDirSize(head)].
+func Fingerprint(dirRegion []byte) string {
+	sum := sha256.Sum256(dirRegion)
+	return hex.EncodeToString(sum[:])
 }
 
 // CabinetDirSize returns the byte length of an MSCF cabinet's directory region — the

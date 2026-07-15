@@ -6,15 +6,18 @@ package main
 import (
 	"fmt"
 	"io"
+	"log/slog"
 
 	"github.com/spf13/cobra"
 
 	"github.com/nradchenko/pe-builder/build"
+	"github.com/nradchenko/pe-builder/buildcache"
 	"github.com/nradchenko/pe-builder/manifest"
 )
 
 func newBuildCmd() *cobra.Command {
 	var allowPluginBuilds bool
+	var noCache bool
 	cmd := &cobra.Command{
 		Use:   "build [manifest.hcl]",
 		Short: "Build a bootable image from a manifest",
@@ -46,7 +49,18 @@ func newBuildCmd() *cobra.Command {
 				m.Build.AllowPluginBuilds = true
 			}
 
-			rep, err := build.Build(cmd.Context(), m)
+			// Reuse decompressed driver-cabinet members across rebuilds of the same
+			// source (the expensive LZX decodes), unless disabled. Enabled by default;
+			// PEBUILD_NO_CACHE / PEBUILD_CACHE_DIR also apply (see buildcache.Open).
+			var cache *buildcache.Cache
+			if !noCache {
+				cache = buildcache.Open()
+			}
+			if cache.Enabled() {
+				slog.Debug("build cache", "dir", cache.Dir())
+			}
+
+			rep, err := build.Build(cmd.Context(), m, build.WithCache(cache))
 			if err != nil {
 				return fmt.Errorf("build: %w", err)
 			}
@@ -63,6 +77,8 @@ func newBuildCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&allowPluginBuilds, "allow-plugin-builds", false,
 		"allow a user-supplied plugin's [Build] section to run its command")
+	cmd.Flags().BoolVar(&noCache, "no-cache", false,
+		"do not reuse (or write) cached driver-cabinet extractions between builds")
 	return cmd
 }
 
