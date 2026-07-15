@@ -28,5 +28,5 @@ func openISO(path string) (Backing, error) {
 	if !ok {
 		return nil, fmt.Errorf("iso %q: filesystem does not support random-access reads", path)
 	}
-	return normFS{fsys: fsys}, nil
+	return newNormFS(fsys), nil
 }

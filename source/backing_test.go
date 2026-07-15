@@ -102,7 +102,7 @@ func TestOpenSurfacesRealError(t *testing.T) {
 	// even when its message contains not-found-sounding words (which the old
 	// substring classifier would have misread).
 	sentinel := errors.New("iso read failed: sector not found")
-	backing := normFS{fsys: errFS{err: sentinel}}
+	backing := newNormFS(errFS{err: sentinel})
 	_, err := backing.Open("I386/NTDLL.DLL")
 	if !errors.Is(err, sentinel) {
 		t.Errorf("Open error = %v, want the original sentinel", err)

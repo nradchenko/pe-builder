@@ -19,5 +19,5 @@ func openDir(path string) (Backing, error) {
 	if !info.IsDir() {
 		return nil, &fs.PathError{Op: "opendir", Path: path, Err: fs.ErrInvalid}
 	}
-	return normFS{fsys: os.DirFS(path)}, nil
+	return newNormFS(os.DirFS(path)), nil
 }
