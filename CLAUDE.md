@@ -74,17 +74,20 @@ PE dependencies.
   each a directory with an `.inf`; a build-capable one (e.g. `poweroff`) ships source
   and a `[Build]` declaration, not a prebuilt binary; a closure-computed one (e.g.
   `win32-gui`, the shared GUI runtime) declares a `[Closure]` seed instead of a hand
-  file list. The desktop composes from four: `storage-pnp` rebuilds the PnP root device
+  file list. The desktop composes from six: `storage-pnp` rebuilds the PnP root device
   tree so disks/volumes enumerate and get a drive letter; `ramdrive` is a build-capable
   plugin shipping a from-scratch WDM PnP kernel driver (`ramdrive.sys`, cross-compiled with
   MinGW-w64, no WDK) that allocates a RAM-backed disk, self-formats it as a FAT16
   super-floppy, and registers the Mount Manager interface so the volume gets a drive letter —
   a writable scratch home for the profile with no attached disk; `win32-gui` provides the
-  shared Win32 GUI runtime; and `explorer-shell` boots to a Windows Explorer desktop instead
+  shared Win32 GUI runtime; `system-tools` and `accessories` add optional GUI utilities
+  (system-administration tools and small accessories), each computing its file set from a
+  `[Closure]` seed and contributing Start-menu entries through the shell's registry contract;
+  and `explorer-shell` boots to a Windows Explorer desktop instead
   of a bare prompt — it ships `peshell` (a build-capable launcher that self-registers the
   shell/COM components at runtime, sets up the profile, applies a classic no-frills desktop,
   and runs explorer) and `peshut` (a hook so the shell's Turn Off powers the machine off),
-  and depends on the other three.
+  and depends on the others.
 - `internal/` — support packages: `golden` (golden-file test helper), `buildinfo`
   (version metadata).
 - `docs/` — project documentation.

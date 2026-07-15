@@ -1,0 +1,23 @@
+; Copyright 2026 Nikita Radchenko
+; SPDX-License-Identifier: Apache-2.0
+;
+; system-tools — GUI system-administration tools for the PE.
+; Off by default; auto-enabled by dependents or enabled directly.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "System tools"
+Enable = 0
+
+[Update]
+depends = win32-gui
+
+[Closure]
+regedit.exe
+taskmgr.exe
+
+[Software.AddReg]
+0x2,"pe-builder\StartMenu","Registry Editor","%SystemRoot%\regedit.exe"
+0x2,"pe-builder\StartMenu","Task Manager","%SystemRoot%\system32\taskmgr.exe"

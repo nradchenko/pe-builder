@@ -10,14 +10,13 @@ package plugins
 
 import "embed"
 
-// FS holds the built-in plugin directories, each a top-level entry. Built-in plugins
-// are embedded by their source files explicitly (not whole directories), so a binary
-// left in a plugin dir by a local `make` can never be bundled — built-in plugins ship
-// source only.
+// FS holds the built-in plugin directories. Every plugin's .inf is embedded by one glob,
+// so adding a declarative plugin needs no change here. A build-capable plugin's source (its
+// .c and Makefile) is listed explicitly instead of embedding the whole directory, so a
+// binary a local `make` leaves in the dir can never be bundled — built-ins ship source only.
 //
-//go:embed poweroff/poweroff.inf poweroff/poweroff.c poweroff/Makefile
-//go:embed win32-gui/win32-gui.inf
-//go:embed storage-pnp/storage-pnp.inf
-//go:embed ramdrive/ramdrive.inf ramdrive/ramdrive.c ramdrive/Makefile
-//go:embed explorer-shell/explorer-shell.inf explorer-shell/peshell.c explorer-shell/peshut.c explorer-shell/Makefile
+//go:embed */*.inf
+//go:embed poweroff/poweroff.c poweroff/Makefile
+//go:embed ramdrive/ramdrive.c ramdrive/Makefile
+//go:embed explorer-shell/peshell.c explorer-shell/peshut.c explorer-shell/Makefile
 var FS embed.FS

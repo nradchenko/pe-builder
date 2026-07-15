@@ -18,7 +18,7 @@ Name = "Explorer shell"
 Enable = 0
 
 [Update]
-depends = win32-gui, storage-pnp, ramdrive
+depends = win32-gui, storage-pnp, ramdrive, system-tools, accessories
 
 [Build]
 Requires = i686-w64-mingw32-gcc make

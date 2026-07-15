@@ -1,0 +1,23 @@
+; Copyright 2026 Nikita Radchenko
+; SPDX-License-Identifier: Apache-2.0
+;
+; accessories — small GUI accessory apps for the PE.
+; Off by default; auto-enabled by dependents or enabled directly.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "Accessories"
+Enable = 0
+
+[Update]
+depends = win32-gui
+
+[Closure]
+clipbrd.exe
+mspaint.exe
+
+[Software.AddReg]
+0x2,"pe-builder\StartMenu","Clipboard Viewer","%SystemRoot%\system32\clipbrd.exe"
+0x2,"pe-builder\StartMenu","Paint","%SystemRoot%\system32\mspaint.exe"

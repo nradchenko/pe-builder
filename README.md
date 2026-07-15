@@ -38,11 +38,10 @@ Early development. A build produces a bootable PE that reaches an interactive
 source's own locale. The plugin subsystem is wired up: builds apply the plugins a
 manifest enables, and pebuild ships a set of built-ins. As an early proof of concept,
 the `explorer-shell` plugin boots to a minimal **Windows Explorer desktop** — Start
-menu, taskbar, and Control Panel — self-contained from CD alone, composing the shared
-`win32-gui` runtime, `storage-pnp` for drive-letter assignment, and a from-scratch
-`ramdrive` that supplies the writable profile volume with no attached disk. `poweroff`
-adds a shutdown / power-off command compiled from source at build time. See
-[`docs/plugins/`](docs/plugins/) to use or write plugins.
+menu, taskbar, and Control Panel — self-contained from CD alone, with a writable
+RAM-backed profile and no attached disk; enabling it auto-enables the supporting plugins
+it needs. A `poweroff` command, compiled from source at build time, ships enabled by
+default. See [`docs/plugins/`](docs/plugins/) to use or write plugins.
 
 ## Quick start
 
@@ -59,9 +58,9 @@ go build -o pebuild ./cmd/pebuild
 qemu-system-i386 -M pc -m 512 -cdrom out/pe.iso -boot d
 ```
 
-The ISO boots to an interactive `cmd.exe`. Enable the `explorer-shell` plugin (it pulls in
-`win32-gui` and `storage-pnp`) to boot to a Windows Explorer desktop instead — a classic
-Start menu, taskbar, and Control Panel:
+The ISO boots to an interactive `cmd.exe`. Enable the `explorer-shell` plugin — its
+supporting plugins are pulled in automatically — to boot to a Windows Explorer desktop
+instead, with a classic Start menu, taskbar, and Control Panel:
 
 ```hcl
 plugin "explorer-shell" {
