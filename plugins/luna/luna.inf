@@ -1,0 +1,78 @@
+; Copyright 2026 Nikita Radchenko
+; SPDX-License-Identifier: Apache-2.0
+;
+; luna — the Windows XP "Luna" visual style for the Explorer desktop, which otherwise renders in
+; the classic (Windows 2000) look.
+;
+; Stages and configures only: it ships no code and needs no toolchain. peshell (from
+; explorer-shell) applies whatever style [Default.AddReg] selects here. See README.md.
+;
+; Off by default. Enabling it auto-enables the desktop it themes and the session it needs.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "Luna visual style"
+Enable = 0
+
+; explorer-shell = the desktop this themes, the applier (peshell), and uxtheme.dll.
+; terminal-services = the console session the theme server attaches to.
+; See README.md § What it takes to theme a PE.
+[Update]
+depends = explorer-shell, terminal-services
+
+; The Themes service host: svchost loads this DLL (ThemeServiceMain), and its client half is what
+; peshell talks to. Its static closure is common runtime already present, so this stages shsvcs
+; itself.
+[Closure]
+shsvcs.dll
+
+; The visual style lives outside the flat system32 view, under Resources\Themes.
+[WinntDirectories]
+a = "Resources\Themes\Luna"
+b = "Resources\Themes"
+
+; luna.msstyles and its .theme descriptor go under Resources\Themes; both have long extensions
+; the install media truncates to an 8.3 name and stores compressed (LUNA.MS_, LUNA.TH_), so they
+; are sourced by that 8.3 name and renamed to the long name Windows expects.
+[SourceDisksFiles]
+luna.mss = a, luna.msstyles
+luna.the = b, luna.theme
+; Luna's caption font. Only the files are needed — the SOFTWARE hive already registers them by
+; name. See README.md § Fonts.
+trebuc.ttf   = 22
+trebucbd.ttf = 22
+
+; --- The Themes service (SYSTEM hive) ---
+; hivesys.inf does not carry it, so define it here: a svchost-hosted Win32 service (Type 0x20) in
+; its own group, auto-start, whitelisted for the setup-mode SCM.
+; See README.md § What it takes to theme a PE.
+[SetupReg.AddReg]
+0x4,"ControlSet001\Services\Themes","Type",0x20
+0x4,"ControlSet001\Services\Themes","Start",0x2
+0x4,"ControlSet001\Services\Themes","ErrorControl",0x1
+0x2,"ControlSet001\Services\Themes","ImagePath","%SystemRoot%\System32\svchost.exe -k Themes"
+0x1,"ControlSet001\Services\Themes","ObjectName","LocalSystem"
+0x1,"ControlSet001\Services\Themes","DisplayName","Themes"
+0x1,"ControlSet001\Services\Themes","Group","UIGroup"
+0x2,"ControlSet001\Services\Themes\Parameters","ServiceDll","%SystemRoot%\System32\shsvcs.dll"
+0x1,"ControlSet001\Services\Themes\Parameters","ServiceMain","ThemeServiceMain"
+0x1,"Setup\AllowStart\Themes"
+
+; --- svchost group + fonts (SOFTWARE hive) ---
+; The "Themes" svchost group lists the one service svchost -k Themes hosts.
+[Software.AddReg]
+0x7,"Microsoft\Windows NT\CurrentVersion\Svchost","Themes","Themes"
+
+; --- Theme selection for the (default) user the PE runs as (DEFAULT hive) ---
+; The contract with peshell: it reads these four values at shell start and applies the style they
+; name. DEFAULT because the PE runs as SYSTEM with no profile loaded, so HKCU is HKU\.DEFAULT.
+; DllName must stay REG_EXPAND_SZ — the system drive is not C:. ColorName/SizeName select blue at
+; normal size; the olive and silver schemes and the larger sizes work too.
+; See README.md § The contract with peshell and § Colour schemes and sizes.
+[Default.AddReg]
+0x1,"Software\Microsoft\Windows\CurrentVersion\ThemeManager","ThemeActive","1"
+0x2,"Software\Microsoft\Windows\CurrentVersion\ThemeManager","DllName","%SystemRoot%\Resources\Themes\Luna\Luna.msstyles"
+0x1,"Software\Microsoft\Windows\CurrentVersion\ThemeManager","ColorName","NormalColor"
+0x1,"Software\Microsoft\Windows\CurrentVersion\ThemeManager","SizeName","NormalSize"
