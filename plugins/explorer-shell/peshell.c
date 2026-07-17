@@ -12,6 +12,7 @@
 #include <shlobj.h>
 
 typedef HRESULT (WINAPI *DLLINSTALL)(BOOL, LPCWSTR);
+typedef HRESULT (WINAPI *DLLREGISTER)(void);
 
 static const char *kProfileDirs[] = {
     "", "\\Desktop", "\\Start Menu", "\\Start Menu\\Programs", "\\Start Menu\\Programs\\Startup",
@@ -52,11 +53,21 @@ static void wait_services(void){
     }
 }
 
-/* Self-register one shell/COM DLL through its own DllInstall entry point. Best-effort. */
+/* Self-register one shell/COM DLL through its own DllInstall entry point. Best-effort.
+ * NOTE: DllInstall's argument is DLL-specific — each one parses the string itself, and a value
+ * it does not recognise is silently ignored, so this call is only as good as the arg. */
 static void dll_install(const char *dll, const WCHAR *arg){
     HMODULE h=LoadLibraryA(dll); if(!h) return;
     DLLINSTALL p=(DLLINSTALL)GetProcAddress(h,"DllInstall");
     if(p) p(TRUE,arg);
+}
+
+/* Register a plain COM server's classes (DllRegisterServer) — the standard entry point, unlike
+ * the shell DLLs above whose DllInstall takes a private argument. Best-effort. */
+static void dll_register(const char *dll){
+    HMODULE h=LoadLibraryA(dll); if(!h) return;
+    DLLREGISTER p=(DLLREGISTER)(void*)GetProcAddress(h,"DllRegisterServer");
+    if(p) p();
 }
 
 /* The shell/COM self-registration pass (see README.md § Self-registration). Only the complete
@@ -77,6 +88,12 @@ static void self_register_shell(void){
     }
     dll_install("urlmon.dll",   L"i,HKLM");
     dll_install("shell32.dll",  L"U");
+    /* Display Properties builds its pages by CLSID, and themeui is a self-registering COM server:
+     * staged but inert until its classes exist, so the applet dies before it can show anything.
+     * It needs DllRegisterServer, NOT the DllInstall pass above — themeui's DllInstall only
+     * recognises "/UserInstall" and "/InstallVS:" and ignores anything else, so registering it
+     * that way is a silent no-op. Done last so it cannot perturb the sequence above. */
+    dll_register("themeui.dll");
 }
 
 static BOOL run_and_wait(const char *cmdline){
@@ -240,7 +257,10 @@ static DWORD WINAPI SplashThread(LPVOID p){
     DWORD style=WS_POPUP|WS_CAPTION;           /* "Please wait..." title bar + border, no sysmenu */
     RECT wr={0,0,g_bw,g_bh+36}; AdjustWindowRect(&wr,style,FALSE);
     int ww=wr.right-wr.left, wh=wr.bottom-wr.top;
-    g_splash=CreateWindowExA(WS_EX_TOPMOST,"peshell_splash","Please wait...",style,
+    /* WS_EX_TOOLWINDOW keeps the splash out of the taskbar: it is still on screen when explorer
+     * starts, and explorer gives every ordinary top-level window a button as it enumerates them —
+     * so without this a button for it flashes up and vanishes as the splash closes. */
+    g_splash=CreateWindowExA(WS_EX_TOPMOST|WS_EX_TOOLWINDOW,"peshell_splash","Please wait...",style,
         (sw-ww)/2,(sh-wh)/2,ww,wh,NULL,NULL,wc.hInstance,NULL);
     if(g_splash){
         ShowWindow(g_splash,SW_SHOW); UpdateWindow(g_splash);
@@ -262,6 +282,114 @@ static void splash_status(const char *msg){
     if(g_splash) PostMessageA(g_splash,WM_SPLASH_UPDATE,0,0);
 }
 static void splash_close(void){ if(g_splash){ PostMessageA(g_splash,WM_CLOSE,0,0); g_splash=NULL; } }
+
+/* --- Visual style -----------------------------------------------------------------------
+ * Apply the visual style the registry selects, the way Windows does at logon: there, winlogon
+ * loads msgina.dll, which delay-loads SHSVCS.dll — the Themes service's *client* side — and drives
+ * the apply before starting the shell. peshell stands in for winlogon here and does the same.
+ *
+ * Why this is peshell's job and not the Themes service's, and why it must be done by something
+ * long-lived (both read out of the binaries, not assumed):
+ *   - The service cannot apply a style itself. shsvcs delay-imports uxtheme ordinals 20-33/63/66
+ *     but NOT #34, the RegisterUserApiHook path: the theme hook is always installed by the client,
+ *     in the client's own process.
+ *   - The hook lives exactly as long as that client's \ThemeApiPort connection — shsvcs imports
+ *     UnregisterUserApiHook and drops the hook when the client goes. peshell runs for the life of
+ *     the shell, so it can hold it; a helper that applied the style and exited would have it torn
+ *     down a second later.
+ *
+ * The client API, as read from shsvcs.dll itself (msgina drives the same ordinals, which is why it
+ * imports 1-6 rather than just the apply):
+ *   Ordinal_2(dwTimeoutMs) -> 0 ok, 0x102 (WAIT_TIMEOUT) on failure. Waits up to dwTimeoutMs for
+ *       the Themes service to reach RUNNING (it opens the SCM and polls QueryServiceStatus every
+ *       50ms itself, so we need no wait of our own), connects this process's \ThemeApiPort client,
+ *       allocates its session context, and turns the theme hooks on. This one call is the whole
+ *       activation: IsThemeActive is already true when it returns.
+ * Everything is resolved dynamically and every step is best-effort: with no visual-style plugin
+ * enabled nothing is selected in the registry and this returns at the first check — and shsvcs.dll
+ * isn't even staged. Such a PE keeps the classic look, exactly as before. */
+typedef DWORD (WINAPI *THEMECONNECT)(DWORD);
+typedef HRESULT (WINAPI *SETSYSVS)(LPCWSTR,LPCWSTR,LPCWSTR,DWORD);
+
+/* Read one ThemeManager value, expanding it if it is a REG_EXPAND_SZ path. Returns FALSE unless
+ * `out` ends up holding the whole value: a caller that acts on a half-expanded path would fail
+ * later and silently (a theme that just never appears), so refuse it here instead. */
+static BOOL theme_value(HKEY k,const WCHAR *name,WCHAR *out,DWORD count){
+    WCHAR raw[MAX_PATH]; DWORD type=0,cb=sizeof raw;
+    if(RegQueryValueExW(k,name,NULL,&type,(BYTE*)raw,&cb)!=ERROR_SUCCESS) return FALSE;
+    /* Only a string is a string — a value of any other type would otherwise be copied out as
+     * WCHARs and used as a path. */
+    if(type!=REG_SZ && type!=REG_EXPAND_SZ) return FALSE;
+    raw[MAX_PATH-1]=0;
+    if(!raw[0]) return FALSE;
+    if(type==REG_EXPAND_SZ){
+        /* ExpandEnvironmentStringsW returns the REQUIRED size when the buffer is too small — a
+         * non-zero value with `out` left truncated — so testing for 0 alone would accept it. */
+        DWORD n=ExpandEnvironmentStringsW(raw,out,count);
+        if(n==0 || n>count) return FALSE;
+    }
+    else lstrcpynW(out,raw,count);
+    return out[0]!=0;
+}
+
+/* Wait (bounded) for the session subsystem before touching the theme stack. winsrv brings the
+ * WinStation subsystem up only once termsrv signals this event, and the theme hooks live in that
+ * subsystem, so applying before it is up would fail silently (a classic desktop, no error). Gate
+ * on the event being SIGNALLED rather than on termsrv reporting RUNNING: it announces RUNNING
+ * early and signals only at the end of the path that creates the WinStation port.
+ *
+ * Keep the bound SHORT. This runs on the boot path, before explorer is launched, so every second
+ * waited is a second of no desktop — and the only thing a timeout costs is the theme. It has
+ * measured 0ms on every boot (termsrv is long up by the time the shell registration finishes), so
+ * this is headroom for a slower machine, not a fix for anything observed; a PE where the stack
+ * never comes up must reach its desktop promptly, not minutes late. */
+static BOOL wait_session_stack(int secs){
+    for(int k=0;k<secs*2;k++){
+        HANDLE ev=OpenEventA(SYNCHRONIZE,FALSE,"Global\\TermSrvReadyEvent");
+        if(ev){
+            DWORD r=WaitForSingleObject(ev,0);
+            CloseHandle(ev);
+            if(r==WAIT_OBJECT_0) return TRUE;
+        }
+        Sleep(500);
+    }
+    return FALSE;
+}
+
+static void apply_visual_style(void){
+    HKEY k;
+    if(RegOpenKeyExA(HKEY_CURRENT_USER,
+                     "Software\\Microsoft\\Windows\\CurrentVersion\\ThemeManager",
+                     0,KEY_READ,&k)!=ERROR_SUCCESS) return;
+    /* DllName is a REG_EXPAND_SZ (%SystemRoot%\...): expand it, never rebuild the path by hand —
+     * this PE boots from CD and its system drive is not C:. */
+    WCHAR flag[8],style[MAX_PATH],color[64],size[64];
+    BOOL on = theme_value(k,L"ThemeActive",flag,8) && flag[0]=='1'
+              && theme_value(k,L"DllName",style,MAX_PATH);
+    if(on){
+        if(!theme_value(k,L"ColorName",color,64)) lstrcpyW(color,L"NormalColor");
+        if(!theme_value(k,L"SizeName",size,64))   lstrcpyW(size,L"NormalSize");
+    }
+    RegCloseKey(k);
+    if(!on) return;
+
+    if(!wait_session_stack(10)) return;
+
+    HMODULE sh=LoadLibraryA("shsvcs.dll"); if(!sh) return;
+    HMODULE ux=LoadLibraryA("uxtheme.dll"); if(!ux) return;
+    THEMECONNECT theme_connect=(THEMECONNECT)GetProcAddress(sh,(LPCSTR)2);
+    SETSYSVS set_visual_style=(SETSYSVS)GetProcAddress(ux,(LPCSTR)65);
+    if(!theme_connect||!set_visual_style) return;
+
+    /* Connect as a theme client — this is what installs the hooks — and hold the connection for
+     * the life of the process. Then select the style: SetSystemVisualStyle only checks that the
+     * hooks are already on (it cannot install them) and fails with 0xd0000001 if they are not.
+     * The timeout is Ordinal_2's own wait for the Themes service, and it is on the boot path too:
+     * short for the same reason as wait_session_stack above — measured 0ms, and a timeout only
+     * costs the theme. */
+    if(theme_connect(15000)!=0) return;
+    set_visual_style(style,color,size,0);
+}
 
 /* Create a .lnk shortcut to target at linkpath (COM must already be initialized). */
 static void create_shortcut(const char *target, const char *linkpath){
@@ -338,6 +466,12 @@ int WINAPI WinMain(HINSTANCE i,HINSTANCE p,LPSTR c,int s){
 
     splash_status("Preparing the Control Panel...");
     prune_ghost_cpl();      /* after self-reg: shell32 adds the CP namespace entries there */
+
+    /* Apply the visual style BEFORE explorer starts, so the desktop paints themed from its first
+     * frame instead of coming up classic and flipping. This is where a real Windows does it too:
+     * winlogon's GINA applies the style during logon, before it launches the shell. */
+    splash_status("Applying the visual style...");
+    apply_visual_style();
 
     splash_status("Launching the desktop...");
 

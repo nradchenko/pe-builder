@@ -39,7 +39,10 @@ reimplemented independently here.
    [Start-menu items](#start-menu-items)).
 6. **Prune ghost Control Panel items** — drop `ControlPanel\NameSpace` entries whose
    backing handler DLL isn't present/loadable, so they don't render as empty folders.
-7. **Launch Explorer** — start `explorer.exe` as the shell, close the splash once the
+7. **Visual style** — apply the style the registry selects, if any (see
+   [Visual style](#visual-style)). Before Explorer, so the desktop paints themed from its
+   first frame; a no-op when no visual-style plugin is enabled.
+8. **Launch Explorer** — start `explorer.exe` as the shell, close the splash once the
    taskbar paints, relaunch Explorer if it dies, and finally fall back to `cmd.exe` so the
    machine is never headless.
 
@@ -50,6 +53,44 @@ to initialize. `peshell` runs the shell and IE COM DLLs' own `DllInstall` self-r
 (under `OleInitialize`, after the COM baseline is up), which is what lets Explorer's
 namespace come up. `ie4uinit.exe` in that pass reads `ieuinit.inf` (staged via
 `[SourceDisksFiles]`).
+
+## Visual style
+
+`peshell` applies the visual style the registry selects, before it launches Explorer — the same
+place and the same handshake Windows uses, where winlogon loads `msgina.dll`, which delay-loads
+`SHSVCS.dll` (the Themes service's *client* half) and drives the apply before starting the shell.
+peshell stands in for winlogon.
+
+**The contract** is four values under `HKCU\Software\Microsoft\Windows\CurrentVersion\ThemeManager`
+— `ThemeActive`, `DllName`, `ColorName`, `SizeName` — written by whichever visual-style plugin is
+enabled (see `luna`). Nothing here is theme-specific: peshell reads what is selected and applies
+it, so a visual style ships no code. With no style selected it returns at the first check, and
+`shsvcs.dll` isn't even staged — the PE keeps the classic look. `DllName` is a `REG_EXPAND_SZ` and
+peshell expands it: **this PE boots from CD and its system drive is not `C:`**, so nothing may
+rebuild that path by hand.
+
+**Why peshell owns this, rather than the Themes service** (read out of the binaries, not assumed):
+
+- The service *cannot* apply a style itself. `shsvcs` delay-imports uxtheme ordinals 20-33, 63 and
+  66 — but **not #34**, the `RegisterUserApiHook` path. The theme hook is always installed by the
+  *client*, in the client's own process.
+- The hook lives exactly as long as that client's `\ThemeApiPort` connection: `shsvcs` imports
+  `UnregisterUserApiHook` and drops the hook when the client goes away. The applier must therefore
+  outlive the desktop — peshell does. A helper that applied the style and exited had it torn down
+  about a second later.
+
+**The apply is two calls.** `shsvcs Ordinal_2(dwTimeoutMs)` connects this process as a theme client
+— it waits for the Themes service itself (opening the SCM and polling), allocates the session
+context, and turns the hooks on, so `IsThemeActive` is already true when it returns. Then
+`uxtheme #65 SetSystemVisualStyle` selects the style; it only *checks* that the hooks are on and
+fails with `0xd0000001` if they are not — it cannot install them. `Ordinal_2` is the same export
+`msgina` drives at logon, which is why msgina imports shsvcs ordinals 1-6 rather than just the
+apply.
+
+**The timeouts are short on purpose.** Both this and the wait for the session subsystem
+(`Global\TermSrvReadyEvent`, which winsrv signals only once termsrv creates the WinStation port)
+sit on the boot path, before Explorer: every second waited is a second of no desktop, and a timeout
+costs only the theme. Both have measured 0ms on every boot.
 
 ## Splash
 
