@@ -25,6 +25,10 @@ type Inject struct {
 // "i386/system32/foo.dll"; registry paths (RegSet keys, RegDelete) use HKLM\/HKU\
 // hive prefixes with the value name as the last backslash component.
 type Override struct {
+	// Options overrides the plugin's declared [Options] values (option name -> value).
+	// They are validated against the plugin's declarations and substituted into its INF
+	// values, not added as actions, so they are handled apart from the layers below.
+	Options map[string]string
 	// Include names Windows-source files to copy in, by output-tree path.
 	Include []string
 	// Exclude names the plugin's own copy targets to suppress, by resolved output path.

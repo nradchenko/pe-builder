@@ -39,6 +39,9 @@ type Plugin struct {
 	// Closure holds the [Closure] section's pewalk seed modules, whose static import
 	// closure the engine computes into the plugin's file set at build time.
 	Closure []string
+	// Options holds the [Options] section: the manifest-settable knobs (with defaults)
+	// the plugin substitutes into its INF values at build time.
+	Options []Option
 	// Actions is the compiled build-IR for the selected build.
 	Actions []action.Action
 }
@@ -97,6 +100,12 @@ func Parse(name string, f *inf.File, build int) (*Plugin, error) {
 	p.Update = parseUpdate(f, build)
 	p.Build = parseBuild(f, build)
 	p.Closure = parseClosure(f, build)
+
+	opts, err := parseOptions(f, build)
+	if err != nil {
+		return nil, fmt.Errorf("plugin %q: %w", name, err)
+	}
+	p.Options = opts
 
 	actions, err := Actions(f, build)
 	if err != nil {

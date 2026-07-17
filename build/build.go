@@ -351,6 +351,7 @@ func runPluginBuilds(ctx context.Context, selected []plugin.Selected, m *manifes
 // engine's Override type.
 func overrideLayer(p manifest.Plugin) plugin.Override {
 	ov := plugin.Override{
+		Options:   p.Options,
 		Include:   p.Files.Include,
 		Exclude:   p.Files.Exclude,
 		RegSet:    p.Registry.Set,

@@ -50,6 +50,9 @@ are output-tree-relative (`i386/system32/…`); registry paths use `HKLM\…`:
 ```hcl
 plugin "shell" {
   enabled = true
+  options {
+    theme = "classic"                                  # set a value the plugin declares (below)
+  }
   files {
     include = ["i386/system32/extra.dll"]              # pull an extra source file in
     exclude = ["i386/system32/unwanted.dll"]           # drop one the plugin copies
@@ -61,6 +64,10 @@ plugin "shell" {
   }
 }
 ```
+
+An `options {}` block sets the values the plugin **declares** in its `[Options]` section
+(see "Let the manifest set a value" below). Setting an option the plugin does not declare,
+or a value outside what it allows, is an error that names the plugin and the option.
 
 If a plugin `depends` on another (via `[Update]`), enabling it **auto-enables** the
 dependency — and its dependencies in turn — placing each one before the plugin that
@@ -168,6 +175,35 @@ The left path is relative to the source's install folder (`i386`); the right is 
 literal destination in the output tree. It addresses **loose or compressed** (`.??_`)
 source files by path; a cab-packed file has no filesystem path, so reach those with
 `[SourceDisksFiles]` by basename instead.
+
+**Let the manifest set a value.** When a value belongs in the plugin but a build should
+be able to change it — a screen resolution, a size, a name — declare it as an *option* in
+an `[Options]` section and reference it with a `$(name)` placeholder in the value. Each
+line declares one option, `name = default[, type][, allowed...]`:
+
+```ini
+[Options]
+; name = default[, type][, allowed...]   (type: string | int | bool; string if omitted)
+width  = 1024, int
+height = 768,  int
+bpp    = 32,   int, 8, 16, 24, 32         ; only these values are accepted
+
+[SetupReg.AddReg]
+0x4,"...\Video\0000","DefaultSettings.XResolution",$(width)
+0x4,"...\Video\0000","DefaultSettings.YResolution",$(height)
+0x4,"...\Video\0000","DefaultSettings.BitsPerPel",$(bpp)
+```
+
+A manifest overrides an option in the plugin's `options {}` block (above); an override is
+validated against the declared type and allowed set, so a bad value is a clear error
+rather than a broken build. When the manifest does not set an option, its **default**
+applies. Substitution is **one-to-one text**: pebuild replaces each `$(name)` in the
+value with the option's value (override or default) before the value is compiled — so an
+option lands wherever the value does. Placeholders are honoured in the **value data** of
+registry and text edits (`[…AddReg]` data, `[SetValue]`/`[AddLine]`/`[DelLine]` values).
+Once a plugin declares options, a `$(name)` that names none of them is an error, catching
+a typo rather than shipping it literally. A plugin with no `[Options]` opts out entirely:
+its values are never scanned, so a literal `$(` is left untouched.
 
 To share a plugin, zip or cab its directory; users install it with `pebuild plugins
 add`. To propose one for bundling with pe-builder, see

@@ -1,0 +1,6 @@
+Actions (5):
+  addreg    hive=software type=0x4 subkey="Display\\Mode" value="Width" data="1024"
+  addreg    hive=software type=0x4 subkey="Display\\Mode" value="Height" data="768"
+  addreg    hive=software type=0x4 subkey="Display\\Mode" value="BitsPerPel" data="32"
+  addreg    hive=software type=0x1 subkey="Display\\Mode" value="Label" data="classic"
+  setvalue  file="desktop.ini" section="Display" key="Caption" data="classic 1024x768"

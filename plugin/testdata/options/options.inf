@@ -1,0 +1,25 @@
+; Clean-room fixture exercising the [Options] declaration and $(name) templating.
+; (Not derived from any Microsoft or third-party plugin.)
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name   = "Options Fixture"
+Enable = 1
+
+[Options]
+; name = default[, type][, allowed...]
+width  = 1024, int
+height = 768, int
+bpp    = 32, int, 8, 16, 24, 32
+label  = classic
+
+[Software.AddReg]
+0x4,"Display\Mode","Width",$(width)
+0x4,"Display\Mode","Height",$(height)
+0x4,"Display\Mode","BitsPerPel",$(bpp)
+0x1,"Display\Mode","Label","$(label)"
+
+[SetValue]
+"desktop.ini", "Display", "Caption", "$(label) $(width)x$(height)"

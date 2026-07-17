@@ -39,7 +39,10 @@ PE dependencies.
     `[Closure]` section that computes a plugin's file set from the static import closure
     of its seed modules (the shared engine the base layer also uses), the `[SourcePaths]`
     section that copies a source file by its exact path (for a basename a name lookup
-    can't disambiguate), and installing plugins from `.cab`/`.zip` archives (`plugins add`).
+    can't disambiguate), the `[Options]` section that declares manifest-settable knobs (with
+    defaults, an optional type, and an allowed set) which the manifest overrides and the
+    engine substitutes one-to-one into the plugin's INF values via `$(name)` placeholders,
+    and installing plugins from `.cab`/`.zip` archives (`plugins add`).
   - `base/` — the clean-room base layer: a hand-curated seed and registry/boot edits in
     `base.inf`, the boot-driver and locale derivation from the source, and the
     `pewalk`-based import-closure scanner that computes the import-derivable half of the
