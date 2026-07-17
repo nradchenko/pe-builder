@@ -137,3 +137,24 @@ The desktop mode is set on the active video device instance,
 `ControlSet001\Control\Video\{GUID}\0000\DefaultSettings.*` (where win32k reads it via
 `HARDWARE\DEVICEMAP\VIDEO`), not only under `Services\VgaSave\Device0`. Whether a given
 mode actually comes up still depends on the display driver's capabilities.
+
+The mode is **configurable from the manifest**. The plugin declares `width`, `height`, and
+`bpp` options (`[Options]`, defaults 1024×768×32) and templates them into the
+`DefaultSettings.*` values with `$(name)` placeholders. A build overrides them in the
+plugin block:
+
+```hcl
+plugin "explorer-shell" {
+  enabled = true
+  options {
+    width  = 1280
+    height = 1024
+    bpp    = 16
+  }
+}
+```
+
+`bpp` is constrained to the
+colour depths the boot VGA driver plausibly accepts (`8`/`16`/`24`/`32`); `width`/`height`
+are unconstrained, so a mode the boot VGA driver does not support will simply not come up —
+stick to the common 4:3/widescreen modes it honours.

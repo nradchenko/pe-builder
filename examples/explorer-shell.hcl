@@ -2,8 +2,8 @@
 # Set source.path, then:  pebuild build examples/explorer-shell.hcl
 #
 # Boots from CD alone (no attached disk) — explorer-shell pulls in a RAM-drive kernel driver
-# that provides the writable profile volume. Needs at least 128 MB RAM. Screen resolution is
-# hardcoded at 1024x768.
+# that provides the writable profile volume. Needs at least 128 MB RAM. The desktop resolution
+# defaults to 1024x768x32; set it per build with the explorer-shell options block below.
 
 source {
   path = "/path/to/winxp-sp3.iso"
@@ -21,4 +21,12 @@ build {
 
 plugin "explorer-shell" {
   enabled = true
+
+  # Desktop display mode. Omit for the 1024x768x32 default; stick to modes the boot VGA
+  # driver supports.
+  # options {
+  #   width  = 1280
+  #   height = 1024
+  #   bpp    = 16
+  # }
 }

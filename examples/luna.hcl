@@ -2,7 +2,9 @@
 # XP "Luna" visual style. Set source.path, then:  pebuild build examples/luna.hcl
 #
 # Boots from CD alone (no attached disk); enabling luna pulls in everything it needs. Needs at
-# least 128 MB RAM. Screen resolution is hardcoded at 1024x768.
+# least 128 MB RAM. The desktop resolution defaults to 1024x768x32; set it per build with an
+# explorer-shell options block (uncommented below) — resolution lives on that plugin, which luna
+# pulls in.
 
 source {
   path = "/path/to/winxp-sp3.iso"
@@ -21,3 +23,13 @@ build {
 plugin "luna" {
   enabled = true
 }
+
+# Resolution is an explorer-shell option (luna depends on explorer-shell). Uncomment to change
+# the desktop mode; stick to modes the boot VGA driver supports.
+# plugin "explorer-shell" {
+#   options {
+#     width  = 1280
+#     height = 1024
+#     bpp    = 16
+#   }
+# }

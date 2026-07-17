@@ -137,6 +137,29 @@ plugin "p" {
 	}
 }
 
+func TestDecodeOptionsVerbatim(t *testing.T) {
+	// The manifest layer does not interpret option names or values — it hands them to the
+	// engine as written, to validate against the plugin's own [Options] declarations.
+	src := `
+source { path = "/x" }
+output { path = "./o" }
+plugin "p" {
+  options {
+    alpha = "one"
+    beta  = "two"
+  }
+}
+`
+	got, err := Decode([]byte(src), "opt.hcl")
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	want := map[string]string{"alpha": "one", "beta": "two"}
+	if diff := cmp.Diff(want, got.Plugins[0].Options); diff != "" {
+		t.Errorf("options mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestValidate(t *testing.T) {
 	base := func() *Manifest {
 		return &Manifest{

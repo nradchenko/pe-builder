@@ -20,6 +20,15 @@ Enable = 0
 [Update]
 depends = win32-gui, storage-pnp, ramdrive, system-tools, accessories
 
+; Desktop display mode — see README.md § Display resolution.
+; The values are constrained to what the boot VGA driver accepts, and
+; template into the display-mode registry values in [SetupReg.AddReg] below.
+[Options]
+; name = default, type[, allowed...]
+width  = 1024, int
+height = 768,  int
+bpp    = 32,   int, 8, 16, 24, 32
+
 [Build]
 Requires = i686-w64-mingw32-gcc make
 Produces = peshell.exe peshut.dll
@@ -99,20 +108,20 @@ msgina.dll = 2
 ; thread in WINMM, cascading every folder window into "Not Responding". Disabled -> waveOut
 ; fails fast instead of blocking.
 0x4,"ControlSet001\Services\AudioSrv","Start",0x4
-; Desktop resolution — the boot VGA driver's default display mode. 1024x768x32
-; (0x400 x 0x300, 32bpp). Edit these values to change it.
+; Desktop resolution — the boot VGA driver's default display mode. The width/height/bpp
+; options (see [Options]) template into these values; the defaults are 1024x768x32.
 ;
 ; win32k reads the active mode from the video device instance under Control\Video\{GUID}\0000
 ; (reached via HARDWARE\DEVICEMAP\VIDEO -> \Device\Video0), NOT from Services\VgaSave\Device0 —
 ; the base populates those two keys separately (they are not linked in this PE). So the mode has
 ; to be set on the Control\Video instance; the Services\Device0 copy is the persistent store.
 ; {23A77BF7-...} is the VgaSave VideoID the base assigns (base.inf).
-0x4,"ControlSet001\Services\VgaSave\Device0","DefaultSettings.XResolution",0x400
-0x4,"ControlSet001\Services\VgaSave\Device0","DefaultSettings.YResolution",0x300
-0x4,"ControlSet001\Services\VgaSave\Device0","DefaultSettings.BitsPerPel",0x20
-0x4,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\0000","DefaultSettings.XResolution",0x400
-0x4,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\0000","DefaultSettings.YResolution",0x300
-0x4,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\0000","DefaultSettings.BitsPerPel",0x20
+0x4,"ControlSet001\Services\VgaSave\Device0","DefaultSettings.XResolution",$(width)
+0x4,"ControlSet001\Services\VgaSave\Device0","DefaultSettings.YResolution",$(height)
+0x4,"ControlSet001\Services\VgaSave\Device0","DefaultSettings.BitsPerPel",$(bpp)
+0x4,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\0000","DefaultSettings.XResolution",$(width)
+0x4,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\0000","DefaultSettings.YResolution",$(height)
+0x4,"ControlSet001\Control\Video\{23A77BF7-ED96-40EC-AF06-9B1F4867732A}\0000","DefaultSettings.BitsPerPel",$(bpp)
 
 [Software.AddReg]
 0x1,"Microsoft\Windows NT\CurrentVersion\Winlogon","Shell","Explorer.exe"
