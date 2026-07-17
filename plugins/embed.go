@@ -19,4 +19,5 @@ import "embed"
 //go:embed poweroff/poweroff.c poweroff/Makefile
 //go:embed ramdrive/ramdrive.c ramdrive/Makefile
 //go:embed explorer-shell/peshell.c explorer-shell/peshut.c explorer-shell/Makefile
+//go:embed pesuite/pesuite.c pesuite/Makefile
 var FS embed.FS

@@ -1,0 +1,37 @@
+; Copyright 2026 Nikita Radchenko
+; SPDX-License-Identifier: Apache-2.0
+;
+; pesuite — set the product SuiteMask a PE otherwise boots without, so the Win32 subsystem will
+; bring up its WinStation/session machinery. Ships a tiny kernel driver, built from source.
+;
+; On its own this plugin does nothing observable — it only opens the gate; terminal-services
+; depends on it and completes the chain. See README.md.
+;
+; Off by default.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "PE suite mask"
+Enable = 0
+
+; Compiled from the bundled pesuite.c at build time rather than shipping a binary; MinGW-w64, no
+; WDK. See README.md § Build — it names the proven toolchain and kernel versions.
+[Build]
+Requires = i686-w64-mingw32-gcc make
+Produces = pesuite.sys
+
+[SourceDisksFiles]
+pesuite.sys = 4
+
+; Start=1 (system-start), NOT 0: a registry-only boot-start entry is never loaded in /minint, and
+; the system-driver pass still runs before every reader of the bit.
+; See README.md § Why Start=1, not Start=0. The group orders it early in that pass.
+[SetupReg.AddReg]
+0x4,"ControlSet001\Services\pesuite","Type",0x1
+0x4,"ControlSet001\Services\pesuite","Start",0x1
+0x4,"ControlSet001\Services\pesuite","ErrorControl",0x1
+0x1,"ControlSet001\Services\pesuite","Group","System Bus Extender"
+0x1,"ControlSet001\Services\pesuite","DisplayName","PE suite mask"
+0x2,"ControlSet001\Services\pesuite","ImagePath","system32\DRIVERS\pesuite.sys"
