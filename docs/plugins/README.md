@@ -138,6 +138,21 @@ the plugin's own seed. `[Closure]` only reads import tables (no code runs), so u
 `[Build]` it needs no opt-in. It is purely additive: a plugin with no `[Closure]` behaves
 exactly as before. See `plugins/win32-gui/` for the reference.
 
+**Know what a closure cannot see.** `[Closure]` follows import tables, so it finds only what
+a binary *links* to. Windows loads plenty of things by **name from the registry** instead, and
+no scan of any binary points at them:
+
+- a **cryptographic provider** — the registry gives its file name (`Image Path = rsaenh.dll`),
+  and CryptoAPI loads that;
+- a **COM in-process server** — reached by CLSID from the registry, not by an import;
+- a **service DLL**, a hook DLL, a codec — likewise named by a registry value.
+
+These fail *quietly*: the caller gets an error nobody prints, and the feature simply does
+nothing. Worse, the file being present proves nothing — a COM server that is staged but never
+registered is just as inert, because **staging is not registering**. When a plugin turns on a
+Windows feature, ask what that feature loads *by name at run time*, add those to
+`[SourceDisksFiles]` yourself, and make sure whatever registers them actually runs.
+
 **Copy a source file by its exact path.** `[SourceDisksFiles]` names files by basename,
 which the source resolves through its layout. When a file's basename is not unique — a
 nested side-by-side assembly, a duplicate name in another folder — name it by its exact

@@ -4,10 +4,10 @@ An open-source, cross-platform tool for building bootable **Windows PE**
 environments from a Windows installation source — a modern, Linux-first revival of
 the ideas behind the classic, discontinued **Bart's PE Builder**.
 
-> **Status: early development.** A build already produces a bootable PE — reaching an
-> interactive `cmd.exe`, or a minimal Windows Explorer desktop (an early proof of
-> concept) with the `explorer-shell` plugin. Formats, commands, and structure are
-> subject to change, and there are no releases yet.
+> **Status: early development.** A build already produces a bootable PE — an interactive
+> `cmd.exe`, a Windows Explorer desktop, or that desktop with the XP **"Luna" visual style**
+> (all early proofs of concept). Formats, commands, and structure are subject to change, and
+> there are no releases yet.
 
 ## What this is
 
@@ -36,37 +36,54 @@ provide.
 Early development. A build produces a bootable PE that reaches an interactive
 `cmd.exe`, with the console locale — code pages, fonts, and keyboard — taken from the
 source's own locale. The plugin subsystem is wired up: builds apply the plugins a
-manifest enables, and pebuild ships a set of built-ins. As an early proof of concept,
-the `explorer-shell` plugin boots to a minimal **Windows Explorer desktop** — Start
-menu, taskbar, and Control Panel — self-contained from CD alone, with a writable
-RAM-backed profile and no attached disk; enabling it auto-enables the supporting plugins
-it needs. A `poweroff` command, compiled from source at build time, ships enabled by
-default. See [`docs/plugins/`](docs/plugins/) to use or write plugins.
+manifest enables, and pebuild ships a set of built-ins. As early proofs of concept, the
+`explorer-shell` plugin boots to a minimal **Windows Explorer desktop** — Start menu,
+taskbar, and Control Panel — self-contained from CD alone, with a writable RAM-backed
+profile and no attached disk, and the `luna` plugin themes that desktop with the familiar
+XP **"Luna" visual style**. Enabling either auto-enables the supporting plugins it needs.
+A `poweroff` command ships as a built-in plugin, compiled from source at build time; enable
+it in your manifest like any other. A build takes a few seconds and produces an ISO of
+roughly 44 MB for the bare `cmd.exe` image up to ~63 MB for the themed desktop. See
+[`docs/plugins/`](docs/plugins/) to use or write plugins.
 
 ## Quick start
 
 You need Go and a Windows XP SP3 installation source (an `.iso` or an extracted
-directory). Point the example manifest at your source and build:
+directory). A desktop image also needs the MinGW-w64 cross-compiler, which builds the
+plugins that ship as source rather than as binaries (`apt install gcc-mingw-w64-i686`).
+Point the example manifest at your source and build:
 
 ```sh
 go build -o pebuild ./cmd/pebuild
 
-# edit source.path in examples/minimal.hcl to your Windows media, then:
-./pebuild build examples/minimal.hcl
+# edit source.path in examples/luna.hcl to your Windows media, then:
+./pebuild build examples/luna.hcl
 
 # boot the result:
-qemu-system-i386 -M pc -m 512 -cdrom out/pe.iso -boot d
+qemu-system-i386 -M pc -m 512 -cdrom out/pe-theme.iso -boot d
 ```
 
-The ISO boots to an interactive `cmd.exe`. Enable the `explorer-shell` plugin — its
-supporting plugins are pulled in automatically — to boot to a Windows Explorer desktop
-instead, with a classic Start menu, taskbar, and Control Panel:
+That boots to a **Windows Explorer desktop** — Start menu, taskbar, Control Panel — with the
+familiar XP **"Luna"** look, self-contained from CD with no attached disk. Enabling `luna` is
+all it takes; its supporting plugins are pulled in automatically:
+
+```hcl
+plugin "luna" {
+  enabled = true
+}
+```
+
+For the same desktop in the classic (Windows 2000) look, enable `explorer-shell` instead — the
+plugin `luna` themes ([`examples/explorer-shell.hcl`](examples/explorer-shell.hcl)):
 
 ```hcl
 plugin "explorer-shell" {
   enabled = true
 }
 ```
+
+With no plugins at all ([`examples/minimal.hcl`](examples/minimal.hcl)) the ISO boots to an
+interactive `cmd.exe`, and needs no cross-compiler.
 
 Rebuilding from the same source is faster after the first run: pebuild caches the files it
 decompresses out of the source's large driver cabinets under `~/.cache/pe-builder` and reuses

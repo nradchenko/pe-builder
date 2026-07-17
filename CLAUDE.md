@@ -44,6 +44,10 @@ PE dependencies.
     `base.inf`, the boot-driver and locale derivation from the source, and the
     `pewalk`-based import-closure scanner that computes the import-derivable half of the
     boot file set from the source's own PE dependency graph (so it is not hand-listed).
+    The seed also has to carry what no import scan can see — a module the registry names by
+    file name and loads at run time, like `psbase.dll` or the `rsaenh.dll` cryptographic
+    provider that the SOFTWARE hive we build registers: those are staged because we create
+    the registration that would otherwise dangle.
   - `tree/` — assemble the output file tree (resolve → decompress → place).
   - `hive/` — build the Windows registry hives (pure-Go `regf` read/write). The SYSTEM hive
     starts from the source's text-setup `setupreg.hiv` and then has the source's `hivesys.inf`
@@ -85,9 +89,19 @@ PE dependencies.
   `[Closure]` seed and contributing Start-menu entries through the shell's registry contract;
   and `explorer-shell` boots to a Windows Explorer desktop instead
   of a bare prompt — it ships `peshell` (a build-capable launcher that self-registers the
-  shell/COM components at runtime, sets up the profile, applies a classic no-frills desktop,
-  and runs explorer) and `peshut` (a hook so the shell's Turn Off powers the machine off),
-  and depends on the others.
+  shell/COM components at runtime, sets up the profile, applies the visual style the registry
+  selects, and runs explorer) and `peshut` (a hook so the shell's Turn Off powers the machine
+  off), and depends on the others. Three more plugins give that desktop the XP look, each a
+  layer of one chain: `pesuite` is a build-capable plugin whose tiny system-start driver
+  (`pesuite.sys`) sets the product SuiteMask bit the Win32 subsystem gates the whole
+  WinStation/session subsystem on — the kernel never writes it in a PE, because a PE needs
+  `Setup\SetupType=1` to get its shell run and that makes the kernel skip its product init;
+  `terminal-services` (depends on `pesuite`) defines and starts the terminal-services stack,
+  whose port the session subsystem waits for, so the PE has a console session at all; and
+  `luna` (depends on `explorer-shell` + `terminal-services`) stages the XP "Luna" visual style
+  and the Themes service, then selects it in the registry. A visual-style plugin ships no code:
+  it only selects a style, and peshell applies it — the theme hook belongs to the client that
+  asks for it and dies with that client, so the applier has to be the long-lived shell process.
 - `internal/` — support packages: `golden` (golden-file test helper), `buildinfo`
   (version metadata).
 - `scripts/` — repository tooling. `gen-licenses.sh` (+ its template) regenerates the
