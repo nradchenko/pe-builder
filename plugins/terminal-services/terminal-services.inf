@@ -1,0 +1,178 @@
+; Copyright 2026 Nikita Radchenko
+; SPDX-License-Identifier: Apache-2.0
+;
+; terminal-services — bring up the WinStation/session subsystem, so the PE has a console session
+; at all. Without one, nothing session-gated works: the theme server (visual styles), fast user
+; switching, terminal services.
+;
+; Defines and starts the terminal-services stack (termdd + TermService/termsrv) and gives it the
+; configuration its init demands. Not about remote desktop: no listener, connections denied.
+; See README.md.
+;
+; Off by default. Enabling it auto-enables pesuite.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "Terminal services (session subsystem)"
+Enable = 0
+
+; The suite bit that makes winsrv run the WinStation init at all — without it the stack below
+; starts and has nothing to serve.
+[Update]
+depends = pesuite
+
+; termsrv.dll is the TermService implementation, loaded by svchost; its import closure (icaapi,
+; mstlsapi, ...) comes with it. A closure cannot see everything this needs, though: the licensing
+; init loads the RSA CSP by file name from the registry, and the base layer stages that.
+; See README.md § What a closure cannot see.
+[Closure]
+termsrv.dll
+
+; The terminal device driver; it ships inside SP3.CAB rather than loose.
+[SourceDisksFiles]
+termdd.sys = 4
+
+[SetupReg.AddReg]
+; termdd.sys: the terminal device driver (system-start), PortDriverEnable=1, no Group (as real).
+0x4,"ControlSet001\Services\termdd","Type",0x1
+0x4,"ControlSet001\Services\termdd","Start",0x1
+0x4,"ControlSet001\Services\termdd","ErrorControl",0x1
+0x2,"ControlSet001\Services\termdd","ImagePath","system32\DRIVERS\termdd.sys"
+0x4,"ControlSet001\Services\termdd","PortDriverEnable",0x1
+; The first key termsrv's init touches, and a fatal one: pre-creating it (empty, as a real XP has
+; it) means the call opens rather than creates. See README.md § Why the config is close to the
+; source's.
+0x1,"ControlSet001\Control\Terminal Server\Licensing Core"
+; TermService: hosted in the DcomLaunch svchost group (as real XP), depends on RPCSS, whitelisted.
+0x4,"ControlSet001\Services\TermService","Type",0x20
+0x4,"ControlSet001\Services\TermService","Start",0x2
+0x4,"ControlSet001\Services\TermService","ErrorControl",0x1
+; MUST be "svchost", NOT "svchost.exe": the SCM shares a host process by comparing ImagePath
+; strings, so this has to match DcomLaunch's own value apart from case — as a real XP has it.
+; See README.md § The `svchost` ImagePath trap.
+0x2,"ControlSet001\Services\TermService","ImagePath","%SystemRoot%\System32\svchost -k DComLaunch"
+0x1,"ControlSet001\Services\TermService","ObjectName","LocalSystem"
+0x7,"ControlSet001\Services\TermService","DependOnService","RPCSS"
+0x2,"ControlSet001\Services\TermService\Parameters","ServiceDll","%SystemRoot%\System32\termsrv.dll"
+0x1,"Setup\AllowStart\TermService"
+; Terminal Server config: the top-level values, the WinStations security descriptors, the Console
+; WinStation, and DefaultUserConfiguration — reproduced from an installed XP SP3, and deliberately
+; close to it. Console\WdDll names wdcon.dll, which is NOT staged (not on the install media), and
+; that is fine. Trim only a value at a time against a real boot.
+; See README.md § Why the config is close to the source's and § What is deliberately absent.
+0x4,"ControlSet001\Control\Terminal Server","fAllowToGetHelp",0x1
+0x4,"ControlSet001\Control\Terminal Server","FirstCountMsgQPeeksSleepBadApp",0xf
+0x7,"ControlSet001\Control\Terminal Server","Modems With Bad DSR","MultiTech MultiModem MT2834","MultiTech MultiModem MT2834ZDX","MultiTech MT2834","MultiTech MT2834ZDX","MultiTech 2834","MultiTech 2834ZDX"
+0x4,"ControlSet001\Control\Terminal Server","MsgQBadAppSleepTimeInMillisec",0x1
+0x4,"ControlSet001\Control\Terminal Server","NthCountMsgQPeeksSleepBadApp",0x5
+0x4,"ControlSet001\Control\Terminal Server","fWritableTSCCPermTab",0x0
+0x4,"ControlSet001\Control\Terminal Server","DeleteTempDirsOnExit",0x0
+0x4,"ControlSet001\Control\Terminal Server","PerSessionTempDir",0x0
+0x4,"ControlSet001\Control\Terminal Server","fDenyTSConnections",0x1
+0x1,"ControlSet001\Control\Terminal Server","ProductVersion","5.1"
+0x4,"ControlSet001\Control\Terminal Server","TSAdvertise",0x0
+0x4,"ControlSet001\Control\Terminal Server","IdleWinStationPoolCount",0x0
+0x4,"ControlSet001\Control\Terminal Server","TSAppCompat",0x0
+0x4,"ControlSet001\Control\Terminal Server","TSEnabled",0x1
+0x4,"ControlSet001\Control\Terminal Server","TSUserEnabled",0x0
+0x4,"ControlSet001\Control\Terminal Server","fEnableSalem",0x1
+0x3,"ControlSet001\Control\Terminal Server\WinStations","DefaultSecurity",01,00,14,80,ac,00,00,00,b8,00,00,00,00,00,00,00,14,00,00,00,02,00,98,00,06,00,00,00,00,00,24,00,bf,03,0f,00,01,05,00,00,00,00,00,05,15,00,00,00,fd,37,42,40,7c,eb,24,0d,23,5f,63,6b,e8,03,00,00,00,00,18,00,bf,03,0f,00,01,02,00,00,00,00,00,05,20,00,00,00,20,02,00,00,00,00,14,00,bf,03,0f,00,01,01,00,00,00,00,00,05,12,00,00,00,00,00,18,00,a1,01,00,00,01,02,00,00,00,00,00,05,20,00,00,00,2b,02,00,00,00,00,14,00,81,00,00,00,01,01,00,00,00,00,00,05,13,00,00,00,00,00,14,00,81,00,00,00,01,01,00,00,00,00,00,05,14,00,00,00,01,01,00,00,00,00,00,05,12,00,00,00,01,01,00,00,00,00,00,05,12,00,00,00
+0x3,"ControlSet001\Control\Terminal Server\WinStations","ConsoleSecurity",01,00,14,80,ac,00,00,00,b8,00,00,00,00,00,00,00,14,00,00,00,02,00,98,00,06,00,00,00,00,00,24,00,bf,03,0f,00,01,05,00,00,00,00,00,05,15,00,00,00,fd,37,42,40,7c,eb,24,0d,23,5f,63,6b,e8,03,00,00,00,00,18,00,bf,03,0f,00,01,02,00,00,00,00,00,05,20,00,00,00,20,02,00,00,00,00,14,00,bf,03,0f,00,01,01,00,00,00,00,00,05,12,00,00,00,00,00,18,00,a1,01,00,00,01,02,00,00,00,00,00,05,20,00,00,00,2b,02,00,00,00,00,14,00,81,00,00,00,01,01,00,00,00,00,00,05,13,00,00,00,00,00,14,00,81,00,00,00,01,01,00,00,00,00,00,05,14,00,00,00,01,01,00,00,00,00,00,05,12,00,00,00,01,01,00,00,00,00,00,05,12,00,00,00
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","MinEncryptionLevel",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","Callback",0x0
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console","CallbackNumber",""
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console","Comment","System Console"
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console","Domain",""
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console","InitialProgram",""
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","InputBufferLength",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","KeyboardLayout",0x0
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console","KeyboardName","\REGISTRY\Machine\System\CurrentControlSet\Services\Kbdclass"
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","MaxConnectionTime",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","MaxDisconnectionTime",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","MaxIdleTime",0x0
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console","MouseName","\REGISTRY\Machine\System\CurrentControlSet\Services\Mouclass"
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","OutBufCount",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","OutBufDelay",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","OutBufLength",0x0
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console","Password",""
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","PdClass",0x1
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console","PdDll",""
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","PdFlag",0x1e
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console","PdName","console"
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console","UserName",""
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console","WdDll","wdcon"
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","WdFlag",0x24
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console","WdName","Console"
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console","WorkDirectory",""
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fInheritAutoLogon",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fInheritCallback",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fInheritCallbackNumber",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fInheritInitialProgram",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fInheritMaxDisconnectionTime",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fInheritMaxIdleTime",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fInheritMaxSessionTime",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fInheritReconnectSame",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fInheritResetBroken",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fInheritShadow",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fLogonDisabled",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fPromptForPassword",0x1
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fReconnectSame",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fResetBroken",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fUseDefaultGina",0x0
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","Shadow",0x1
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","TraceClass",0x10000009
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","TraceDebugger",0x1
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","TraceEnable",0xc
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console","fEnableWinStation",0x1
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","CdClass",0x0
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","CdDLL",""
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","CdFlag",0x0
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","CdName",""
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","CfgDll","RDPCFGEX.DLL"
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","InteractiveDelay",0x32
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","OutBufDelay",0x64
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","PdClass",0x2
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","PdDLL","tdtcp"
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","PdFlag",0x4e
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","PdName","tcp"
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","WdDLL","rdpwd"
+0x4,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","WdFlag",0x34
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","WdName","Microsoft RDP 5.1"
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","WdPrefix","RDP"
+0x1,"ControlSet001\Control\Terminal Server\WinStations\Console\RDP","WsxDLL","rdpwsx"
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","Callback",0x0
+0x1,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","CallbackNumber",""
+0x1,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","Domain",""
+0x1,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","InitialProgram",""
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","KeyboardLayout",0x0
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","MaxConnectionTime",0x0
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","MaxDisconnectionTime",0x0
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","MaxIdleTime",0x0
+0x1,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","NWLogonServer",""
+0x1,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","Password",""
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","Shadow",0x1
+0x1,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","UserName",""
+0x1,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","WorkDirectory",""
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","fInheritAutoLogon",0x1
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","fInheritCallback",0x0
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","fInheritCallbackNumber",0x0
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","fInheritInitialProgram",0x1
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","fInheritMaxDisconnectionTime",0x0
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","fInheritMaxIdleTime",0x0
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","fInheritMaxSessionTime",0x0
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","fInheritReconnectSame",0x0
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","fInheritResetBroken",0x0
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","fInheritShadow",0x0
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","fLogonDisabled",0x0
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","fPromptForPassword",0x0
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","fReconnectSame",0x0
+0x4,"ControlSet001\Control\Terminal Server\DefaultUserConfiguration","fResetBroken",0x0
+
+
+; --- svchost group (SOFTWARE hive) ---
+; TermService runs in the DcomLaunch svchost group, as it does on a real XP (that svchost instance
+; is already running in the PE). This overwrites the group's member list to include both.
+[Software.AddReg]
+0x7,"Microsoft\Windows NT\CurrentVersion\Svchost","DcomLaunch","DcomLaunch","TermService"
