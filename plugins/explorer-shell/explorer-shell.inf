@@ -171,6 +171,10 @@ msgina.dll = 2
 ; "cannot find syncui.dll".
 "Classes\Briefcase"
 "Classes\CLSID\{85BBD920-42A0-1069-A2E4-08002B30309D}"
+; "Windows Marketplace Link" Active Setup component — may be already absent in localized sources.
+; Its StubPath runs InstallHinfSection over %systemroot%\inf\ie.inf, which the PE doesn't stage,
+; so the ie4uinit pass fails with a modal "Installation failed."
+"Microsoft\Active Setup\Installed Components\{4b218e3e-bc98-4770-93d3-2731b9329278}"
 
 ; No wav files or audio device are staged, so any PlaySound — the Explorer "Navigating" click
 ; fires on folder-open — blocks in WINMM waveOut and hangs the shell's tray thread, cascading
