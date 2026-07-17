@@ -186,8 +186,9 @@ static void paint_splash(HDC dc,RECT rc){
         SelectObject(dc,of); DeleteObject(big);
     }
 
-    /* Thin running rainbow bar — full width, flush directly under the banner (the msgina "gas
-     * gauge"): each column is a spectrum colour that scrolls sideways as g_marquee advances. */
+    /* Thin running bar — full width, flush directly under the banner (the msgina "gas gauge"):
+     * each column takes its blue<->orange colour from the sweep above, offset by g_marquee so the
+     * bar reads as scrolling sideways. */
     int by=g_bh, bh=6;
     for(int x=0;x<g_bw;x++){
         RECT c={x,by,x+1,by+bh};
