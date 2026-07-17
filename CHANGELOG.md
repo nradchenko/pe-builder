@@ -5,6 +5,44 @@ All notable changes to pe-builder are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-07-17
+
+The themed-desktop release. The `luna` plugin brings the XP "Luna" visual style — the
+familiar blue desktop — to a Windows PE, which the classic-shell tradition never managed.
+
+### Added
+
+- **The XP "Luna" visual style** — the `luna` plugin themes the Explorer desktop with the
+  familiar blue XP look instead of the classic Windows 2000 one — the theme engine running
+  in a Windows PE. Enabling it is a four-line manifest; it pulls in what it needs:
+  `terminal-services` and `pesuite`, which give the PE the session subsystem the theme
+  server attaches to (a PE boots without one), and the shell's visual-style apply. Three
+  colour schemes and three sizes work (blue, normal size by default). A visual-style plugin
+  ships no code — it stages a style and the Themes service and selects the style in the
+  registry.
+
+### Fixed
+
+- **A missing cryptographic provider** — the SOFTWARE hive registers the RSA provider by
+  file name (`rsaenh.dll`), but nothing staged the file, so it was advertised-but-absent and
+  every `CryptAcquireContext` call failed silently. The base layer now stages it.
+- **Themed controls in Control Panel applets and property sheets** — `explorer.exe` and the
+  applet host `rundll32.exe` were not binding to the v6 Common-Controls assembly, so their
+  tabs and buttons drew in the classic v5 style around themed pages. `win32-gui` now ships
+  an external manifest for each host so they activate v6.
+
+### Known limitations
+
+- Targets Windows XP sources; other source flavors (e.g. Server 2003, x64) and output
+  targets are planned.
+- The Explorer desktop is an early proof of concept, with rough edges — for example, "Log
+  Off" still appears in the shutdown dialog (it does nothing), and dragging files to the
+  Recycle Bin is a no-op (use Delete instead).
+- With `luna`, themed common controls are enabled for the shell hosts (Explorer and the
+  Control Panel applets) via external manifests; the general theme-activation path a real XP
+  uses does not take effect in the PE, so some other applications may still draw their
+  controls in the classic style.
+
 ## [0.2.0] - 2026-07-17
 
 The graphical-desktop release. A build can now boot the PE to a **classic Windows Explorer
@@ -90,5 +128,6 @@ build runs in about 4 seconds and produces a roughly 45 MB ISO.
 - Targets Windows XP sources; other source flavors and output targets are planned.
 - No plugin system yet — a build is the base layer only.
 
+[0.3.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.3.0
 [0.2.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.2.0
 [0.1.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.1.0
