@@ -31,3 +31,13 @@ oleaut32.dll
 [SourcePaths]
 ASMS\6000\MSFT\WINDOWS\COMMON\CONTROLS\COMCTL32.DLL = i386\WinSxS\x86_Microsoft.Windows.Common-Controls_6595b64144ccf1df_6.0.0.0_x-ww_1382d70a\comctl32.dll
 ASMS\6000\MSFT\WINDOWS\COMMON\CONTROLS\CONTROLS.MAN = i386\WinSxS\Manifests\x86_Microsoft.Windows.Common-Controls_6595b64144ccf1df_6.0.0.0_x-ww_1382d70a.manifest
+
+; Bind the two shells that host property sheets to the assembly above. Staging an assembly is
+; not enough: a process only gets it by asking, and the loader honours a manifest only at
+; resource id 1 — rundll32.exe (which hosts every Control Panel applet) carries none, and
+; explorer.exe carries one at id 123. So neither gets an activation context, and their property
+; sheets draw the v5 tab control and buttons around themed pages. These external manifests are
+; ours (attribute 1 = shipped with the plugin), and give each host the context it never asks for.
+[SourceDisksFiles]
+rundll32.exe.manifest = 2,, 1
+explorer.exe.manifest = 1,, 1

@@ -20,4 +20,5 @@ import "embed"
 //go:embed ramdrive/ramdrive.c ramdrive/Makefile
 //go:embed explorer-shell/peshell.c explorer-shell/peshut.c explorer-shell/Makefile
 //go:embed pesuite/pesuite.c pesuite/Makefile
+//go:embed win32-gui/rundll32.exe.manifest win32-gui/explorer.exe.manifest
 var FS embed.FS

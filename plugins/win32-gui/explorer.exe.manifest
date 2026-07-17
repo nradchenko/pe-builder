@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Copyright 2026 Nikita Radchenko
+     SPDX-License-Identifier: Apache-2.0
+
+     An external application manifest for explorer.exe, binding it to the v6 Common-Controls
+     assembly this plugin stages — the same reason as rundll32.exe.manifest beside it: explorer
+     hosts the file/folder property sheets, whose tab control and buttons otherwise draw v5.
+
+     explorer.exe does carry a manifest, but at resource id 123; the loader only honours id 1, so
+     it gets no process-wide context and this external manifest supplies one. -->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <!-- Our own identity, not a Microsoft one — see rundll32.exe.manifest beside this file. -->
+  <assemblyIdentity
+      type="win32"
+      name="pe-builder.explorer"
+      version="1.0.0.0"
+      processorArchitecture="x86"/>
+  <description>Windows Explorer</description>
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity
+          type="win32"
+          name="Microsoft.Windows.Common-Controls"
+          version="6.0.0.0"
+          processorArchitecture="x86"
+          publicKeyToken="6595b64144ccf1df"
+          language="*"/>
+    </dependentAssembly>
+  </dependency>
+</assembly>

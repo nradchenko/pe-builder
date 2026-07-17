@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Copyright 2026 Nikita Radchenko
+     SPDX-License-Identifier: Apache-2.0
+
+     An external application manifest for rundll32.exe, binding it to the v6 Common-Controls
+     assembly this plugin stages. rundll32 hosts every Control Panel applet the shell opens
+     (rundll32 shell32.dll,Control_RunDLL main.cpl), and it carries no manifest of its own, so
+     without this it runs with no activation context and its property sheets draw the v5 tab
+     control and buttons while the pages inside them are themed.
+
+     Windows reads <exename>.manifest from the executable's own directory when the image has no
+     manifest at resource id 1 (the only id the loader honours), which is rundll32's case. -->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <!-- Our own identity, deliberately not a Microsoft one: an application manifest's identity is
+       not used to resolve anything, so there is no reason for a file we author to claim a vendor
+       name it does not belong to. -->
+  <assemblyIdentity
+      type="win32"
+      name="pe-builder.rundll32"
+      version="1.0.0.0"
+      processorArchitecture="x86"/>
+  <description>Run a DLL as an app</description>
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity
+          type="win32"
+          name="Microsoft.Windows.Common-Controls"
+          version="6.0.0.0"
+          processorArchitecture="x86"
+          publicKeyToken="6595b64144ccf1df"
+          language="*"/>
+    </dependentAssembly>
+  </dependency>
+</assembly>
