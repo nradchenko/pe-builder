@@ -89,7 +89,7 @@ MinGW-w64 builds a loadable XP kernel driver with no WDK and no MSVC. **Proven w
 |---|---|
 | Compiler | `i686-w64-mingw32-gcc (GCC) 13-win32` — Debian/Ubuntu `gcc-mingw-w64-i686` 13.2.0 |
 | Linker | `GNU ld (GNU Binutils) 2.41.90.20240122` — `binutils-mingw-w64-i686` |
-| Kernel it loads against | `ntoskrnl.exe` **5.1.2600.5512** (`xpsp.080413-2111`), i.e. XP SP3 — staged from the source's `ntkrnlmp.exe` (the base layer installs the multiprocessor kernel under the uniprocessor name) |
+| Kernel it loads against | `ntoskrnl.exe` **5.1.2600.5512** (`xpsp.080413-2111`), i.e. XP SP3 — staged from the source's `ntkrnlmp.exe` (the base layer installs the multiprocessor kernel under the uniprocessor name). Proven on both the Russian and English VL sources: at this version their kernels differ only in the localized `.rsrc` section — every code and data section is byte-identical. |
 
 Those are the versions it was proven on, not the versions it is pinned to — **nothing here is
 hardcoded to that kernel by address.** The base comes from the DDK's `KI_USER_SHARED_DATA`, which
