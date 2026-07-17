@@ -1,5 +1,5 @@
 identity: winxp build 2600 (i386)
-written: 113
+written: 114
 skipped: [cabonly.sys]
 hives: [i386/system32/SETUPREG.HIV i386/system32/config/SOFTWARE i386/system32/config/DEFAULT i386/system32/config/SAM i386/system32/config/SECURITY]
 
@@ -89,6 +89,7 @@ i386/system32/print.exe
 i386/system32/psbase.dll
 i386/system32/pstorsvc.dll
 i386/system32/rpcss.dll
+i386/system32/rsaenh.dll
 i386/system32/schannel.dll
 i386/system32/serife.fon
 i386/system32/services.exe

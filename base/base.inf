@@ -103,6 +103,10 @@ winsrv.dll  =
 ; reached by the import closure.
 psbase.dll   = 2
 
+; The RSA cryptographic service provider — like psbase.dll above, named by the registry our
+; own SOFTWARE hive builds and loaded by that name at run time, so no import closure reaches it.
+rsaenh.dll   = 2
+
 ; Session, logon, and service host — the chain that reaches the shell.
 services.exe =
 winlogon.exe =

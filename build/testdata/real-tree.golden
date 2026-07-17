@@ -1,5 +1,5 @@
 identity: winxp build 2600 (i386)
-written: 255
+written: 256
 skipped: 
 
 BOOTFONT.BIN 4952
@@ -219,6 +219,7 @@ i386/system32/pstorsvc.dll 33792
 i386/system32/regapi.dll 49664
 i386/system32/rpcrt4.dll 584704
 i386/system32/rpcss.dll 399360
+i386/system32/rsaenh.dll 208384
 i386/system32/samlib.dll 64000
 i386/system32/samsrv.dll 427520
 i386/system32/scesrv.dll 321024

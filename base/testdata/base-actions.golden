@@ -26,6 +26,7 @@ copy smss.exe dir="" rename="" flags=-
 copy basesrv.dll dir="" rename="" flags=-
 copy winsrv.dll dir="" rename="" flags=-
 copy psbase.dll dir="2" rename="" flags=-
+copy rsaenh.dll dir="2" rename="" flags=-
 copy services.exe dir="" rename="" flags=-
 copy winlogon.exe dir="" rename="" flags=-
 copy lsass.exe dir="" rename="" flags=-
