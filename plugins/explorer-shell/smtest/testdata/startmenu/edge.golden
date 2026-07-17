@@ -1,0 +1,4 @@
+LINK	prog		BadName	%SystemRoot%\foo.exe
+MKDIR	prog	Games
+MKDIR	prog	A
+LINK	prog	A	B	%SystemRoot%\foo.exe

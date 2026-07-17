@@ -1,0 +1,7 @@
+MKDIR	prog	Games
+LINK	prog	Games	Solitaire	%SystemRoot%\system32\sol.exe
+MKDIR	prog	Games
+LINK	prog	Games	Minesweeper	%SystemRoot%\system32\winmine.exe
+MKDIR	prog	Games
+MKDIR	prog	Games\Board
+LINK	prog	Games\Board	Chess	%SystemRoot%\system32\chess.exe

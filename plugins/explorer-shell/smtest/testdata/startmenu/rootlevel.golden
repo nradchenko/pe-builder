@@ -1,0 +1,4 @@
+LINK	root		Command Prompt	%SystemRoot%\system32\cmd.exe
+MKDIR	root	Games
+LINK	root	Games	Chess	%SystemRoot%\system32\chess.exe
+LINK	prog		Калькулятор	%SystemRoot%\system32\calc.exe

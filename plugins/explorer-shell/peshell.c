@@ -10,6 +10,7 @@
 #include <windows.h>
 #include <objbase.h>
 #include <shlobj.h>
+#include "startmenu.h"
 
 typedef HRESULT (WINAPI *DLLINSTALL)(BOOL, LPCWSTR);
 typedef HRESULT (WINAPI *DLLREGISTER)(void);
@@ -405,22 +406,82 @@ static void create_shortcut(const char *target, const char *linkpath){
     sl->lpVtbl->Release(sl);
 }
 
+/* The Windows side of the Start-menu generator: the callbacks startmenu.c drives, plus the
+ * enumeration that feeds them. The planner owns the layout and stays host-testable; everything
+ * here touches the OS. The context carries the two anchors an entry can land under: the All
+ * Programs tree, or the Start Menu root (selected by a leading backslash in the value name). */
+struct sm_ctx { char programs[MAX_PATH]; char root[MAX_PATH]; };
+
+/* Read the target's version-resource FileDescription (localized per the source). The path is the
+ * raw value data, so expand its %vars% first — this PE's system drive is not C:. Best-effort:
+ * a target with no version resource returns 0 and the planner falls back to the name leaf. */
+static int sm_filedesc(void *c, const char *rawtarget, char *out, int outsz){
+    (void)c;
+    char exp[MAX_PATH]; ExpandEnvironmentStringsA(rawtarget,exp,MAX_PATH);
+    DWORD handle=0, sz=GetFileVersionInfoSizeA(exp,&handle);
+    if(!sz) return 0;
+    static BYTE buf[16384];             /* these applets' version blocks are a few KB; setup is single-threaded */
+    if(sz>sizeof buf) return 0;
+    if(!GetFileVersionInfoA(exp,0,sz,buf)) return 0;
+    /* Read FileDescription for the binary's own first translation (language+codepage), so the
+     * string comes back in the source's language rather than a guessed 040904b0. */
+    struct { WORD lang, cp; } *tr=NULL; UINT trlen=0;
+    if(!VerQueryValueA(buf,"\\VarFileInfo\\Translation",(void**)&tr,&trlen) || trlen<4 || !tr) return 0;
+    char sub[80]; wsprintfA(sub,"\\StringFileInfo\\%04x%04x\\FileDescription",tr[0].lang,tr[0].cp);
+    char *desc=NULL; UINT dl=0;
+    if(!VerQueryValueA(buf,sub,(void**)&desc,&dl) || !desc || !desc[0]) return 0;
+    lstrcpynA(out,desc,outsz);
+    return out[0]!=0;
+}
+
+static const char *sm_base(struct sm_ctx *x, int at_root){ return at_root ? x->root : x->programs; }
+
+/* Called parent-first, so one CreateDirectory suffices. The planner allows a deeper rel than a
+ * MAX_PATH ANSI path holds, so bound the join and skip an over-long one rather than overflow. */
+static void sm_ensure_dir(void *c, int at_root, const char *rel){
+    struct sm_ctx *x=(struct sm_ctx*)c;
+    const char *base=sm_base(x,at_root);
+    if(lstrlenA(base)+1+lstrlenA(rel) >= MAX_PATH) return;
+    char full[MAX_PATH]; wsprintfA(full,"%s\\%s",base,rel);
+    CreateDirectoryA(full,NULL);
+}
+
+/* Drop the shortcut in its folder (rel="" -> straight under the anchor). COM is already
+ * initialized (self_register_shell ran OleInitialize on this thread). Bounded like sm_ensure_dir:
+ * base + rel + label + ".lnk" must fit MAX_PATH, else skip. */
+static void sm_make_link(void *c, int at_root, const char *rel, const char *label, const char *rawtarget){
+    struct sm_ctx *x=(struct sm_ctx*)c;
+    const char *base=sm_base(x,at_root);
+    int need=lstrlenA(base)+1+(rel[0]?lstrlenA(rel)+1:0)+lstrlenA(label)+4;   /* +"\..\.lnk" */
+    if(need >= MAX_PATH) return;
+    char full[MAX_PATH];
+    if(rel[0]) wsprintfA(full,"%s\\%s\\%s.lnk",base,rel,label);
+    else       wsprintfA(full,"%s\\%s.lnk",base,label);
+    char exp[MAX_PATH]; ExpandEnvironmentStringsA(rawtarget,exp,MAX_PATH);
+    create_shortcut(exp,full);
+}
+
 /* Materialize the Start-menu items declared under HKLM\SOFTWARE\pe-builder\StartMenu — one value
- * per item: the value name is the label, its data the (env-expandable) target path. The INF plugin
- * fills these keys, so the top-level menu is fully data-driven — nothing is hardcoded here. Each
- * becomes a shortcut in the Start Menu root, which also props the classic menu up to the height
- * shell32 needs before it draws the vertical side banner. */
+ * per item (see README.md § Start-menu items for the contract). The INF plugins fill these keys,
+ * so the menu is fully data-driven; the layout is decided by the pure planner in startmenu.c. */
 static void setup_start_menu(char drive){
     if(!drive) return;
+    struct sm_ctx x;
+    wsprintfA(x.root,"%c:\\profile\\Start Menu",drive);
+    wsprintfA(x.programs,"%c:\\profile\\Start Menu\\Programs",drive);
+    CreateDirectoryA(x.root,NULL);      /* both are in the kProfileDirs skeleton already; */
+    CreateDirectoryA(x.programs,NULL);  /* belt-and-braces */
     HKEY k;
     if(RegOpenKeyExA(HKEY_LOCAL_MACHINE,"SOFTWARE\\pe-builder\\StartMenu",0,KEY_READ,&k)!=ERROR_SUCCESS) return;
     for(DWORD i=0;;i++){
-        char label[128], data[MAX_PATH]; DWORD nl=sizeof label, dl=sizeof data, type;
-        if(RegEnumValueA(k,i,label,&nl,NULL,&type,(LPBYTE)data,&dl)!=ERROR_SUCCESS) break;
+        char name[256], data[MAX_PATH]; DWORD nl=sizeof name, dl=sizeof data, type;
+        LONG r=RegEnumValueA(k,i,name,&nl,NULL,&type,(LPBYTE)data,&dl);
+        if(r==ERROR_NO_MORE_ITEMS) break;
+        /* A name/data too big for these buffers comes back ERROR_MORE_DATA — skip that one
+         * value and keep going, rather than abandon the rest of the menu. */
+        if(r!=ERROR_SUCCESS) continue;
         if(type!=REG_SZ && type!=REG_EXPAND_SZ) continue;
-        char target[MAX_PATH]; ExpandEnvironmentStringsA(data,target,MAX_PATH);
-        char lnk[MAX_PATH]; wsprintfA(lnk,"%c:\\profile\\Start Menu\\%s.lnk",drive,label);
-        create_shortcut(target,lnk);
+        sm_plan_entry(name,data,sm_filedesc,sm_ensure_dir,sm_make_link,&x);
     }
     RegCloseKey(k);
 }

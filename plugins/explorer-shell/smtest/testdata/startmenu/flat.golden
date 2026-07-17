@@ -1,0 +1,2 @@
+LINK	prog		Редактор реестра	%SystemRoot%\regedit.exe
+LINK	prog		Command Prompt	%SystemRoot%\system32\cmd.exe

@@ -1,0 +1,3 @@
+LINK	prog		Command Prompt	%SystemRoot%\system32\cmd.exe
+MKDIR	prog	Tools
+LINK	prog	Tools	My Shell	%SystemRoot%\system32\cmd.exe

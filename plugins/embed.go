@@ -18,7 +18,7 @@ import "embed"
 //go:embed */*.inf
 //go:embed poweroff/poweroff.c poweroff/Makefile
 //go:embed ramdrive/ramdrive.c ramdrive/Makefile
-//go:embed explorer-shell/peshell.c explorer-shell/peshut.c explorer-shell/Makefile
+//go:embed explorer-shell/peshell.c explorer-shell/peshut.c explorer-shell/startmenu.c explorer-shell/startmenu.h explorer-shell/Makefile
 //go:embed pesuite/pesuite.c pesuite/Makefile
 //go:embed win32-gui/rundll32.exe.manifest win32-gui/explorer.exe.manifest
 var FS embed.FS

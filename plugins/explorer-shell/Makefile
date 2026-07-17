@@ -14,8 +14,8 @@ LDFLAGS := -Wl,--no-insert-timestamp
 
 all: peshell.exe peshut.dll
 
-peshell.exe: peshell.c
-	$(CC) -O2 -s -mwindows -Wall -Wextra $(LDFLAGS) -o $@ $< -lole32 -luuid -ladvapi32
+peshell.exe: peshell.c startmenu.c startmenu.h
+	$(CC) -O2 -s -mwindows -Wall -Wextra $(LDFLAGS) -o $@ peshell.c startmenu.c -lole32 -luuid -ladvapi32 -lversion
 
 peshut.dll: peshut.c
 	$(CC) -shared -O2 -s -Wall -Wextra $(LDFLAGS) -o $@ $< -ladvapi32

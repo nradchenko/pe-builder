@@ -21,6 +21,7 @@ reimplemented independently here.
 |------|----------|------|
 | `explorer-shell.inf` | — | Manifest: dependency/closure/build declarations and the registry, file and text edits. |
 | `peshell.c` | `peshell.exe` | The `SYSTEM\Setup\CmdLine` launcher — brings the shell up. |
+| `startmenu.c` / `.h` | (into `peshell.exe`) | Pure Start-menu layout planner (see [Start-menu items](#start-menu-items)); host-tested by `smtest/`. |
 | `peshut.c` | `peshut.dll` | The shutdown power-off hook (see [Shutdown](#shutdown)). |
 
 ## Boot sequence (`peshell.exe`)
@@ -121,15 +122,36 @@ so the baked values survive. Both halves are required.
 
 ## Start-menu items
 
-Top-level Start-menu shortcuts are data-driven. Each value under
-`HKLM\SOFTWARE\pe-builder\StartMenu` is one item — the value name is the label, the data is
-the (env-expandable) target path. `peshell` reads them at boot and writes a `.lnk` into the
-Start Menu root for each. Add or remove items by editing the `[Software.AddReg]` lines; no
-code change is needed.
+Start-menu shortcuts are data-driven. Each value under `HKLM\SOFTWARE\pe-builder\StartMenu`
+is one item, and `peshell` reads them at boot and materializes a `.lnk` for each. Any plugin
+can contribute items by writing these values from its own `[Software.AddReg]`; no code change
+is needed. The layout logic lives in the pure `startmenu.c` planner (host-tested by
+`smtest/`), separate from the Windows side that creates the folders and `.lnk` files.
 
-A side effect that is also relied on: the classic Start menu only draws its vertical side
-banner when the menu is tall enough. `NoFind`/`NoSMHelp` remove two rows; keeping a couple
-of items here restores the height so the banner reappears.
+**The contract** — for one value:
+
+- **Value name = the menu path.** A backslash encodes a submenu: `Games\Solitaire` places
+  *Solitaire* in a *Games* submenu; `Games\Board\Chess` nests two deep. A bare name (no
+  backslash) sits at the top of *All Programs*. A **single leading backslash** anchors the
+  entry at the **Start Menu root** instead — the classic menu's top level, above *Programs*:
+  `\Command Prompt` is a root item, `\Games\Chess` a submenu off the root. Intermediate folders
+  are created as needed.
+- **Value data = the target**, `%var%`-expandable, optionally `target|Explicit Label`.
+- **The displayed label** is resolved by precedence:
+  1. the **explicit label** after `|` in the data, if given (an override);
+  2. otherwise the target's version-resource **`FileDescription`** — which XP ships
+     **localized** for the source's language, so the menu reads in that language for free
+     (ties to the source-locale work); no hardcoded label table;
+  3. otherwise the **leaf** of the value name.
+
+  The chain never yields an empty label, so a target with no version resource still gets a
+  sensible name from its value-name leaf.
+
+Items are placed under **`Start Menu\Programs`** (the *All Programs* tree), the standard XP
+structure — except a leading-backslash entry, which is placed in the **Start Menu root** (the
+classic menu's top level). Backslash characters that are path separators in the name become
+real folders; any character that is illegal in a filename is stripped from the on-disk
+`.lnk`/folder name.
 
 ## Display resolution
 

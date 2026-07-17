@@ -129,12 +129,11 @@ msgina.dll = 2
 ; user picks Turn Off / Restart — /minint has no winlogon to carry out a normal shutdown.
 0x1,"Microsoft\Windows NT\CurrentVersion\Windows","AppInit_DLLs","peshut.dll"
 0x4,"Microsoft\Windows NT\CurrentVersion\Windows","LoadAppInit_DLLs",0x1
-; Top-level Start-menu items — peshell reads these at boot and creates a shortcut in the Start
-; Menu root for each (value name = label, data = target, %vars% expanded). Add/remove lines here
-; to manage the menu with no code change. Keeping a couple also props the classic menu up to the
-; height shell32 needs to draw its side banner.
-0x2,"pe-builder\StartMenu","Command Prompt","%SystemRoot%\system32\cmd.exe"
-0x2,"pe-builder\StartMenu","Calculator","%SystemRoot%\system32\calc.exe"
+; Start-menu items — peshell creates a .lnk per value at boot. Name = the menu path (backslash
+; separates submenus, one leading backslash anchors at the root), data = the %var%-expandable
+; target, optionally target|Explicit Label. See README.md § Start-menu items.
+0x2,"pe-builder\StartMenu","\Command Prompt","%SystemRoot%\system32\cmd.exe"
+0x2,"pe-builder\StartMenu","\Calculator","%SystemRoot%\system32\calc.exe"
 ; Machine-wide "Take a tour of Windows XP" balloon off (companion to the per-user Tour count).
 0x4,"Microsoft\Windows\CurrentVersion\Applets\Tour","RunCount",0x0
 ; Common (All Users) shell folders — explorer builds the common Start Menu/Desktop from these.
