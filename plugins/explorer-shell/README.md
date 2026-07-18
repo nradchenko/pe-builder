@@ -4,7 +4,7 @@ SPDX-License-Identifier: Apache-2.0
 -->
 # explorer-shell
 
-Boots the PE to a classic Windows Explorer desktop — Start menu, taskbar, and Control
+Boots the PE to a Windows Explorer desktop — the modern XP Start menu, taskbar, and Control
 Panel — instead of a bare `cmd.exe`. Off by default; enabling it auto-pulls its
 dependencies **win32-gui** (the shared Win32 GUI runtime) and **storage-pnp** (so a
 writable lettered volume exists for the user profile).
@@ -119,6 +119,40 @@ win32k *session* settings: the baked `Control Panel\Desktop\UserPreferencesMask`
 `HKU\.DEFAULT` copy. The `Explorer\VisualEffects\<effect>\DefaultApplied=1` flags (plus
 `VisualFXSetting=3`) tell XP those defaults are already applied, suppressing the recompute
 so the baked values survive. Both halves are required.
+
+## Modern Start menu
+
+The desktop uses the **modern two-column XP Start panel**, not the classic 2000-style menu. A
+`/minint` SOFTWARE hive doesn't come configured for it (GUI-mode setup would do that), so three
+things are needed, all in `explorer-shell.inf`:
+
+- **`duser.dll`** — the DirectUI runtime the panel is drawn with. shell32 loads it by name at
+  runtime (it's in no import closure), so it's a `[Closure]` seed.
+- **The two Start-panel COM objects** — CLSIDs `{4622AD11-…}` (the Start Menu band) and
+  `{A2A9545D-…}` (the "Pin to Start menu" handler), both served by shell32. Their
+  `InProcServer32` registration is written in `[Software.AddReg]`; without it the panel can't
+  instantiate and the shell falls back to the classic menu.
+- **The selection** — `HKCU\…\Explorer\Advanced\Start_ShowClassicMenu = 0` picks the modern
+  menu, and the `NoSimpleStartMenu` policy (which would force classic) is deliberately not set.
+
+**Right-column / panel cleanup.** The panel is trimmed to what makes sense in a PE via per-user
+`Explorer\Advanced` flags: My Music / My Pictures / Printers hidden (`Start_ShowMyMusic` /
+`Start_ShowMyPics` / `Start_ShowPrinters` = 0). Because the modern menu hides My Computer and My
+Documents from the *desktop* by default (it relocates them into the menu), they're kept on the
+desktop explicitly under `HideDesktopIcons\NewStartPanel` (CLSID = 0 = shown).
+
+**Internet / E-mail.** The panel ships two default *pinned* items — Internet (the default browser)
+and E-mail (the default mail client) — shown unconditionally, with no policy to remove them (there
+is no client-registration or restriction lever; confirmed by reverse-engineering shell32). The
+pinned list is a serialized pidl stream shell32 streams in and out of
+`HKCU\…\Explorer\StartPage\Favorites` via `SHOpenRegStream2W`. Writing a single `0xFF` byte there
+is what shell32 itself writes for an empty list (it is the stream's end-of-list terminator), so the
+two defaults are not seeded and the list stays available for our own items.
+
+The `0xFF` marker is **not sufficient on its own**: `Explorer\Advanced\StartMenuInit` must also say
+the panel has been initialized (value `2`, what the shell writes after its own first run). Without
+it the shell treats the profile as fresh and re-seeds both default pins straight over the marker.
+The two values are only correct together — removing either brings Internet and E-mail back.
 
 ## Start-menu items
 

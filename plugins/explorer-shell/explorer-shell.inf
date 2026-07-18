@@ -4,7 +4,7 @@
 ; explorer-shell — boot to a working Windows Explorer desktop instead of a bare command
 ; prompt. Ships peshell.exe (built from source) as the Setup\CmdLine shell: it self-registers
 ; the shell/COM components at runtime (their own DllInstall, the sequence Explorer needs to
-; initialize), sets up a writable profile, applies a classic no-frills desktop, and launches
+; initialize), sets up a writable profile, applies a no-frills desktop, and launches
 ; explorer. The [Closure] stages Explorer plus the shell handler/resource DLLs and a minimal
 ; Control Panel set (System, Display, Mouse, Keyboard). Needs the shared GUI runtime and a
 ; writable lettered volume, so it depends on win32-gui, storage-pnp, and ramdrive (the
@@ -69,6 +69,9 @@ actxprxy.dll
 comcat.dll
 mlang.dll
 shfolder.dll
+; DirectUI runtime for the modern Start panel. shell32 loads it by name at runtime, so no import
+; closure sees it — it has to be seeded explicitly.
+duser.dll
 
 [SourceDisksFiles]
 peshell.exe = 2
@@ -129,6 +132,12 @@ msgina.dll = 2
 ; user picks Turn Off / Restart — /minint has no winlogon to carry out a normal shutdown.
 0x1,"Microsoft\Windows NT\CurrentVersion\Windows","AppInit_DLLs","peshut.dll"
 0x4,"Microsoft\Windows NT\CurrentVersion\Windows","LoadAppInit_DLLs",0x1
+; The modern Start panel's COM objects, both served by shell32: {4622AD11-...} is the Start Menu
+; band, {A2A9545D-...} the "Pin to Start menu" handler. See README.md § Modern Start menu.
+0x2,"Classes\CLSID\{4622AD11-FF23-11D0-8D34-00A0C90F2719}\InProcServer32","","%SystemRoot%\system32\shell32.dll"
+0x1,"Classes\CLSID\{4622AD11-FF23-11D0-8D34-00A0C90F2719}\InProcServer32","ThreadingModel","Apartment"
+0x2,"Classes\CLSID\{A2A9545D-A0C2-42B4-9708-A0B2BADD77C8}\InProcServer32","","%SystemRoot%\system32\shell32.dll"
+0x1,"Classes\CLSID\{A2A9545D-A0C2-42B4-9708-A0B2BADD77C8}\InProcServer32","ThreadingModel","Apartment"
 ; Start-menu items — peshell creates a .lnk per value at boot. Name = the menu path (backslash
 ; separates submenus, one leading backslash anchors at the root), data = the %var%-expandable
 ; target, optionally target|Explicit Label. See README.md § Start-menu items.
@@ -234,18 +243,33 @@ msgina.dll = 2
 0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","Start_NotifyNewApps",0x0
 0x4,"Software\Microsoft\Windows\CurrentVersion\Applets\Tour","RunCount",0x0
 
-; --- Start menu / Control Panel: classic style; drop Search and Help (nothing to search / no
-; help content in the PE). ---
-0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoSimpleStartMenu",0x1
+; --- Start menu: the modern (XP) two-column panel. Start_ShowClassicMenu=0 selects it (the
+; NoSimpleStartMenu policy, which forced the classic menu and hid the choice, is intentionally
+; NOT set). Classic Control Panel view is kept; drop Search and Help (nothing to search / no help
+; content in the PE). See README.md § Modern Start menu. ---
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","Start_ShowClassicMenu",0x0
 0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","ForceClassicControlPanel",0x1
 0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoFind",0x1
 0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoSMHelp",0x1
+; Panel entries with nothing behind them in a PE: no user content, no print stack. 0 = hidden.
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","Start_ShowMyMusic",0x0
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","Start_ShowMyPics",0x0
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","Start_ShowPrinters",0x0
+; Drop the panel's two default pins (Internet, E-mail) — clients this PE does not ship. The FF byte
+; is shell32's empty-pinned-list marker; StartMenuInit=2 marks the panel already initialized, or
+; the shell re-seeds both pins over it. REQUIRED TOGETHER — see README.md § Internet / E-mail.
+0x3,"Software\Microsoft\Windows\CurrentVersion\Explorer\StartPage","Favorites",ff
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","StartMenuInit",0x2
 
 ; --- My Network Places: hidden. shell32 enumerates it while building the Desktop view; with no
 ; network the provider enumeration blocks and hangs the desktop. NoNetHood drops it entirely. ---
 0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoNetHood",0x1
 0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\ClassicStartMenu","{208D2C60-3AEA-1069-A2D7-08002B30309D}",0x1
 0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel","{208D2C60-3AEA-1069-A2D7-08002B30309D}",0x1
+; The modern menu relocates My Computer and My Documents into itself, leaving the desktop with only
+; the Recycle Bin. Keep them on the desktop: 0 = shown, in the NewStartPanel set the modern menu reads.
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel","{20D04FE0-3AEA-1069-A2D8-08002B30309D}",0x0
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel","{450D8FBA-AD25-11D0-98A8-0800361B1103}",0x0
 
 ; --- Folder views / Active Desktop: plain listview, no Web View and no Active Desktop (both pull
 ; mshtml + folder .htt templates absent from the PE and hang); folders open in the shell process,
