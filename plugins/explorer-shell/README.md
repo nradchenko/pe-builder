@@ -164,6 +164,17 @@ the panel has been initialized (value `2`, what the shell writes after its own f
 it the shell treats the profile as fresh and re-seeds both default pins straight over the marker.
 The two values are only correct together — removing either brings Internet and E-mail back.
 
+**First-run auto-open.** Left alone, the panel opens itself the first time the desktop comes up.
+The gate is `Explorer\Advanced\StartButtonBalloonTip`: explorer opens the panel while the value is
+below `2`, then stamps `2` itself, so pre-seeding `2` suppresses it. The name is misleading — it
+reads as if it controlled a balloon tip, and one function forks on `IsStartPanelOn()` to decide
+between opening the panel and showing a balloon, which is how it came by that name.
+
+This is the **second** thing depending on `StartMenuInit=2`: below that value, explorer's first-run
+initialization deletes both this value and the `StartPage` key above, so the pinned-list marker and
+the auto-open gate stand or fall together.
+
+
 ## Start-menu items
 
 Start-menu shortcuts are data-driven. Each value under `HKLM\SOFTWARE\pe-builder\StartMenu`

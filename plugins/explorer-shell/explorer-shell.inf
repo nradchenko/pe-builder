@@ -267,6 +267,9 @@ msgina.dll = 2
 ; the shell re-seeds both pins over it. REQUIRED TOGETHER — see README.md § Internet / E-mail.
 0x3,"Software\Microsoft\Windows\CurrentVersion\Explorer\StartPage","Favorites",ff
 0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","StartMenuInit",0x2
+; Suppress the first-run Start-menu auto-open. The name misleads: this gates the panel, not a
+; balloon. Also requires StartMenuInit=2 above — see README.md § Modern Start menu.
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","StartButtonBalloonTip",0x2
 
 ; --- My Network Places: hidden. shell32 enumerates it while building the Desktop view; with no
 ; network the provider enumeration blocks and hangs the desktop. NoNetHood drops it entirely. ---
