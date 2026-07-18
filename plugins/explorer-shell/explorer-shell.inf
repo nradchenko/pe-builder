@@ -149,7 +149,9 @@ msgina.dll = 2
 0x2,"Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Common Desktop","%ALLUSERSPROFILE%\Desktop"
 0x2,"Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Common Start Menu","%ALLUSERSPROFILE%\Start Menu"
 0x2,"Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Common Programs","%ALLUSERSPROFILE%\Start Menu\Programs"
-0x2,"Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Common Startup","%ALLUSERSPROFILE%\Start Menu\Programs\Startup"
+; Startup points outside Start Menu\Programs so the empty auto-run folder is not shown as a
+; submenu in All Programs; peshell creates the redirected folder (see peshell.c kProfileDirs).
+0x2,"Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Common Startup","%ALLUSERSPROFILE%\Startup"
 0x2,"Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Common AppData","%ALLUSERSPROFILE%\Application Data"
 0x2,"Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Common Documents","%ALLUSERSPROFILE%\Documents"
 
@@ -195,7 +197,7 @@ msgina.dll = 2
 0x2,"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Desktop","%USERPROFILE%\Desktop"
 0x2,"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Start Menu","%USERPROFILE%\Start Menu"
 0x2,"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Programs","%USERPROFILE%\Start Menu\Programs"
-0x2,"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Startup","%USERPROFILE%\Start Menu\Programs\Startup"
+0x2,"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Startup","%USERPROFILE%\Startup"
 0x2,"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","AppData","%USERPROFILE%\Application Data"
 0x2,"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Personal","%USERPROFILE%\My Documents"
 0x2,"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders","Local AppData","%USERPROFILE%\Local Settings\Application Data"

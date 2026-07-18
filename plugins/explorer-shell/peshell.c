@@ -16,7 +16,10 @@ typedef HRESULT (WINAPI *DLLINSTALL)(BOOL, LPCWSTR);
 typedef HRESULT (WINAPI *DLLREGISTER)(void);
 
 static const char *kProfileDirs[] = {
-    "", "\\Desktop", "\\Start Menu", "\\Start Menu\\Programs", "\\Start Menu\\Programs\\Startup",
+    "", "\\Desktop", "\\Start Menu", "\\Start Menu\\Programs",
+    /* Startup lives at the profile root, not under Programs, so the (empty) auto-run folder is
+     * not shown as a submenu in All Programs; User Shell Folders\Startup points here. */
+    "\\Startup",
     "\\Application Data", "\\My Documents", "\\Favorites", "\\Recent", "\\SendTo", "\\Templates",
     "\\Local Settings", "\\Local Settings\\Application Data", "\\Local Settings\\Temp",
     "\\Local Settings\\Temporary Internet Files", "\\Local Settings\\History", NULL
@@ -505,7 +508,7 @@ int WINAPI WinMain(HINSTANCE i,HINSTANCE p,LPSTR c,int s){
         SetEnvironmentVariableA("TMP",tmp);
         char au[MAX_PATH]; wsprintfA(au,"%c:\\All Users",drive);
         static const char *cd[]={"","\\Desktop","\\Start Menu","\\Start Menu\\Programs",
-            "\\Start Menu\\Programs\\Startup","\\Application Data","\\Documents",NULL};
+            "\\Startup","\\Application Data","\\Documents",NULL};   /* Startup off Programs — see kProfileDirs */
         for(int k=0;cd[k];k++){ char x[MAX_PATH]; wsprintfA(x,"%s%s",au,cd[k]); CreateDirectoryA(x,NULL); }
         SetEnvironmentVariableA("ALLUSERSPROFILE",au);
     }
