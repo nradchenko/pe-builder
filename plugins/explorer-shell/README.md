@@ -107,8 +107,18 @@ routes to a shutdown coordinator that isn't there and fails silently — nothing
 `peshut.dll` fixes this: it is loaded into shell processes via `AppInit_DLLs` and, on load,
 inline-patches `user32!ExitWindowsEx` so any shutdown/restart request instead drives the
 kernel's ACPI path directly (`NtShutdownSystem`) — the same primitive as the `poweroff`
-plugin. Restart maps to reboot, everything else to power-off. `Log Off` is removed from the
-shutdown dialog (there is only the SYSTEM user) via the `NoLogoff` policy.
+plugin. Restart maps to reboot, everything else to power-off.
+
+**Log Off** is meaningless here — only the SYSTEM user exists — and it appears on two separate
+surfaces, each needing its own HKLM policy: `StartMenuLogoff` removes the modern menu's button,
+`NoLogoff` the shutdown dialog's row. Two traps:
+
+- `NoLogoff` is honoured by *msgina's* dialog. If msgina can't load, shell32 falls back to its own
+  dialog, which ignores the policy — and msgina reaches it through `odbc32`, which loads
+  **`odbcint.dll`** by name. That DLL is invisible to any import closure, so it is staged
+  explicitly by `base.inf`. Dropping it there silently un-removes Log Off here.
+- `StartMenuLogoff` must be `1`. Setting it to `2` forces the button back *on* rather than
+  removing it more firmly.
 
 ## Visual effects
 

@@ -89,6 +89,7 @@ copy msls31.dll dir="" rename="" flags=-
 copy msprivs.dll dir="" rename="" flags=-
 copy msv1_0.dll dir="" rename="" flags=-
 copy odbc32.dll dir="" rename="" flags=-
+copy odbcint.dll dir="" rename="" flags=-
 copy olesvr.dll dir="" rename="" flags=-
 copy peer.exe dir="" rename="" flags=-
 copy pentnt.exe dir="" rename="" flags=-

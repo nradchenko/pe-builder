@@ -138,6 +138,11 @@ msgina.dll = 2
 0x1,"Classes\CLSID\{4622AD11-FF23-11D0-8D34-00A0C90F2719}\InProcServer32","ThreadingModel","Apartment"
 0x2,"Classes\CLSID\{A2A9545D-A0C2-42B4-9708-A0B2BADD77C8}\InProcServer32","","%SystemRoot%\system32\shell32.dll"
 0x1,"Classes\CLSID\{A2A9545D-A0C2-42B4-9708-A0B2BADD77C8}\InProcServer32","ThreadingModel","Apartment"
+; Remove "Log Off" from both surfaces it appears on: the modern menu's button and the shutdown
+; dialog's row. NoLogoff depends on base staging odbcint.dll, and StartMenuLogoff=2 would force
+; the button back on — see README.md § Shutdown.
+0x4,"Microsoft\Windows\CurrentVersion\Policies\Explorer","StartMenuLogoff",0x1
+0x4,"Microsoft\Windows\CurrentVersion\Policies\Explorer","NoLogoff",0x1
 ; Start-menu items — peshell creates a .lnk per value at boot. Name = the menu path (backslash
 ; separates submenus, one leading backslash anchors at the root), data = the %var%-expandable
 ; target, optionally target|Explicit Label. See README.md § Start-menu items.

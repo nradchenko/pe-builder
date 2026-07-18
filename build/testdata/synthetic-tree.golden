@@ -1,5 +1,5 @@
 identity: winxp build 2600 (i386)
-written: 114
+written: 115
 skipped: [cabonly.sys]
 hives: [i386/system32/SETUPREG.HIV i386/system32/config/SOFTWARE i386/system32/config/DEFAULT i386/system32/config/SAM i386/system32/config/SECURITY]
 
@@ -80,6 +80,7 @@ i386/system32/ntfs.sys
 i386/system32/ntoskrnl.exe
 i386/system32/null.sys
 i386/system32/odbc32.dll
+i386/system32/odbcint.dll
 i386/system32/olesvr.dll
 i386/system32/peer.exe
 i386/system32/pentnt.exe

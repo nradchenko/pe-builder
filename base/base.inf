@@ -232,6 +232,9 @@ msls31.dll =
 msprivs.dll =
 msv1_0.dll =
 odbc32.dll =
+; Closure-invisible: odbc32 loads it by name, like psbase/rsaenh above. Completes the
+; msgina→odbc32→odbcint chain, so msgina loads and its shutdown dialog honours NoLogoff.
+odbcint.dll =
 olesvr.dll =
 peer.exe =
 pentnt.exe =

@@ -1,5 +1,5 @@
 identity: winxp build 2600 (i386)
-written: 256
+written: 257
 skipped: 
 
 BOOTFONT.BIN 4952
@@ -205,6 +205,7 @@ i386/system32/ntdll.dll 710144
 i386/system32/ntdsapi.dll 67072
 i386/system32/ntoskrnl.exe 2147328
 i386/system32/odbc32.dll 249856
+i386/system32/odbcint.dll 98304
 i386/system32/ole32.dll 1287168
 i386/system32/olesvr.dll 24064
 i386/system32/peer.exe 108057
