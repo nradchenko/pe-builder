@@ -4,6 +4,7 @@
 package manifest
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -203,13 +204,27 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-func TestExampleManifestIsValid(t *testing.T) {
-	m, err := Load("../examples/rescue.hcl")
+// TestExampleManifestsAreValid loads and validates every shipped example. It globs rather
+// than naming them so an example that is added or renamed is covered without touching this
+// test — and so a broken one cannot ship unnoticed.
+func TestExampleManifestsAreValid(t *testing.T) {
+	paths, err := filepath.Glob("../examples/*.hcl")
 	if err != nil {
-		t.Fatalf("Load example: %v", err)
+		t.Fatalf("glob examples: %v", err)
 	}
-	if err := Validate(m); err != nil {
-		t.Fatalf("Validate example: %v", err)
+	if len(paths) == 0 {
+		t.Fatal("no examples found — the glob or the directory moved")
+	}
+	for _, p := range paths {
+		t.Run(filepath.Base(p), func(t *testing.T) {
+			m, err := Load(p)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if err := Validate(m); err != nil {
+				t.Fatalf("Validate: %v", err)
+			}
+		})
 	}
 }
 
