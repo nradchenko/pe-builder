@@ -395,6 +395,12 @@ static void apply_visual_style(void){
     set_visual_style(style,color,size,0);
 }
 
+/* Widen an ANSI path for the shell APIs. Returns FALSE on failure so the caller skips the item
+ * rather than handing a half-written buffer to a parser. */
+static BOOL path_to_wide(const char *path, WCHAR *out, int count){
+    return MultiByteToWideChar(CP_ACP,0,path,-1,out,count) != 0;
+}
+
 /* Create a .lnk shortcut to target at linkpath (COM must already be initialized). */
 static void create_shortcut(const char *target, const char *linkpath){
     IShellLinkA *sl;
@@ -402,8 +408,8 @@ static void create_shortcut(const char *target, const char *linkpath){
     sl->lpVtbl->SetPath(sl,target);
     IPersistFile *pf;
     if(sl->lpVtbl->QueryInterface(sl,&IID_IPersistFile,(void**)&pf)==S_OK){
-        WCHAR w[MAX_PATH]; MultiByteToWideChar(CP_ACP,0,linkpath,-1,w,MAX_PATH);
-        pf->lpVtbl->Save(pf,w,TRUE);
+        WCHAR w[MAX_PATH];
+        if(path_to_wide(linkpath,w,MAX_PATH)) pf->lpVtbl->Save(pf,w,TRUE);
         pf->lpVtbl->Release(pf);
     }
     sl->lpVtbl->Release(sl);
@@ -411,9 +417,18 @@ static void create_shortcut(const char *target, const char *linkpath){
 
 /* The Windows side of the Start-menu generator: the callbacks startmenu.c drives, plus the
  * enumeration that feeds them. The planner owns the layout and stays host-testable; everything
- * here touches the OS. The context carries the two anchors an entry can land under: the All
- * Programs tree, or the Start Menu root (selected by a leading backslash in the value name). */
-struct sm_ctx { char programs[MAX_PATH]; char root[MAX_PATH]; };
+ * here touches the OS.
+ *
+ * The context carries the two anchors an entry can land under (All Programs, or the Start Menu
+ * root) and collects root-anchored links so pin_top_level can pin them into the modern panel —
+ * a side channel on the layout context, and a few KB of stack, both accepted at this scale. */
+#define SM_MAXPINS 16
+struct sm_ctx {
+    char programs[MAX_PATH];
+    char root[MAX_PATH];
+    char pins[SM_MAXPINS][MAX_PATH];   /* root-anchored .lnk paths, in contract order */
+    int  npins;
+};
 
 /* Read the target's version-resource FileDescription (localized per the source). The path is the
  * raw value data, so expand its %vars% first — this PE's system drive is not C:. Best-effort:
@@ -462,6 +477,58 @@ static void sm_make_link(void *c, int at_root, const char *rel, const char *labe
     else       wsprintfA(full,"%s\\%s.lnk",base,label);
     char exp[MAX_PATH]; ExpandEnvironmentStringsA(rawtarget,exp,MAX_PATH);
     create_shortcut(exp,full);
+    /* Remember the top-level ones: the modern panel does not render Start Menu root shortcuts, so
+     * these get pinned instead once the whole menu is built. */
+    if(at_root && x->npins<SM_MAXPINS) lstrcpynA(x->pins[x->npins++],full,MAX_PATH);
+}
+
+/* --- Modern panel pinned list ------------------------------------------------------------------
+ * The two-column panel does not render Start Menu root shortcuts, so the contract's top-level items
+ * are pinned instead (see README.md § Modern Start menu). shell32's "Pin to Start menu" object —
+ * the CLSID explorer-shell.inf already registers for the panel — exposes an undocumented
+ * IStartMenuPin whose Modify(NULL,pidl) appends one item. It is registry I/O plus a change notify:
+ * it reads no window handle, no data object and no explorer IPC, so peshell can pin before the shell
+ * is started. Calling Modify (rather than hand-writing StartPage\Favorites) also lets shell32 author
+ * the item bytes and store each one CSIDL-relative. */
+/* Own copies: the SDK declares the CLSID but not this interface — its IStartMenuPinnedList is the
+ * later, different one (RemoveFromList only). Named with the file's k-prefix to avoid colliding
+ * with the SDK's CLSID declaration. */
+static const GUID kCLSID_StartMenuPin =
+    {0xA2A9545D,0xA0C2,0x42B4,{0x97,0x08,0xA0,0xB2,0xBA,0xDD,0x77,0xC8}};
+static const GUID kIID_IStartMenuPin =
+    {0xEC35E37A,0x6579,0x4F3C,{0x93,0xCD,0x6E,0x62,0xC4,0xEF,0x76,0x36}};
+
+/* Only the slots up to Modify are declared — the object has three more (a change counter and two
+ * unidentified) that we never call. */
+typedef struct IStartMenuPinVtbl {
+    HRESULT (STDMETHODCALLTYPE *QueryInterface)(void*, REFIID, void**);
+    ULONG   (STDMETHODCALLTYPE *AddRef)(void*);
+    ULONG   (STDMETHODCALLTYPE *Release)(void*);
+    HRESULT (STDMETHODCALLTYPE *GetPinnedList)(void*, void**);
+    HRESULT (STDMETHODCALLTYPE *Modify)(void*, LPCITEMIDLIST, LPCITEMIDLIST);   /* old, new */
+} IStartMenuPinVtbl;
+typedef struct { IStartMenuPinVtbl *lpVtbl; } IStartMenuPin;
+
+/* Pin the collected top-level shortcuts, in contract order — the order they appear in the panel.
+ * Best-effort: anything that won't resolve just leaves the desktop without that pin. The hive is
+ * rebuilt from the baked copy every boot and this runs once per boot, so the list always starts
+ * empty — hence no de-duplication. */
+static void pin_top_level(struct sm_ctx *x){
+    if(!x->npins) return;
+    IStartMenuPin *pin=NULL;
+    if(CoCreateInstance(&kCLSID_StartMenuPin,NULL,CLSCTX_INPROC_SERVER,
+                        &kIID_IStartMenuPin,(void**)&pin)!=S_OK || !pin) return;
+    /* One Modify per item, and each one rewrites the whole list — the interface has no batch entry
+     * point. Fine while SM_MAXPINS keeps the count small; it is the reason not to raise that cap. */
+    for(int i=0;i<x->npins;i++){
+        WCHAR w[MAX_PATH];
+        if(!path_to_wide(x->pins[i],w,MAX_PATH)) continue;
+        LPITEMIDLIST pidl=ILCreateFromPathW(w);
+        if(!pidl) continue;
+        pin->lpVtbl->Modify(pin,NULL,pidl);      /* (NULL,pidl) appends = pin */
+        ILFree(pidl);
+    }
+    pin->lpVtbl->Release(pin);
 }
 
 /* Materialize the Start-menu items declared under HKLM\SOFTWARE\pe-builder\StartMenu — one value
@@ -470,6 +537,7 @@ static void sm_make_link(void *c, int at_root, const char *rel, const char *labe
 static void setup_start_menu(char drive){
     if(!drive) return;
     struct sm_ctx x;
+    x.npins=0;
     wsprintfA(x.root,"%c:\\profile\\Start Menu",drive);
     wsprintfA(x.programs,"%c:\\profile\\Start Menu\\Programs",drive);
     CreateDirectoryA(x.root,NULL);      /* both are in the kProfileDirs skeleton already; */
@@ -487,6 +555,7 @@ static void setup_start_menu(char drive){
         sm_plan_entry(name,data,sm_filedesc,sm_ensure_dir,sm_make_link,&x);
     }
     RegCloseKey(k);
+    pin_top_level(&x);      /* top-level items into the modern panel's pinned list */
 }
 
 int WINAPI WinMain(HINSTANCE i,HINSTANCE p,LPSTR c,int s){

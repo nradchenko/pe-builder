@@ -174,6 +174,14 @@ This is the **second** thing depending on `StartMenuInit=2`: below that value, e
 initialization deletes both this value and the `StartPage` key above, so the pinned-list marker and
 the auto-open gate stand or fall together.
 
+**Top-level items are pinned.** The panel does not render Start Menu root shortcuts, so a contract
+entry with a leading backslash (see [Start-menu items](#start-menu-items)) is *also* pinned: peshell
+drives shell32's "Pin to Start menu" object — `IStartMenuPin::Modify(NULL, pidl)` on the same CLSID
+registered above — once per item, in contract order, right after the menu is built and before
+Explorer starts. That call is registry I/O plus a change notification: it needs no window, no data
+object and no running shell, and the panel re-reads the list every time it opens, so nothing has to
+be notified. Letting shell32 author the entries (rather than writing the blob by hand) also stores
+each one relative to a known folder, so no drive letter is baked in.
 
 ## Start-menu items
 
