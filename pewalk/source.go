@@ -27,6 +27,7 @@ import (
 	"io"
 	"io/fs"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 
@@ -292,17 +293,61 @@ func (s *Source) readCabinetDir(p string) ([]byte, error) {
 
 // Has reports whether name resolves to a module in the source.
 func (s *Source) Has(name string) bool {
+	_, ok := s.Locate(name)
+	return ok
+}
+
+// Locate resolves name to its origin without reading or decompressing anything,
+// following the same loose → compressed-loose → cabinet-member precedence as Read.
+// It answers "is this file on the media, and in what form" for a whole file list at
+// index cost, where Read would decode each one.
+func (s *Source) Locate(name string) (Origin, bool) {
 	key := strings.ToLower(name)
-	if _, ok := s.files[key]; ok {
-		return true
+	if p, ok := s.files[key]; ok {
+		return Origin{Kind: OriginLoose, Path: p}, true
 	}
 	if ck := compressedForm(key); ck != key {
-		if _, ok := s.files[ck]; ok {
-			return true
+		if p, ok := s.files[ck]; ok {
+			return Origin{Kind: OriginCompressedLoose, Path: p}, true
 		}
 	}
-	_, ok := s.cab[key]
-	return ok
+	if cabPath, ok := s.cab[key]; ok {
+		return Origin{Kind: OriginCab, Path: cabPath}, true
+	}
+	return Origin{}, false
+}
+
+// IndexEntry is one file the source index holds: the name it is stored under — the
+// on-disk file name for a loose or compressed-loose file (shell32.dll, shell32.dl_),
+// the member name for a cabinet member — and where that file lives.
+type IndexEntry struct {
+	Name   string
+	Origin Origin
+}
+
+// Index returns every file the source indexed, sorted by name. Names are as stored,
+// so a compressed-loose entry keeps its *.??_ spelling: the canonical name is not
+// recoverable from it (dl_ could be dll or dlx), and only the source's own metadata
+// or the archive's directory knows which. Nothing is read or decompressed.
+func (s *Source) Index() []IndexEntry {
+	out := make([]IndexEntry, 0, len(s.files)+len(s.cab))
+	for name, p := range s.files {
+		kind := OriginLoose
+		if strings.HasSuffix(name, "_") {
+			kind = OriginCompressedLoose
+		}
+		out = append(out, IndexEntry{Name: name, Origin: Origin{Kind: kind, Path: p}})
+	}
+	for name, cabPath := range s.cab {
+		out = append(out, IndexEntry{Name: name, Origin: Origin{Kind: OriginCab, Path: cabPath}})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Name != out[j].Name {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].Origin.Path < out[j].Origin.Path
+	})
+	return out
 }
 
 // Read resolves name and returns its decompressed PE bytes and origin. Resolution

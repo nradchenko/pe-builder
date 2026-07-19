@@ -5,6 +5,7 @@ package hive
 
 import (
 	"encoding/binary"
+	"strings"
 	"unicode/utf16"
 )
 
@@ -67,4 +68,27 @@ func (v Value) AsDWord() uint32 {
 		return 0
 	}
 	return binary.LittleEndian.Uint32(v.Data)
+}
+
+// AsQWord decodes a REG_QWORD value's eight little-endian data bytes.
+func (v Value) AsQWord() uint64 {
+	if len(v.Data) < 8 {
+		return 0
+	}
+	return binary.LittleEndian.Uint64(v.Data)
+}
+
+// AsMultiSZ decodes a REG_MULTI_SZ value's data into its list of strings, dropping
+// the terminating empty string. Like AsString it is a convenience for spot-checks
+// and does not validate type. An empty or NUL-only payload decodes to no strings.
+func (v Value) AsMultiSZ() []string {
+	s := decodeUTF16(v.Data)
+	var out []string
+	for _, item := range strings.Split(s, "\x00") {
+		if item == "" {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
 }

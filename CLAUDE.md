@@ -16,7 +16,13 @@ The build **engine** is a set of importable Go packages; `cmd/pebuild` is a thin
 over it. `pewalk` is a second, standalone tool (library + CLI) that inspects a source's
 PE dependencies.
 
-- `cmd/pebuild/` — the command-line frontend (cobra).
+- `cmd/pebuild/` — the command-line frontend (cobra). Besides building, it exposes the
+  engine's readers as inspection commands: `source probe|extract|ls|dirs|inf` reads a
+  Windows installation source (identity, a file pulled out and decompressed from
+  whichever form the media stores it in, the declared file list with each file's storage
+  form and output path, the directory-ID table, and an INF section as the build's own
+  parser sees it), and `hive dump` prints a key or value from a registry hive in a
+  source, a built PE, or a bare hive file.
 - `cmd/pewalk/` — the `pewalk` command: an "ldd for PE" that computes and renders the
   import closure of a Windows binary against a source (cobra).
 - Engine packages, roughly in pipeline order:
@@ -121,6 +127,34 @@ PE dependencies.
     Bart's PE Builder: its build process, the plugin `.inf` format, conventions,
     and internals. Treat these as the authoritative model of how the original tool
     behaves, and consult them before implementing anything format-related.
+
+## Inspecting a source or a build
+
+**Use the tools, not a one-off script.** Questions about a Windows source or a built
+PE — what is on the media, in what form, where it would land, what a registry hive or
+an INF says — are answered by `pebuild`'s own inspection commands. They read the media
+exactly as a build does, so what they report is what the engine sees.
+
+| Question | Command |
+|---|---|
+| What is this media? | `pebuild source probe <src>` |
+| Get me this file, decompressed | `pebuild source extract <src> <file>... [-o dir\|-]` |
+| Is this file on the media, and where does it land? | `pebuild source ls <src> [pattern]` |
+| What directory does this ID mean? | `pebuild source dirs <src>` |
+| What does this INF section say? | `pebuild source inf <src> <file> [section]` |
+| What is in this registry hive? | `pebuild hive dump <target> [path]` |
+| What does this binary import? | `pewalk --iso <src> <binary>` |
+
+`source extract` resolves a bare name against all three forms the media stores files in
+(loose, compressed `*.??_`, packed in `DRIVER.CAB`/`SP*.CAB`), takes an exact path when
+a basename is ambiguous, and pipes to stdout with `-o -`. `hive dump` reads a source, a
+built PE (directory or mastered `.iso`), or a bare hive file. Full detail in
+[`docs/inspecting.md`](docs/inspecting.md).
+
+So: do **not** mount the ISO, shell out to `7z`/`xorriso`/`cabextract`, hand-parse
+`txtsetup.sif`, or write a throwaway Go program to read a hive. If an inspection need
+is not covered, extend these commands rather than working around them — the next
+session gets the capability instead of rewriting the one-liner.
 
 ## Ground rules
 

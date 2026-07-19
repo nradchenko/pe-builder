@@ -93,6 +93,14 @@ or `PEBUILD_NO_CACHE=1` to disable it.
 
 This is early, fast-moving work — details change commit to commit.
 
+## Looking inside a source or a build
+
+`pebuild source` inspects a Windows installation source without unpacking it by hand —
+extract a file, list where the media keeps each one and where a build would place it,
+read the directory-ID table or an INF section. `pebuild hive dump` prints a registry key
+or value out of a source, a PE you just built, or a bare hive file. See
+[`docs/inspecting.md`](docs/inspecting.md).
+
 ## Inspecting dependencies with `pewalk`
 
 `pewalk` is a standalone companion tool — an "ldd for PE". Given a Windows binary and a
@@ -143,6 +151,9 @@ The text and JSON formats scale to the full closure without this concern.
 
 ## Documentation
 
+- [`docs/inspecting.md`](docs/inspecting.md) — inspecting a source or a build:
+  extracting files, listing what the media carries, reading INF sections and
+  registry hives.
 - [`docs/plugins/`](docs/plugins/) — using and writing plugins: a short guide, and
   the policy for what may be bundled with pe-builder.
 - [`docs/reference/`](docs/reference/) — a detailed, primary-source reference for
