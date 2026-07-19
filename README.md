@@ -15,7 +15,8 @@ The original *Bart's PE Builder* (freeware, Windows-only, now discontinued and
 never open-sourced) assembled a bootable live Windows environment — "BartPE" —
 from a genuine Windows XP / Server 2003 installation, driven by a simple but
 powerful plugin system. Its plugin ecosystem, including the well-known desktop
-shell plugin, turned a rescue disc into something close to a full Windows desktop.
+shell plugin, turned a bare live environment into something close to a full Windows
+desktop.
 
 **pe-builder** is a clean-room, open-source reimplementation of that idea, with two
 goals:
@@ -161,8 +162,13 @@ MPL-2.0 licenses; their notices are reproduced in
 
 ## Disclaimer
 
-This project is **not affiliated with, endorsed by, or derived from the code of**
-Bart Lagerweij or the original PE Builder (no source for which was ever released).
-Windows, Windows XP, and Windows Server are trademarks of Microsoft Corporation.
-"BartPE" refers to the environment produced by the original tool and is used here
-only for description and compatibility.
+pe-builder is **not affiliated with, endorsed by, or derived from the code of** Bart
+Lagerweij, the original PE Builder, or Microsoft. Windows and Windows XP are trademarks
+of Microsoft Corporation.
+
+Windows XP is end-of-life and unpatched, so **treat any image you build as untrusted**:
+run it in an isolated environment, ideally an offline VM, and never as a working system.
+You supply your own licensed Windows source — this project ships no Microsoft files. It
+is an experiment for enthusiasts, not a supported product.
+
+See [DISCLAIMER.md](DISCLAIMER.md) for the full text.
