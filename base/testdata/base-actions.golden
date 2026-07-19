@@ -9,7 +9,6 @@ copy ndis.sys dir="4" rename="" area=system flags=-
 copy afd.sys dir="4" rename="" area=system flags=-
 copy mup.sys dir="4" rename="" area=system flags=-
 copy dxg.sys dir="4" rename="" area=system flags=-
-copy dxgthk.sys dir="4" rename="" area=system flags=-
 copy null.sys dir="" rename="" area=system flags=-
 copy npfs.sys dir="" rename="" area=system flags=-
 copy fs_rec.sys dir="" rename="" area=system flags=-
@@ -90,10 +89,6 @@ copy msprivs.dll dir="" rename="" area=system flags=-
 copy msv1_0.dll dir="" rename="" area=system flags=-
 copy odbc32.dll dir="" rename="" area=system flags=-
 copy odbcint.dll dir="" rename="" area=system flags=-
-copy olesvr.dll dir="" rename="" area=system flags=-
-copy peer.exe dir="" rename="" area=system flags=-
-copy pentnt.exe dir="" rename="" area=system flags=-
-copy portmon.exe dir="" rename="" area=system flags=-
 copy print.exe dir="" rename="" area=system flags=-
 copy pstorsvc.dll dir="" rename="" area=system flags=-
 copy rpcss.dll dir="" rename="" area=system flags=-
@@ -101,16 +96,21 @@ copy schannel.dll dir="" rename="" area=system flags=-
 copy sortkey.nls dir="" rename="" area=system flags=-
 copy sorttbls.nls dir="" rename="" area=system flags=-
 copy svchost.exe dir="" rename="" area=system flags=-
-copy tzchange.exe dir="" rename="" area=system flags=-
 copy unicode.nls dir="" rename="" area=system flags=-
 copy userinit.exe dir="" rename="" area=system flags=-
 copy uxtheme.dll dir="" rename="" area=system flags=-
-copy vdmdbg.dll dir="" rename="" area=system flags=-
-copy vga256.dll dir="" rename="" area=system flags=-
-copy vga64k.dll dir="" rename="" area=system flags=-
 copy xlog.exe dir="" rename="" area=system flags=-
 copy xmlprov.dll dir="" rename="" area=system flags=-
 copy xmlprovi.dll dir="" rename="" area=system flags=-
+copy dxgthk.sys dir="4" rename="" area=system flags=-
+copy olesvr.dll dir="" rename="" area=system flags=-
+copy peer.exe dir="" rename="" area=system flags=-
+copy pentnt.exe dir="" rename="" area=system flags=-
+copy portmon.exe dir="" rename="" area=system flags=-
+copy tzchange.exe dir="" rename="" area=system flags=-
+copy vdmdbg.dll dir="" rename="" area=system flags=-
+copy vga256.dll dir="" rename="" area=system flags=-
+copy vga64k.dll dir="" rename="" area=system flags=-
 addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Winlogon" value="Shell" data="cmd.exe"
 addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Winlogon" value="ShutdownWithoutLogon" data="1"
 addreg hive=software type=0x7 subkey="Microsoft\\Windows NT\\CurrentVersion\\Svchost" value="rpcss" data="RpcSs"
@@ -289,8 +289,8 @@ addreg hive=default type=0x1 subkey="Console" value="FaceName" data="Lucida Cons
 addreg hive=default type=0x4 subkey="Console" value="FontFamily" data="0x36"
 addreg hive=default type=0x4 subkey="Console" value="FontWeight" data="0x190"
 addreg hive=default type=0x4 subkey="Console" value="FontSize" data="0xc0000"
-setvalue file="txtsetup.sif" section="SetupData" key="osloadoptions" data="\"/fastdetect /minint /kernel=ntoskrnl.exe /hal=halaacpi.dll\""
 setvalue file="txtsetup.sif" section="SetupData" key="loaderprompt" data="\"Starting pebuild...\""
+setvalue file="txtsetup.sif" section="SetupData" key="osloadoptions" data="\"/fastdetect /minint /kernel=ntoskrnl.exe /hal=halaacpi.dll\""
 copy hal.dll dir="" rename="" area=system flags=optional
 copy halacpi.dll dir="" rename="" area=system flags=optional
 copy atapi.sys dir="" rename="" area=system flags=optional

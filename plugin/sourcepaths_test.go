@@ -21,7 +21,7 @@ func TestSourcePathsActions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	acts, err := Actions(f, 0)
+	acts, err := Actions(f, Target{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestSourcePathsSkipsIncomplete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	acts, err := Actions(f, 0)
+	acts, err := Actions(f, Target{})
 	if err != nil {
 		t.Fatal(err)
 	}

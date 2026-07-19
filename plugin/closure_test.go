@@ -20,7 +20,7 @@ func TestParseClosure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := Parse("win32-gui", f, 0)
+	p, err := Parse("win32-gui", f, Target{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestParseNoClosure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := Parse("p", f, 0)
+	p, err := Parse("p", f, Target{})
 	if err != nil {
 		t.Fatal(err)
 	}

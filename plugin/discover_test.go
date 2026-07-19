@@ -14,7 +14,7 @@ import (
 func discoverAll(t *testing.T) (map[string]*Discovered, []*Discovered) {
 	t.Helper()
 	sp := SearchPath{DirSource{Root: "testdata/discover", Label: "test"}}
-	disc, err := Discover(sp, 0)
+	disc, err := Discover(sp, Target{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestParseFSSkipsSupportManifest(t *testing.T) {
 		"foo.inf":  &fstest.MapFile{Data: []byte(support)},  // name-matching support file
 		"real.inf": &fstest.MapFile{Data: []byte(manifest)}, // the actual manifest
 	}
-	p, err := ParseFS(fsys, "foo", 0)
+	p, err := ParseFS(fsys, "foo", Target{})
 	if err != nil {
 		t.Fatalf("ParseFS errored on a support main .inf: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestParseFSSkipsSupportManifest(t *testing.T) {
 
 	// A directory with .inf files but no plugin manifest is a clear error.
 	noManifest := fstest.MapFS{"foo.inf": &fstest.MapFile{Data: []byte(support)}}
-	if _, err := ParseFS(noManifest, "foo", 0); err == nil {
+	if _, err := ParseFS(noManifest, "foo", Target{}); err == nil {
 		t.Error("ParseFS on a manifest-less directory returned no error")
 	}
 }

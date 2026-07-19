@@ -57,6 +57,30 @@ const bootRoot = "i386"
 // each reader keeps one definition of the fallback, so no caller can drift from it.
 const defaultArch = "i386"
 
+// ResolveArch normalizes an architecture for everything that selects on one: an unset
+// architecture is the x86 layout. Both halves of that selection go through it — the
+// folders a build reads and writes (Roots) and the architecture-conditional sections
+// it compiles — so the two cannot disagree about what an unset architecture means.
+func ResolveArch(arch string) string {
+	if arch == "" {
+		return defaultArch
+	}
+	return arch
+}
+
+// KnownArch reports whether arch is one Probe can detect. It is the check for an
+// architecture that came from somewhere other than a probed source — a hand-built
+// Identity or a command-line flag — where a value that matches nothing would
+// otherwise select no architecture-specific content and say nothing about it.
+func KnownArch(arch string) bool {
+	for _, a := range archFolders {
+		if a.arch == arch {
+			return true
+		}
+	}
+	return false
+}
+
 // Roots is a source's two top-level folders, resolved for one architecture. It is
 // the single definition of "which folder", shared by the layout parser, the tree
 // assembler, the hive stage, and the boot stage — all of which resolve a folder
@@ -105,11 +129,7 @@ func (id Identity) String() string {
 // source splits them); the boot area is always i386. An Identity with no
 // architecture resolves to the x86 layout.
 func (id Identity) Roots() Roots {
-	system := id.Arch
-	if system == "" {
-		system = defaultArch
-	}
-	return Roots{System: system, Boot: bootRoot}
+	return Roots{System: ResolveArch(id.Arch), Boot: bootRoot}
 }
 
 // Source is a Windows installation source.

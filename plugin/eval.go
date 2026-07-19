@@ -28,6 +28,50 @@ const (
 	attrBootArea = 16
 )
 
+// Target is what an INF is compiled for: the source's build number, which selects
+// .BuildNo section variants, and its architecture, which selects .<arch> ones. It is
+// one value rather than two parameters so a further axis does not have to be threaded
+// through every section reader again.
+type Target struct {
+	// Build is the source's Windows build number; 0 selects no .BuildNo variant.
+	Build int
+	// Arch is the source's architecture ("i386", "amd64"). An unset one resolves to
+	// the x86 layout, exactly as it does for a source's folders — see
+	// source.ResolveArch, which both go through.
+	Arch string
+}
+
+// TargetFor derives the compilation target from a probed source identity. The base
+// layer and the plugin layer both build their target through it, so one source can
+// never resolve a different set of sections in one than in the other.
+func TargetFor(id source.Identity) Target {
+	return Target{Build: id.Build, Arch: id.Arch}
+}
+
+// validate rejects an architecture that no source can have. An unrecognized one would
+// otherwise match no section and quietly compile the architecture-neutral content
+// alone — which, for the base layer, means dropping the very options that make the
+// output a PE. Everything the engine builds comes from a probe and is always valid;
+// this catches a hand-built identity or a command-line flag.
+func (t Target) validate() error {
+	if a := source.ResolveArch(t.Arch); !source.KnownArch(a) {
+		return fmt.Errorf("unknown architecture %q", t.Arch)
+	}
+	return nil
+}
+
+// sections returns a section's lines followed by those of its architecture variant,
+// so an INF adds arch-specific entries without repeating the shared ones. It mirrors
+// how the source's own metadata reads its arch sections, and how inf.File.Section
+// folds in a .BuildNo variant — the same compose rule at each level.
+//
+// It applies to the sections that compile to actions. The metadata sections a plugin
+// declares ([Build], [Closure], [Options], [Update]) are read per build only.
+func (t Target) sections(f *inf.File, base string) []*inf.Line {
+	lines := f.Section(base, t.Build)
+	return append(lines, f.Section(base+"."+source.ResolveArch(t.Arch), t.Build)...)
+}
+
 // WinntDirectories attribute bits. 1 and 2 are the original format's; 16 is the
 // same pebuild extension as attrBootArea, kept at the same value so one number means
 // "boot chain" in both sections.
@@ -38,10 +82,14 @@ const (
 )
 
 // Actions compiles a plugin's copy/registry/text sections into the action IR for
-// the given build. Sections are visited in a fixed order (directories, file
+// the given target. Sections are visited in a fixed order (directories, file
 // copies, registry edits, then text patches); within a section, file order is
-// preserved. .BuildNo variants are folded in by inf.File.Section.
-func Actions(f *inf.File, build int) ([]action.Action, error) {
+// preserved. .BuildNo variants are folded in by inf.File.Section, and .<arch> ones
+// by Target.sections.
+func Actions(f *inf.File, t Target) ([]action.Action, error) {
+	if err := t.validate(); err != nil {
+		return nil, err
+	}
 	var out []action.Action
 	add := func(as []action.Action, err error) error {
 		if err != nil {
@@ -51,16 +99,16 @@ func Actions(f *inf.File, build int) ([]action.Action, error) {
 		return nil
 	}
 
-	if err := add(dirsActions(f, build)); err != nil {
+	if err := add(dirsActions(f, t)); err != nil {
 		return nil, err
 	}
 	// A copy may target a directory the plugin defines itself in [WinntDirectories]
 	// (a letter or number ID), not one the Windows source's txtsetup.sif knows, so it
 	// is resolved against the plugin's own table here rather than the source layout.
-	if err := add(copyActions(f, build, winntDirs(f, build))); err != nil {
+	if err := add(copyActions(f, t, winntDirs(f, t))); err != nil {
 		return nil, err
 	}
-	if err := add(sourcePathActions(f, build)); err != nil {
+	if err := add(sourcePathActions(f, t)); err != nil {
 		return nil, err
 	}
 	for _, r := range []struct {
@@ -71,29 +119,29 @@ func Actions(f *inf.File, build int) ([]action.Action, error) {
 		{"SetupReg", action.HiveSystem},
 		{"Default", action.HiveDefault},
 	} {
-		if err := add(regActions(f, build, r.section, r.hive)); err != nil {
+		if err := add(regActions(f, t, r.section, r.hive)); err != nil {
 			return nil, err
 		}
 	}
-	if err := add(setValueActions(f, build)); err != nil {
+	if err := add(setValueActions(f, t)); err != nil {
 		return nil, err
 	}
-	if err := add(lineActions(f, build, "AddLine", action.AddLine)); err != nil {
+	if err := add(lineActions(f, t, "AddLine", action.AddLine)); err != nil {
 		return nil, err
 	}
-	if err := add(lineActions(f, build, "DelLine", action.DelLine)); err != nil {
+	if err := add(lineActions(f, t, "DelLine", action.DelLine)); err != nil {
 		return nil, err
 	}
-	if err := add(appendActions(f, build)); err != nil {
+	if err := add(appendActions(f, t)); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
 // dirsActions maps [WinntDirectories]: directoryID=dirname[, attribute].
-func dirsActions(f *inf.File, build int) ([]action.Action, error) {
+func dirsActions(f *inf.File, t Target) ([]action.Action, error) {
 	var out []action.Action
-	for _, l := range f.Section("WinntDirectories", build) {
+	for _, l := range t.sections(f, "WinntDirectories") {
 		attr, _ := l.IntField(1)
 		out = append(out, action.Action{
 			Kind:         action.Mkdir,
@@ -118,9 +166,9 @@ type dirTarget struct {
 
 // winntDirs indexes the plugin's [WinntDirectories] by directory ID so a copy can
 // resolve a directory the plugin defines itself.
-func winntDirs(f *inf.File, build int) map[string]dirTarget {
+func winntDirs(f *inf.File, t Target) map[string]dirTarget {
 	dirs := make(map[string]dirTarget)
-	for _, l := range f.Section("WinntDirectories", build) {
+	for _, l := range t.sections(f, "WinntDirectories") {
 		attr, _ := l.IntField(1)
 		dirs[l.Key] = dirTarget{
 			path:     l.Field(0),
@@ -147,9 +195,9 @@ func bootAreaAttr(attr int64, bootBit int64) source.Area {
 // the copy lands there rather than being looked up — and missed — in the source
 // layout. IDs the plugin does not define (the predefined source IDs like 2=system32)
 // are left for the tree assembler to resolve against the source layout.
-func copyActions(f *inf.File, build int, dirs map[string]dirTarget) ([]action.Action, error) {
+func copyActions(f *inf.File, t Target, dirs map[string]dirTarget) ([]action.Action, error) {
 	var out []action.Action
-	for _, l := range f.Section("SourceDisksFiles", build) {
+	for _, l := range t.sections(f, "SourceDisksFiles") {
 		attr, _ := l.IntField(2)
 		a := action.Action{
 			Kind:           action.CopyFile,
@@ -181,9 +229,9 @@ func copyActions(f *inf.File, build int, dirs map[string]dirTarget) ([]action.Ac
 // is not unique in the source (nested side-by-side assemblies, duplicate names) that
 // [SourceDisksFiles]'s name lookup cannot resolve; the compressed .??_ form is handled
 // like any source copy. A line missing either side is skipped.
-func sourcePathActions(f *inf.File, build int) ([]action.Action, error) {
+func sourcePathActions(f *inf.File, t Target) ([]action.Action, error) {
 	var out []action.Action
-	for _, l := range f.Section("SourcePaths", build) {
+	for _, l := range t.sections(f, "SourcePaths") {
 		src := normalizeTreePath(l.Key)
 		dest := normalizeTreePath(l.Field(0))
 		if src == "" || dest == "" {
@@ -199,10 +247,10 @@ func sourcePathActions(f *inf.File, build int) ([]action.Action, error) {
 }
 
 // regActions maps [<prefix>.AddReg]/[<prefix>.DelReg] to the given hive.
-func regActions(f *inf.File, build int, prefix string, hive action.RegHive) ([]action.Action, error) {
+func regActions(f *inf.File, t Target, prefix string, hive action.RegHive) ([]action.Action, error) {
 	var out []action.Action
 
-	for _, l := range f.Section(prefix+".AddReg", build) {
+	for _, l := range t.sections(f, prefix+".AddReg") {
 		// type,"subkey","valuename",data...
 		regType, ok := l.IntField(0)
 		if !ok {
@@ -237,7 +285,7 @@ func regActions(f *inf.File, build int, prefix string, hive action.RegHive) ([]a
 		out = append(out, a)
 	}
 
-	for _, l := range f.Section(prefix+".DelReg", build) {
+	for _, l := range t.sections(f, prefix+".DelReg") {
 		// "subkey"[,"valuename"]
 		out = append(out, action.Action{
 			Kind:      action.DelReg,
@@ -250,9 +298,9 @@ func regActions(f *inf.File, build int, prefix string, hive action.RegHive) ([]a
 }
 
 // setValueActions maps [SetValue]: "file","section","key"[,"value"].
-func setValueActions(f *inf.File, build int) ([]action.Action, error) {
+func setValueActions(f *inf.File, t Target) ([]action.Action, error) {
 	var out []action.Action
-	for _, l := range f.Section("SetValue", build) {
+	for _, l := range t.sections(f, "SetValue") {
 		out = append(out, action.Action{
 			Kind:          action.SetValue,
 			TargetFile:    l.Field(0),
@@ -265,9 +313,9 @@ func setValueActions(f *inf.File, build int) ([]action.Action, error) {
 }
 
 // lineActions maps [AddLine]/[DelLine]: "file","section","line".
-func lineActions(f *inf.File, build int, section string, kind action.Kind) ([]action.Action, error) {
+func lineActions(f *inf.File, t Target, section string, kind action.Kind) ([]action.Action, error) {
 	var out []action.Action
-	for _, l := range f.Section(section, build) {
+	for _, l := range t.sections(f, section) {
 		out = append(out, action.Action{
 			Kind:          kind,
 			TargetFile:    l.Field(0),
@@ -279,9 +327,9 @@ func lineActions(f *inf.File, build int, section string, kind action.Kind) ([]ac
 }
 
 // appendActions maps [Append]: Filename, FileNameToAppend.
-func appendActions(f *inf.File, build int) ([]action.Action, error) {
+func appendActions(f *inf.File, t Target) ([]action.Action, error) {
 	var out []action.Action
-	for _, l := range f.Section("Append", build) {
+	for _, l := range t.sections(f, "Append") {
 		// [Append] lines are keyless (Filename, FileNameToAppend). Some may be
 		// written key=value (Filename=FileNameToAppend); handle both.
 		target, appended := l.Field(0), l.Field(1)

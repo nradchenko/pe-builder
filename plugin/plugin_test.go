@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/nradchenko/pe-builder/action"
 	"github.com/nradchenko/pe-builder/inf"
 	"github.com/nradchenko/pe-builder/internal/golden"
@@ -75,7 +77,7 @@ func parseFixture(t *testing.T, path string, build int) *Plugin {
 		t.Fatal(err)
 	}
 	name := "sample"
-	p, err := Parse(name, f, build)
+	p, err := Parse(name, f, Target{Build: build})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +92,7 @@ func TestParseSamplePluginGolden(t *testing.T) {
 func TestEnableDefault(t *testing.T) {
 	// No Enable= key: default disabled.
 	f, _ := inf.Parse([]byte("[Version]\nSignature=\"$Windows NT$\"\n[PEBuilder]\nName=\"X\""))
-	p, err := Parse("x", f, 0)
+	p, err := Parse("x", f, Target{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +117,7 @@ func TestSignatureCaseInsensitive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Parse("x", f, 0); err != nil {
+	if _, err := Parse("x", f, Target{}); err != nil {
 		t.Errorf("case-variant signature rejected: %v", err)
 	}
 }
@@ -126,7 +128,7 @@ func TestMultiSZCapturesAllStrings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := Parse("x", f, 0)
+	p, err := Parse("x", f, Target{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,8 +157,89 @@ func TestMissingRequiredSections(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: parse: %v", name, err)
 		}
-		if _, err := Parse("x", f, 0); err == nil {
+		if _, err := Parse("x", f, Target{}); err == nil {
 			t.Errorf("%s: expected error, got none", name)
+		}
+	}
+}
+
+// TestArchAffectsActions covers the architecture-conditional sections: an INF adds
+// arch-specific entries in a .<arch> section and the shared ones stay in the
+// unsuffixed section, so each architecture sees the shared set plus its own. It is
+// the same compose rule .BuildNo uses, on the other axis.
+func TestArchAffectsActions(t *testing.T) {
+	const src = `[Version]
+Signature="$Windows NT$"
+[PEBuilder]
+Name="X"
+[SourceDisksFiles]
+shared.dll =
+[SourceDisksFiles.i386]
+x86only.dll =
+[SourceDisksFiles.amd64]
+x64only.dll =
+[SetValue]
+"txtsetup.sif","SetupData","loaderprompt","""shared"""
+[SetValue.amd64]
+"txtsetup.sif","SetupData","osloadoptions","""/hal=hal.dll"""
+`
+	f, err := inf.Parse([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	copies := func(arch string) []string {
+		acts, err := Actions(f, Target{Arch: arch})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, a := range acts {
+			switch a.Kind {
+			case action.CopyFile:
+				out = append(out, a.Src)
+			case action.SetValue:
+				out = append(out, a.LineKey)
+			}
+		}
+		return out
+	}
+
+	// The shared entries appear for every architecture and each arch's own appear only
+	// for it. An unset architecture resolves to the x86 layout — the same default
+	// source.Identity.Roots applies to a source's folders, so a zero identity cannot
+	// get x86 folders while silently compiling neither architecture's sections.
+	for _, tt := range []struct {
+		arch string
+		want []string
+	}{
+		{"i386", []string{"shared.dll", "x86only.dll", "loaderprompt"}},
+		{"amd64", []string{"shared.dll", "x64only.dll", "loaderprompt", "osloadoptions"}},
+		{"", []string{"shared.dll", "x86only.dll", "loaderprompt"}},
+	} {
+		if diff := cmp.Diff(tt.want, copies(tt.arch)); diff != "" {
+			t.Errorf("arch %q (-want +got):\n%s", tt.arch, diff)
+		}
+	}
+}
+
+// TestUnknownArchRejected covers an architecture that matches no section. Left
+// unchecked it would compile the architecture-neutral content alone and report
+// success, which for the base layer means dropping the options that make the output a
+// PE — a silent wrong answer rather than a failure.
+func TestUnknownArchRejected(t *testing.T) {
+	f, err := inf.Parse([]byte("[Version]\nSignature=\"$Windows NT$\"\n[PEBuilder]\nName=\"X\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"AMD64", "x86", "x64", "ia64"} {
+		if _, err := Actions(f, Target{Arch: arch}); err == nil {
+			t.Errorf("Actions accepted unknown architecture %q", arch)
+		}
+	}
+	// The two a source can actually have, and the unset default, are accepted.
+	for _, arch := range []string{"i386", "amd64", ""} {
+		if _, err := Actions(f, Target{Arch: arch}); err != nil {
+			t.Errorf("Actions rejected valid architecture %q: %v", arch, err)
 		}
 	}
 }

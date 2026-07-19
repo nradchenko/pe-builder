@@ -89,13 +89,13 @@ func (d *Discovered) ClosureSeeds() []string {
 
 // Discover scans the search path and returns every available plugin, de-duplicated
 // by name with search-path precedence (a more specific source shadows a less
-// specific one), in name order. build selects .BuildNo section variants.
+// specific one), in name order. t selects the conditional section variants (see Parse).
 //
 // A directory that holds .inf files but no plugin manifest (no [PEBuilder] section)
 // is not a plugin and is skipped. A manifest that fails to parse is collected into
 // the returned error; the plugins that parsed cleanly are still returned, so one
 // broken plugin does not hide the rest.
-func Discover(sp SearchPath, build int) ([]*Discovered, error) {
+func Discover(sp SearchPath, t Target) ([]*Discovered, error) {
 	var (
 		out  []*Discovered
 		errs []string
@@ -106,7 +106,7 @@ func Discover(sp SearchPath, build int) ([]*Discovered, error) {
 			// Listed by the source but no longer resolvable (a race); skip it.
 			continue
 		}
-		units, err := parseUnits(fsys, canonical, build)
+		units, err := parseUnits(fsys, canonical, t)
 		if err != nil {
 			errs = append(errs, err.Error())
 			continue
@@ -127,7 +127,7 @@ func Discover(sp SearchPath, build int) ([]*Discovered, error) {
 // the manifest named after the directory first and the rest in name order. A .inf
 // without a [PEBuilder] section is a shipped support file, not a manifest, and is
 // skipped; a malformed manifest is an error.
-func parseUnits(fsys fs.FS, name string, build int) ([]*Plugin, error) {
+func parseUnits(fsys fs.FS, name string, t Target) ([]*Plugin, error) {
 	entries, err := fs.ReadDir(fsys, ".")
 	if err != nil {
 		return nil, err
@@ -155,7 +155,7 @@ func parseUnits(fsys fs.FS, name string, build int) ([]*Plugin, error) {
 			continue
 		}
 		unitName := strings.TrimSuffix(n, path.Ext(n))
-		p, err := Parse(unitName, f, build)
+		p, err := Parse(unitName, f, t)
 		if err != nil {
 			return nil, fmt.Errorf("plugin %q: %w", name, err)
 		}
@@ -187,8 +187,8 @@ func mainFirst(infs []string, name string) []string {
 // directory name. It shares parseUnits with Discover, so it selects the main .inf and
 // skips shipped support .inf files identically; a directory with no plugin manifest
 // is an error. Used by `plugins info`.
-func ParseFS(fsys fs.FS, name string, build int) (*Plugin, error) {
-	units, err := parseUnits(fsys, name, build)
+func ParseFS(fsys fs.FS, name string, t Target) (*Plugin, error) {
+	units, err := parseUnits(fsys, name, t)
 	if err != nil {
 		return nil, err
 	}

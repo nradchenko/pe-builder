@@ -33,7 +33,7 @@ func TestBuiltinBuildCapablePluginsShipSource(t *testing.T) {
 		if err != nil {
 			t.Fatalf("sub %q: %v", name, err)
 		}
-		p, err := ParseFS(sub, name, build)
+		p, err := ParseFS(sub, name, Target{Build: build})
 		if err != nil {
 			t.Fatalf("parse built-in %q: %v", name, err)
 		}

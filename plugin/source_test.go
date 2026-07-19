@@ -247,7 +247,7 @@ func TestParseFS(t *testing.T) {
 	}
 	// Parsing under the canonical name gives the on-disk identity regardless of the
 	// requested casing.
-	p, err := ParseFS(fsys, canonical, 2600)
+	p, err := ParseFS(fsys, canonical, Target{Build: 2600})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -59,10 +59,10 @@ func newPluginsAddCmd() *cobra.Command {
 }
 
 func newPluginsListCmd() *cobra.Command {
-	var (
-		build int
-		dir   string
-	)
+	// Listing enumerates the search path without parsing any manifest, so it has no
+	// conditional sections to select and takes no build/arch flags — unlike `info`,
+	// which parses and does.
+	var dir string
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List available plugins and where each resolves from",
@@ -82,7 +82,6 @@ func newPluginsListCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().IntVar(&build, "build", 0, "source build number for .BuildNo sections (e.g. 2600, 3790)")
 	cmd.Flags().StringVar(&dir, "dir", "", "project plugins directory to include (highest precedence)")
 	return cmd
 }
@@ -90,6 +89,7 @@ func newPluginsListCmd() *cobra.Command {
 func newPluginsInfoCmd() *cobra.Command {
 	var (
 		build int
+		arch  string
 		dir   string
 	)
 	cmd := &cobra.Command{
@@ -110,7 +110,7 @@ func newPluginsInfoCmd() *cobra.Command {
 			}
 			// Parse under the plugin's canonical on-disk name, not the (possibly
 			// differently cased) name the user typed.
-			p, err := plugin.ParseFS(fsys, canonical, build)
+			p, err := plugin.ParseFS(fsys, canonical, plugin.Target{Build: build, Arch: arch})
 			if err != nil {
 				return err
 			}
@@ -119,6 +119,7 @@ func newPluginsInfoCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().IntVar(&build, "build", 0, "source build number for .BuildNo sections (e.g. 2600, 3790)")
+	cmd.Flags().StringVar(&arch, "arch", "", "source architecture for .<arch> sections (i386, amd64)")
 	cmd.Flags().StringVar(&dir, "dir", "", "project plugins directory to include (highest precedence)")
 	return cmd
 }

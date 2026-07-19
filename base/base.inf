@@ -66,11 +66,11 @@ afd.sys       = 4
 ; The Multiple UNC Provider, a boot-start filesystem driver setup loads by group/tag.
 mup.sys       = 4
 
-; The DirectX kernel graphics module and its thunk that win32k loads at runtime during
-; graphics init — a runtime load invisible to the static import closure, so seeded here;
-; without them the subsystem's display init never completes.
+; The DirectX kernel graphics module that win32k loads at runtime during graphics
+; init — a runtime load invisible to the static import closure, so seeded here;
+; without it the subsystem's display init never completes. Its 32-bit thunk is x86
+; only (see the architecture-scoped section at the end of this list).
 dxg.sys       = 4
-dxgthk.sys    = 4
 
 ; Core NT system drivers not named in any txtsetup.sif *.Load list: the Null and
 ; Beep devices, the named-pipe file system (RPC/LPC over \Device\NamedPipe), and
@@ -242,10 +242,6 @@ odbc32.dll =
 ; Closure-invisible: odbc32 loads it by name, like psbase/rsaenh above. Completes the
 ; msgina→odbc32→odbcint chain, so msgina loads and its shutdown dialog honours NoLogoff.
 odbcint.dll =
-olesvr.dll =
-peer.exe =
-pentnt.exe =
-portmon.exe =
 print.exe =
 pstorsvc.dll =
 rpcss.dll =
@@ -253,16 +249,35 @@ schannel.dll =
 sortkey.nls =
 sorttbls.nls =
 svchost.exe =
-tzchange.exe =
 unicode.nls =
 userinit.exe =
 uxtheme.dll =
-vdmdbg.dll =
-vga256.dll =
-vga64k.dll =
 xlog.exe =
 xmlprov.dll =
 xmlprovi.dll =
+
+; ===========================================================================
+; x86-only residual — files the 32-bit product has and the 64-bit one does not.
+; The amd64 source's own metadata does not declare any of them, so they are scoped
+; here rather than marked optional: an x86 build still fails loudly if one goes
+; missing, which marking them optional would have silently swallowed.
+;
+; Every one is a legitimate casualty of the architecture rather than a gap in this
+; list: pentnt checks for the Pentium FDIV bug, olesvr and vdmdbg belong to the
+; Win16/NTVDM subsystem x64 drops entirely, vga256/vga64k are legacy VGA display
+; drivers, and dxgthk is the 32-bit thunk beside dxg.sys (which x64 does ship).
+; ===========================================================================
+[SourceDisksFiles.i386]
+dxgthk.sys   = 4
+olesvr.dll   =
+peer.exe     =
+pentnt.exe   =
+portmon.exe  =
+tzchange.exe =
+vdmdbg.dll   =
+vga256.dll   =
+vga64k.dll   =
+
 ; ---------------------------------------------------------------------------
 ; Registry seed.
 ;
@@ -609,12 +624,25 @@ xmlprovi.dll =
 ; The single edit that makes the result a PE: /minint puts the loader and kernel
 ; into the minimal, RAM-based preinstall mode, running from the boot media rather
 ; than an installed disk. /kernel and /hal name the kernel and HAL images
-; explicitly: /kernel=ntoskrnl.exe (the multiprocessor kernel installed under that
-; name) and /hal=halaacpi.dll, the ACPI PIC HAL. The pinned HAL targets a standard
-; ACPI machine with a uniprocessor interrupt controller — the common VM/PC case; a
-; host needing a different HAL (an APIC/multiprocessor halmacpi.dll, or a non-ACPI
-; HAL) would need this value adjusted. Applied to txtsetup.sif by a later build stage.
+; explicitly: /kernel=ntoskrnl.exe is the multiprocessor kernel installed under that
+; name, which both architectures ship.
+;
+; The HAL differs by architecture, so the whole option string is written per
+; architecture rather than defaulted and overridden — each source reads exactly one
+; of the two sections below, and there is no value to override. Applied to
+; txtsetup.sif by a later build stage.
 ; ---------------------------------------------------------------------------
 [SetValue]
-"txtsetup.sif","SetupData","osloadoptions","""/fastdetect /minint /kernel=ntoskrnl.exe /hal=halaacpi.dll"""
 "txtsetup.sif","SetupData","loaderprompt","""Starting pebuild..."""
+
+; x86 ships several HALs and the choice matters: halaacpi.dll is the ACPI HAL for a
+; uniprocessor interrupt controller — the common VM/PC case. A host needing a
+; different one (an APIC/multiprocessor halmacpi.dll, or a non-ACPI HAL) would need
+; this value adjusted.
+[SetValue.i386]
+"txtsetup.sif","SetupData","osloadoptions","""/fastdetect /minint /kernel=ntoskrnl.exe /hal=halaacpi.dll"""
+
+; x64 ships exactly one HAL, hal.dll — there are no halaacpi/halacpi/halmacpi
+; variants — so the choice that has to be made on x86 does not arise here.
+[SetValue.amd64]
+"txtsetup.sif","SetupData","osloadoptions","""/fastdetect /minint /kernel=ntoskrnl.exe /hal=hal.dll"""

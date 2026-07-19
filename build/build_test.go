@@ -251,7 +251,7 @@ demo.exe=2,,1
 	}
 
 	// No enabled plugins: the base layer is the whole build.
-	if sel, err := selectPlugins(&manifest.Manifest{PluginsDir: dir}, 2600); err != nil || sel != nil {
+	if sel, err := selectPlugins(&manifest.Manifest{PluginsDir: dir}, source.Identity{Build: 2600}); err != nil || sel != nil {
 		t.Fatalf("no enabled plugins: sel=%v err=%v", sel, err)
 	}
 
@@ -259,7 +259,7 @@ demo.exe=2,,1
 	m := &manifest.Manifest{PluginsDir: dir, Plugins: []manifest.Plugin{
 		{Name: "demo", Enabled: true, Files: manifest.Files{Exclude: []string{"i386/system32/gone.dll"}}},
 	}}
-	sel, err := selectPlugins(m, 2600)
+	sel, err := selectPlugins(m, source.Identity{Build: 2600})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +272,7 @@ demo.exe=2,,1
 
 	// An enabled plugin that is not on the search path is a clear error.
 	missing := &manifest.Manifest{PluginsDir: dir, Plugins: []manifest.Plugin{{Name: "ghost", Enabled: true}}}
-	if _, err := selectPlugins(missing, 2600); err == nil {
+	if _, err := selectPlugins(missing, source.Identity{Build: 2600}); err == nil {
 		t.Error("enabled-but-absent plugin returned no error")
 	}
 }

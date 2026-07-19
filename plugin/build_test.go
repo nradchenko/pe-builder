@@ -29,7 +29,7 @@ func TestBuiltinPoweroff(t *testing.T) {
 	if !ok {
 		t.Fatal("Resolve(poweroff) not found in the built-in source")
 	}
-	p, err := ParseFS(fsys, canonical, 2600)
+	p, err := ParseFS(fsys, canonical, Target{Build: 2600})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ Command  = make all
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := Parse("x", f, 0)
+	p, err := Parse("x", f, Target{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestParseBuildCommandVerbatim(t *testing.T) {
 	// stripped/truncated by INF field splitting).
 	f, _ := inf.Parse([]byte("[Version]\nSignature=\"$Windows NT$\"\n[PEBuilder]\nName=\"X\"\n" +
 		"[Build]\nCommand = gcc -DV=\"1,2\" -o t.exe t.c\n"))
-	p, err := Parse("x", f, 0)
+	p, err := Parse("x", f, Target{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestParseBuildCommandVerbatim(t *testing.T) {
 
 func TestParseBuildDefaultCommand(t *testing.T) {
 	f, _ := inf.Parse([]byte("[Version]\nSignature=\"$Windows NT$\"\n[PEBuilder]\nName=\"X\"\n[Build]\nProduces=a.exe\n"))
-	p, err := Parse("x", f, 0)
+	p, err := Parse("x", f, Target{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -90,6 +90,35 @@ func TestActions(t *testing.T) {
 	golden.Assert(t, "base-actions", renderActions(acts))
 }
 
+// TestActionsAlwaysSetMinint asserts the property the golden cannot: whatever the
+// architecture, the compiled base carries the loader options that make the output a
+// PE. /minint is the single edit that distinguishes a PE from ordinary setup, and it
+// now lives in architecture-scoped sections — so a source whose architecture selects
+// no section would produce a bootable-looking tree that is not a PE at all, with
+// nothing failing. This is what makes that unrepresentable.
+func TestActionsAlwaysSetMinint(t *testing.T) {
+	for _, arch := range []string{"i386", "amd64", ""} {
+		acts, err := Actions(nil, fixtureLayout(), source.Identity{Build: 2600, Arch: arch})
+		if err != nil {
+			t.Fatalf("arch %q: %v", arch, err)
+		}
+		var opts string
+		for _, a := range acts {
+			if a.Kind == action.SetValue && strings.EqualFold(a.LineKey, "osloadoptions") {
+				opts = a.LineData
+			}
+		}
+		switch {
+		case opts == "":
+			t.Errorf("arch %q: no osloadoptions in the compiled base", arch)
+		case !strings.Contains(opts, "/minint"):
+			t.Errorf("arch %q: osloadoptions lacks /minint: %s", arch, opts)
+		case !strings.Contains(opts, "/hal="):
+			t.Errorf("arch %q: osloadoptions names no HAL: %s", arch, opts)
+		}
+	}
+}
+
 // renderActions serializes an action list to a stable, readable form for golden
 // diffing: one line per action with only the fields relevant to its kind.
 func renderActions(acts []action.Action) string {

@@ -77,10 +77,11 @@ type Update struct {
 const versionSignature = "$Windows NT$"
 
 // Parse builds a Plugin from a parsed INF. name is the plugin's identifier
-// (conventionally the .inf base name). build selects .BuildNo section variants
-// (0 = unsuffixed sections only). A valid plugin must carry the [Version]
-// signature and a [PEBuilder] section.
-func Parse(name string, f *inf.File, build int) (*Plugin, error) {
+// (conventionally the .inf base name). t selects the conditional section variants:
+// its build number picks .BuildNo ones (0 = unsuffixed only) and its architecture
+// picks .<arch> ones. A valid plugin must carry the [Version] signature and a
+// [PEBuilder] section.
+func Parse(name string, f *inf.File, t Target) (*Plugin, error) {
 	if err := checkSignature(f); err != nil {
 		return nil, err
 	}
@@ -89,7 +90,10 @@ func Parse(name string, f *inf.File, build int) (*Plugin, error) {
 	}
 
 	p := &Plugin{Name: name}
-	pb := sectionMap(f.Section("PEBuilder", build))
+	// The sections below declare what the plugin *is* — its identity, what it builds,
+	// what it depends on — rather than what it places, so they resolve per build only.
+	// Architecture variants apply to the sections that compile to actions.
+	pb := sectionMap(f.Section("PEBuilder", t.Build))
 	p.Display = pb["name"]
 	p.Help = pb["help"]
 	p.Config = pb["config"]
@@ -97,17 +101,17 @@ func Parse(name string, f *inf.File, build int) (*Plugin, error) {
 		p.Enabled = strings.TrimSpace(v) == "1"
 	}
 
-	p.Update = parseUpdate(f, build)
-	p.Build = parseBuild(f, build)
-	p.Closure = parseClosure(f, build)
+	p.Update = parseUpdate(f, t.Build)
+	p.Build = parseBuild(f, t.Build)
+	p.Closure = parseClosure(f, t.Build)
 
-	opts, err := parseOptions(f, build)
+	opts, err := parseOptions(f, t.Build)
 	if err != nil {
 		return nil, fmt.Errorf("plugin %q: %w", name, err)
 	}
 	p.Options = opts
 
-	actions, err := Actions(f, build)
+	actions, err := Actions(f, t)
 	if err != nil {
 		return nil, fmt.Errorf("plugin %q: %w", name, err)
 	}

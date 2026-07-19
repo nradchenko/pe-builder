@@ -64,7 +64,7 @@ func Actions(pw *pewalk.Source, l *layout.Layout, id source.Identity) ([]action.
 	if err != nil {
 		return nil, fmt.Errorf("parse base.inf: %w", err)
 	}
-	seed, err := plugin.Actions(f, id.Build)
+	seed, err := plugin.Actions(f, plugin.TargetFor(id))
 	if err != nil {
 		return nil, fmt.Errorf("compile base.inf: %w", err)
 	}

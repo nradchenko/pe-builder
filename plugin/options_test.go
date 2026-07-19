@@ -186,7 +186,7 @@ func discoverFixture(t *testing.T, path string) *Discovered {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := Parse("options", f, 0)
+	p, err := Parse("options", f, Target{})
 	if err != nil {
 		t.Fatal(err)
 	}

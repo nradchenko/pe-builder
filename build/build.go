@@ -97,7 +97,7 @@ func Build(ctx context.Context, m *manifest.Manifest, opts ...Option) (*Report, 
 		}
 	}
 
-	selected, err := selectPlugins(m, id.Build)
+	selected, err := selectPlugins(m, id)
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +262,7 @@ func needsMachineClasses(selected []plugin.Selected) bool {
 // is one the manifest enabled: Select errors clearly when an enabled plugin is
 // missing (whether absent or unparseable), and an unrelated broken plugin is only
 // warned about.
-func selectPlugins(m *manifest.Manifest, build int) ([]plugin.Selected, error) {
+func selectPlugins(m *manifest.Manifest, id source.Identity) ([]plugin.Selected, error) {
 	enabled := m.EnabledPlugins()
 	if len(enabled) == 0 {
 		return nil, nil
@@ -272,7 +272,7 @@ func selectPlugins(m *manifest.Manifest, build int) ([]plugin.Selected, error) {
 	if err != nil {
 		return nil, err
 	}
-	discovered, discErr := plugin.Discover(sp, build)
+	discovered, discErr := plugin.Discover(sp, plugin.TargetFor(id))
 
 	enabledNames := make([]string, len(enabled))
 	for i, p := range enabled {
