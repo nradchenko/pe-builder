@@ -13,10 +13,12 @@ func TestFileVersionAtLeast(t *testing.T) {
 		v, min fileVersion
 		want   bool
 	}{
-		{fileVersion{5, 1, 2600, 5512}, minVersion, true},  // XP SP3
-		{fileVersion{5, 1, 2600, 1045}, minVersion, true},  // exact minimum
-		{fileVersion{5, 1, 2600, 1044}, minVersion, false}, // one below
-		{fileVersion{5, 1, 2600, 0}, minVersion, false},    // pre-SP1 RTM
+		{fileVersion{5, 1, 2600, 5512}, minVersion, true},  // XP SP3 — the exact minimum
+		{fileVersion{5, 1, 2600, 6000}, minVersion, true},  // above it: post-SP3 servicing
+		{fileVersion{5, 1, 2600, 5511}, minVersion, false}, // one below
+		{fileVersion{5, 1, 2600, 2180}, minVersion, false}, // XP SP2
+		{fileVersion{5, 1, 2600, 1045}, minVersion, false}, // XP SP1
+		{fileVersion{5, 1, 2600, 0}, minVersion, false},    // XP RTM
 		{fileVersion{5, 2, 3790, 0}, minVersion, true},     // Server 2003
 		{fileVersion{5, 0, 2195, 0}, minVersion, false},    // Windows 2000
 	}

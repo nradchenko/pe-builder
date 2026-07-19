@@ -27,9 +27,8 @@ goals:
 ## Bring your own Windows
 
 Like the original, pe-builder ships **no Microsoft files**. You supply your own
-licensed Windows installation source (Windows XP Service Pack 1 or later, or
-Windows Server 2003). The tool only reads and repackages files from the source you
-provide.
+licensed Windows installation source (Windows XP Service Pack 3). The tool only
+reads and repackages files from the source you provide.
 
 ## Status
 

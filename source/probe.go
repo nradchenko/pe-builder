@@ -10,10 +10,12 @@ import (
 	"github.com/nradchenko/pe-builder/compress"
 )
 
-// minVersion is the lowest source version accepted: Windows XP SP1
-// (5.1.2600.1045). Older media predates the PE-mode build features this tool
-// relies on.
-var minVersion = fileVersion{Major: 5, Minor: 1, Build: 2600, Revision: 1045}
+// minVersion is the lowest source version accepted: Windows XP SP3
+// (5.1.2600.5512, the revision SP3 media ships ntdll at). SP3 was the last XP
+// service pack and supersedes the earlier ones, so building from SP0/SP1/SP2
+// media has almost no practical use and is not a target; such a source is
+// refused here rather than failing somewhere deeper in the pipeline.
+var minVersion = fileVersion{Major: 5, Minor: 1, Build: 2600, Revision: 5512}
 
 // archFolders maps a source's top-level architecture folder to the Arch value.
 // amd64 is checked first: x64 install media carries BOTH an AMD64 folder (the

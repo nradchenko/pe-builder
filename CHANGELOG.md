@@ -5,6 +5,22 @@ All notable changes to pe-builder are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **A source must now be Windows XP SP3.** The accepted minimum moved up from SP1 to SP3
+  (`5.1.2600.5512`), so earlier service packs are refused when the source is probed rather
+  than failing somewhere deeper in the build. SP3 was the last and universal XP service
+  pack, and it supersedes the earlier ones — building a PE from SP0/SP1/SP2 media has
+  almost no practical use, so they are not a target at all rather than merely untested.
+
+### Known limitations
+
+- **Windows Server 2003 sources are untested.** They are still accepted — a 2003 source is
+  newer than the SP3 minimum — and may well build, but nothing has been verified against
+  one. Windows XP SP3 is the only source proven to work.
+
 ## [0.3.0] - 2026-07-17
 
 The themed-desktop release. The `luna` plugin brings the XP "Luna" visual style — the
@@ -128,6 +144,7 @@ build runs in about 4 seconds and produces a roughly 45 MB ISO.
 - Targets Windows XP sources; other source flavors and output targets are planned.
 - No plugin system yet — a build is the base layer only.
 
+[Unreleased]: https://github.com/nradchenko/pe-builder/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.3.0
 [0.2.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.2.0
 [0.1.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.1.0
