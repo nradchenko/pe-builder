@@ -105,6 +105,11 @@ PE dependencies.
   and the Themes service, then selects it in the registry. A visual-style plugin ships no code:
   it only selects a style, and peshell applies it — the theme hook belongs to the client that
   asks for it and dies with that client, so the applier has to be the long-lived shell process.
+  Standing apart from that desktop chain, `games` is an optional plugin that stages the XP
+  games a minimal PE can actually run (Solitaire, Minesweeper, FreeCell, Spider Solitaire)
+  from a `[Closure]` seed each, grouping them under a `Games` submenu via the path-encoded
+  Start-menu contract; Hearts and Pinball are left out, needing a network stack and
+  DirectX/sound respectively.
 - `internal/` — support packages: `golden` (golden-file test helper), `buildinfo`
   (version metadata).
 - `scripts/` — repository tooling. `gen-licenses.sh` (+ its template) regenerates the

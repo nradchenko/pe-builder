@@ -1,0 +1,34 @@
+; Copyright 2026 Nikita Radchenko
+; SPDX-License-Identifier: Apache-2.0
+;
+; games — the XP games that run in the PE, grouped under a Games Start-menu folder.
+; Off by default; auto-enabled by dependents or enabled directly.
+;
+; Hearts and Pinball are deliberately absent: they need a network stack and
+; DirectX/sound respectively, neither of which a minimal PE has. See README.md.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "Games"
+Enable = 0
+
+[Update]
+depends = win32-gui
+
+; cards.dll is not seeded: sol.exe and freecell.exe import it statically, so the closure
+; already stages it, and spider.exe carries its own card art. See README.md § Card graphics.
+[Closure]
+freecell.exe
+sol.exe
+spider.exe
+winmine.exe
+
+; The value name is the menu path, so each entry lands in a Games submenu; the label comes
+; from the target's own FileDescription, which XP ships localized for the source's language.
+[Software.AddReg]
+0x2,"pe-builder\StartMenu","Games\FreeCell","%SystemRoot%\system32\freecell.exe"
+0x2,"pe-builder\StartMenu","Games\Minesweeper","%SystemRoot%\system32\winmine.exe"
+0x2,"pe-builder\StartMenu","Games\Solitaire","%SystemRoot%\system32\sol.exe"
+0x2,"pe-builder\StartMenu","Games\Spider Solitaire","%SystemRoot%\system32\spider.exe"
