@@ -6,8 +6,9 @@ the ideas behind the classic, discontinued **Bart's PE Builder**.
 
 > **Status: early development.** A build already produces a bootable PE — an interactive
 > `cmd.exe`, a Windows Explorer desktop, or that desktop with the XP **"Luna" visual style**
-> (all early proofs of concept). Formats, commands, and structure are subject to change, and
-> there are no releases yet.
+> (all early proofs of concept). **Windows XP x64 Edition sources build and boot too**, to a
+> `cmd.exe` prompt. Formats, commands, and structure are subject to change, and there are no
+> releases yet.
 
 ## What this is
 
@@ -28,8 +29,11 @@ goals:
 ## Bring your own Windows
 
 Like the original, pe-builder ships **no Microsoft files**. You supply your own
-licensed Windows installation source (Windows XP Service Pack 3). The tool only
-reads and repackages files from the source you provide.
+licensed Windows installation source — Windows XP SP3, or Windows XP Professional x64
+Edition. The tool only reads and repackages files from the source you provide.
+
+See [`docs/supported.md`](docs/supported.md) for what each source produces, and for the
+hardware an image expects.
 
 ## Status
 
@@ -45,6 +49,14 @@ A `poweroff` command ships as a built-in plugin, compiled from source at build t
 it in your manifest like any other. A build takes a few seconds and produces an ISO of
 roughly 44 MB for the bare `cmd.exe` image up to ~63 MB for the themed desktop. See
 [`docs/plugins/`](docs/plugins/) to use or write plugins.
+
+**64-bit sources.** A Windows XP Professional x64 Edition source builds and boots to
+`cmd.exe`. Such a source splits its files across two folders — the OS payload in `AMD64`,
+the real-mode boot chain in `I386` — and the build mirrors that layout rather than assuming
+a single `I386`. The desktop plugins stay 32-bit for now, so an x64 image is a command-line
+environment; [`docs/supported.md`](docs/supported.md) has the detail.
+
+Images are developed and tested in **QEMU**; booting on physical hardware is untested.
 
 ## Quick start
 
@@ -151,6 +163,8 @@ The text and JSON formats scale to the full closure without this concern.
 
 ## Documentation
 
+- [`docs/supported.md`](docs/supported.md) — which Windows sources are supported and what
+  each one produces, the output targets, and the hardware an image expects.
 - [`docs/inspecting.md`](docs/inspecting.md) — inspecting a source or a build:
   extracting files, listing what the media carries, reading INF sections and
   registry hives.

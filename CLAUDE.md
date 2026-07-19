@@ -113,8 +113,12 @@ PE dependencies.
   and `explorer-shell` boots to a Windows Explorer desktop instead
   of a bare prompt — it ships `peshell` (a build-capable launcher that self-registers the
   shell/COM components at runtime, sets up the profile, applies the visual style the registry
-  selects, and runs explorer) and `peshut` (a hook so the shell's Turn Off powers the machine
-  off), and depends on the others. Three more plugins give that desktop the XP look, each a
+  selects, builds the Start menu from the registry contract other plugins contribute to —
+  creating each shortcut, its submenu folders, and pinning the root-anchored ones into the
+  modern panel — and runs explorer) and `peshut` (a hook so the shell's Turn Off powers the
+  machine off), and depends on the others. The Start-menu layout logic is a pure planner
+  (`startmenu.c`) with a host golden test in `smtest/`, so the contract is verifiable without
+  booting. Three more plugins give that desktop the XP look, each a
   layer of one chain: `pesuite` is a build-capable plugin whose tiny system-start driver
   (`pesuite.sys`) sets the product SuiteMask bit the Win32 subsystem gates the whole
   WinStation/session subsystem on — the kernel never writes it in a PE, because a PE needs
@@ -136,6 +140,11 @@ PE dependencies.
   committed `THIRD-PARTY-LICENSES` notice from the binaries' transitive dependency closure
   via `go-licenses`; run it through `make licenses`.
 - `docs/` — project documentation.
+  - `docs/supported.md` — the compatibility matrix: which Windows sources are supported and
+    what each produces (XP SP3 32-bit reaches the themed desktop; XP x64 reaches `cmd.exe`),
+    the output targets, and the guest hardware an image expects. Keep it current when a
+    source, target, or environment changes status — it is where "does X work?" is answered,
+    and it distinguishes **verified** from **untested** deliberately.
   - `docs/plugins/` — the plugin bundling/inclusion policy (what may ship built-in).
   - `docs/reference/` — a primary-source reference describing the **original**
     Bart's PE Builder: its build process, the plugin `.inf` format, conventions,
