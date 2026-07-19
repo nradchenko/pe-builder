@@ -22,6 +22,13 @@ Enable = 0
 [Update]
 depends = explorer-shell, terminal-services
 
+; Every scheme and size lives in the one Luna.msstyles staged below, so these stage nothing extra.
+; See README.md § Colour schemes and sizes.
+[Options]
+; name = default, type[, allowed...]
+color = NormalColor, string, NormalColor, HomeStead, Metallic
+size  = NormalSize,  string, NormalSize,  LargeFonts, ExtraLargeFonts
+
 ; The Themes service host: svchost loads this DLL (ThemeServiceMain), and its client half is what
 ; peshell talks to. Its static closure is common runtime already present, so this stages shsvcs
 ; itself.
@@ -68,11 +75,11 @@ trebucbd.ttf = 22
 ; --- Theme selection for the (default) user the PE runs as (DEFAULT hive) ---
 ; The contract with peshell: it reads these four values at shell start and applies the style they
 ; name. DEFAULT because the PE runs as SYSTEM with no profile loaded, so HKCU is HKU\.DEFAULT.
-; DllName must stay REG_EXPAND_SZ — the system drive is not C:. ColorName/SizeName select blue at
-; normal size; the olive and silver schemes and the larger sizes work too.
+; DllName must stay REG_EXPAND_SZ — the system drive is not C:. ColorName/SizeName come from the
+; `color` and `size` options declared above.
 ; See README.md § The contract with peshell and § Colour schemes and sizes.
 [Default.AddReg]
 0x1,"Software\Microsoft\Windows\CurrentVersion\ThemeManager","ThemeActive","1"
 0x2,"Software\Microsoft\Windows\CurrentVersion\ThemeManager","DllName","%SystemRoot%\Resources\Themes\Luna\Luna.msstyles"
-0x1,"Software\Microsoft\Windows\CurrentVersion\ThemeManager","ColorName","NormalColor"
-0x1,"Software\Microsoft\Windows\CurrentVersion\ThemeManager","SizeName","NormalSize"
+0x1,"Software\Microsoft\Windows\CurrentVersion\ThemeManager","ColorName","$(color)"
+0x1,"Software\Microsoft\Windows\CurrentVersion\ThemeManager","SizeName","$(size)"

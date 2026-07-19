@@ -57,23 +57,36 @@ peshell expands it; nothing may rebuild that path by hand.
 ## Colour schemes and sizes
 
 `Luna.msstyles` carries **all three** of XP's colour schemes and **all three** sizes, and every
-combination works. The plugin selects blue at normal size because that is XP's default, not
-because the others are unavailable:
+combination works. Blue at normal size is the default because that is XP's, not because the
+others are unavailable — pick another with the `color` and `size` options:
 
-| `ColorName` | Scheme |
+| `color` → `ColorName` | Scheme |
 |---|---|
-| `NormalColor` | blue (XP's default — what this plugin selects) |
+| `NormalColor` | blue (XP's default — this plugin's default) |
 | `HomeStead` | olive |
 | `Metallic` | silver |
 
-| `SizeName` | Size |
+| `size` → `SizeName` | Size |
 |---|---|
-| `NormalSize` | normal |
+| `NormalSize` | normal (this plugin's default) |
 | `LargeFonts` | large |
-| `ExtraLarge` | extra large |
+| `ExtraLargeFonts` | extra large |
 
-Change them here to ship a different default, or switch at run time in Display Properties →
-Appearance, which rewrites the same values.
+```hcl
+plugin "luna" {
+  enabled = true
+  options {
+    color = "HomeStead"
+    size  = "LargeFonts"
+  }
+}
+```
+
+Note the size value is `ExtraLargeFonts`, not `ExtraLarge`: the msstyles names each
+size/colour *combination* internally by concatenation (`ExtraLargeHomeStead`), and that bare
+`ExtraLarge` prefix is not what `SizeName` takes.
+
+Both are also rewritten at run time by Display Properties → Appearance, if the desktop has it.
 
 ## Fonts
 

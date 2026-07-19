@@ -22,6 +22,13 @@ build {
 
 plugin "luna" {
   enabled = true
+
+  # Colour scheme and font size. These are the defaults; color also takes "HomeStead" (olive)
+  # or "Metallic" (silver), and size "LargeFonts" or "ExtraLargeFonts".
+  # options {
+  #   color = "NormalColor"
+  #   size  = "NormalSize"
+  # }
 }
 
 # Resolution is an explorer-shell option (luna depends on explorer-shell). Uncomment to change
