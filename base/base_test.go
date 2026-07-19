@@ -97,11 +97,11 @@ func renderActions(acts []action.Action) string {
 	for _, a := range acts {
 		switch a.Kind {
 		case action.CopyFile:
-			fmt.Fprintf(&b, "copy %s dir=%q rename=%q flags=%s\n",
-				a.Src, a.DirID, a.Rename, copyFlags(a))
+			fmt.Fprintf(&b, "copy %s dir=%q rename=%q area=%s flags=%s\n",
+				a.Src, a.DirID, a.Rename, a.Area, copyFlags(a))
 		case action.Mkdir:
-			fmt.Fprintf(&b, "mkdir id=%s path=%q fromRoot=%v always=%v\n",
-				a.DirID, a.Path, a.FromRoot, a.AlwaysCreate)
+			fmt.Fprintf(&b, "mkdir id=%s path=%q area=%s fromRoot=%v always=%v\n",
+				a.DirID, a.Path, a.Area, a.FromRoot, a.AlwaysCreate)
 		case action.AddReg:
 			fmt.Fprintf(&b, "addreg hive=%s type=0x%x subkey=%q value=%q data=%q\n",
 				a.Hive, a.RegType, a.Subkey, a.ValueName, a.Data)

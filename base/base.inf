@@ -28,15 +28,22 @@ Enable = 1
 ; boot reveals what else is required, and this list grows to match.
 ; ---------------------------------------------------------------------------
 [SourceDisksFiles]
-; Boot chain, placed at the system root (\I386): the setup loader the CD boot
-; sector chains to, the hardware detector it invokes, and the boot metadata it
+; Boot chain, placed at the source root (directory ID 1): the setup loader the CD
+; boot sector chains to, the hardware detector it invokes, and the boot metadata it
 ; reads (edited into PE mode by a later stage). bootfix.bin only adds the "press
 ; any key to boot from CD" prompt, so it is optional (attribute 4) — a source that
 ; omits it still boots.
-setupldr.bin = 1
-ntdetect.com = 1
+;
+; The first three are real mode, so they ship in the I386 folder on every
+; architecture and are marked as boot-area (attribute 16; bootfix combines it with
+; optional, 4|16=20). txtsetup.sif is metadata rather than code and travels with the
+; OS payload, so it stays in the system area — the AMD64 folder on an x64 source,
+; alongside the hives, while the loader that reads it sits in I386. Directory ID and
+; area are separate axes: all four are at the root of their own folder.
+setupldr.bin = 1,,16
+ntdetect.com = 1,,16
 txtsetup.sif = 1
-bootfix.bin  = 1,,4
+bootfix.bin  = 1,,20
 ; The text-setup mini-driver the loader loads for setup-mode device access, from
 ; the drivers directory (matching a working reference build). It depends on the
 ; setup language driver, loaded alongside it.

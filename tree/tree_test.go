@@ -37,26 +37,91 @@ func TestAssembleAmd64Roots(t *testing.T) {
 		t.Fatalf("amd64 roots must differ to make this test meaningful: %+v", roots)
 	}
 
-	// The payload is under the amd64 folder. A decoy of the same name sits in the
-	// boot folder: reading the boot area instead would find it and pass silently.
+	// Each area holds a decoy of the other's file, so resolving the wrong area finds
+	// something and would pass silently rather than erroring on a missing file.
 	src := fstest.MapFS{
 		"amd64/loose.txt": {Data: []byte("amd64 payload\n")},
 		"i386/loose.txt":  {Data: []byte("boot-area decoy\n")},
+		"i386/ldr.bin":    {Data: []byte("real-mode loader\n")},
+		"amd64/ldr.bin":   {Data: []byte("system-area decoy\n")},
 	}
-	acts := []action.Action{{Kind: action.CopyFile, Src: "loose.txt", DirID: "2"}}
+	acts := []action.Action{
+		{Kind: action.CopyFile, Src: "loose.txt", DirID: "2"},
+		// The real-mode boot chain: read from and written to the boot area, pinned at
+		// the source root (directory ID 1) like the loader the CD boot sector chains to.
+		{Kind: action.CopyFile, Src: "ldr.bin", DirID: "1", Area: source.AreaBoot},
+		// Directories carry an area too. These create nothing a copy would create, so
+		// only makeDir's own area resolution can place them — a misplaced directory
+		// writes no file and so would leave the assertions on Written untouched.
+		{Kind: action.Mkdir, DirID: "p", Path: "payloaddir", AlwaysCreate: true},
+		{Kind: action.Mkdir, DirID: "b", Path: "bootdir", AlwaysCreate: true, Area: source.AreaBoot},
+	}
 
 	res, err := Assemble(context.Background(), acts, testLayout(), src, roots, nil, out, nil)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
-	if diff := cmp.Diff([]string{"amd64/system32/loose.txt"}, res.Written); diff != "" {
+	want := []string{"amd64/system32/loose.txt", "i386/ldr.bin"}
+	if diff := cmp.Diff(want, res.Written); diff != "" {
 		t.Errorf("Written mismatch (-want +got):\n%s", diff)
 	}
-	// Read from the system area, not the boot area's decoy...
+	// The payload resolves through the system area, not the boot area's decoy.
 	assertFile(t, out, "amd64/system32/loose.txt", []byte("amd64 payload\n"))
-	// ...and written under the system area, so nothing lands in the boot folder.
-	if _, err := os.Stat(filepath.Join(out, "i386")); !os.IsNotExist(err) {
-		t.Errorf("assembly created a boot-area directory; nothing in this build belongs there")
+	// The boot chain resolves through the boot area, not the system area's decoy —
+	// the two areas are read and written independently and never cross.
+	assertFile(t, out, "i386/ldr.bin", []byte("real-mode loader\n"))
+	// Each directory lands under its own area's folder, and under no other.
+	assertDir(t, filepath.Join(out, "amd64", "payloaddir"))
+	assertDir(t, filepath.Join(out, "i386", "bootdir"))
+	for _, stray := range []string{"i386/payloaddir", "amd64/bootdir"} {
+		if _, err := os.Stat(filepath.Join(out, filepath.FromSlash(stray))); !os.IsNotExist(err) {
+			t.Errorf("directory created in the wrong area: %s exists", stray)
+		}
+	}
+}
+
+// TestCabinetsAreSystemAreaOnly checks that the driver cabinets answer only for the
+// OS payload. They are part of that payload — they sit in the system folder — so
+// serving a boot-chain file from one would take one area's bytes for the other's
+// file, the crossing the area exists to prevent. The same name resolves from the
+// cabinet in the system area and is simply not found in the boot area.
+func TestCabinetsAreSystemAreaOnly(t *testing.T) {
+	cab, err := os.ReadFile(filepath.Join("testdata", "lzx-single.cab"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots := source.Identity{Arch: "amd64"}.Roots()
+	// A driver cabinet in the system area, holding hello.txt. Nothing is loose, so a
+	// copy of that name can only be answered by the cabinet.
+	src := fstest.MapFS{"amd64/driver.cab": {Data: cab}}
+	hello, err := os.ReadFile(filepath.Join("testdata", "hello.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out := t.TempDir()
+	sys := []action.Action{{Kind: action.CopyFile, Src: "hello.txt", DirID: "2"}}
+	if _, err := Assemble(context.Background(), sys, testLayout(), src, roots, nil, out, nil); err != nil {
+		t.Fatalf("system-area copy should resolve from the cabinet: %v", err)
+	}
+	assertFile(t, out, "amd64/system32/hello.txt", hello)
+
+	// The boot-area copy is paired with a system-area copy of the SAME name, so the
+	// member really is extracted and sitting in the cabinet resolver — the only state
+	// in which a cross-area answer is possible. Excluding boot-area names from the
+	// wanted set is not enough to prevent it; the read itself has to refuse.
+	both := []action.Action{
+		{Kind: action.CopyFile, Src: "hello.txt", DirID: "2"},
+		{Kind: action.CopyFile, Src: "hello.txt", DirID: "2", Area: source.AreaBoot},
+	}
+	res, err := Assemble(context.Background(), both, testLayout(), src, roots, nil, t.TempDir(), nil)
+	if err == nil {
+		t.Error("boot-area copy was answered from a system-area cabinet; want not found")
+	}
+	// The system-area copy of the same name still resolves — refusing the boot-area
+	// read must not break the payload path it shares a name with.
+	if res == nil || len(res.Written) != 1 || res.Written[0] != "amd64/system32/hello.txt" {
+		t.Errorf("system-area copy did not resolve alongside the refused boot-area one: %+v", res)
 	}
 }
 

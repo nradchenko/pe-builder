@@ -1,116 +1,116 @@
-copy setupldr.bin dir="1" rename="" flags=-
-copy ntdetect.com dir="1" rename="" flags=-
-copy txtsetup.sif dir="1" rename="" flags=-
-copy bootfix.bin dir="1" rename="" flags=optional
-copy setupdd.sys dir="4" rename="" flags=-
-copy spddlang.sys dir="4" rename="" flags=-
-copy acpi.sys dir="4" rename="" flags=-
-copy ndis.sys dir="4" rename="" flags=-
-copy afd.sys dir="4" rename="" flags=-
-copy mup.sys dir="4" rename="" flags=-
-copy dxg.sys dir="4" rename="" flags=-
-copy dxgthk.sys dir="4" rename="" flags=-
-copy null.sys dir="" rename="" flags=-
-copy npfs.sys dir="" rename="" flags=-
-copy fs_rec.sys dir="" rename="" flags=-
-copy beep.sys dir="" rename="" flags=-
-copy ntkrnlmp.exe dir="" rename="ntoskrnl.exe" flags=-
-copy ntdll.dll dir="" rename="" flags=-
-copy biosinfo.inf dir="1" rename="" flags=-
-copy biosinfo.inf dir="2" rename="" flags=-
-copy bootvid.dll dir="" rename="" flags=-
-copy kdcom.dll dir="" rename="" flags=-
-copy win32k.sys dir="" rename="" flags=-
-copy csrss.exe dir="" rename="" flags=-
-copy smss.exe dir="" rename="" flags=-
-copy basesrv.dll dir="" rename="" flags=-
-copy winsrv.dll dir="" rename="" flags=-
-copy psbase.dll dir="2" rename="" flags=-
-copy rsaenh.dll dir="2" rename="" flags=-
-copy services.exe dir="" rename="" flags=-
-copy winlogon.exe dir="" rename="" flags=-
-copy lsass.exe dir="" rename="" flags=-
-copy autochk.exe dir="" rename="" flags=-
-copy cmd.exe dir="" rename="" flags=-
-copy chcp.com dir="" rename="" flags=-
-copy shutdown.exe dir="" rename="" flags=-
-copy find.exe dir="2" rename="" flags=-
-copy findstr.exe dir="2" rename="" flags=-
-copy xcopy.exe dir="2" rename="" flags=-
-copy more.com dir="2" rename="" flags=-
-copy kbdclass.sys dir="" rename="" flags=-
-copy c_1252.nls dir="" rename="" flags=-
-copy c_437.nls dir="" rename="" flags=-
-copy l_intl.nls dir="" rename="" flags=-
-copy vgaoem.fon dir="2" rename="" flags=-
-copy vgasys.fon dir="22" rename="" flags=-
-copy vgafix.fon dir="22" rename="" flags=-
-copy vgaoem.fon dir="22" rename="" flags=-
-copy micross.ttf dir="22" rename="" flags=-
-copy tahoma.ttf dir="22" rename="" flags=-
-copy marlett.ttf dir="22" rename="" flags=-
-copy serife.fon dir="22" rename="" flags=-
-copy sserife.fon dir="22" rename="" flags=-
-copy coure.fon dir="22" rename="" flags=-
-copy lucon.ttf dir="22" rename="" flags=-
-copy atmfd.dll dir="2" rename="" flags=-
-copy vga.dll dir="2" rename="" flags=-
-copy framebuf.dll dir="2" rename="" flags=-
-copy dciman32.dll dir="2" rename="" flags=-
-copy kbdus.dll dir="2" rename="" flags=-
-copy imm32.dll dir="2" rename="" flags=-
-copy lpk.dll dir="2" rename="" flags=-
-copy usp10.dll dir="2" rename="" flags=-
-copy msimg32.dll dir="2" rename="" flags=-
-copy powrprof.dll dir="2" rename="" flags=-
-copy apphelp.dll dir="2" rename="" flags=-
-copy sxs.dll dir="2" rename="" flags=-
-copy activeds.dll dir="" rename="" flags=-
-copy adsldpc.dll dir="" rename="" flags=-
-copy alrsvc.dll dir="" rename="" flags=-
-copy clb.dll dir="" rename="" flags=-
-copy clusapi.dll dir="" rename="" flags=-
-copy ctype.nls dir="" rename="" flags=-
-copy dnsrslvr.dll dir="" rename="" flags=-
-copy esent.dll dir="" rename="" flags=-
-copy fc.exe dir="" rename="" flags=-
-copy fltlib.dll dir="" rename="" flags=-
-copy fltmc.exe dir="" rename="" flags=-
-copy gptext.dll dir="" rename="" flags=-
-copy intl.cpl dir="" rename="" flags=-
-copy iologmsg.dll dir="" rename="" flags=-
-copy kerberos.dll dir="" rename="" flags=-
-copy l_except.nls dir="" rename="" flags=-
-copy locale.nls dir="" rename="" flags=-
-copy locator.exe dir="" rename="" flags=-
-copy mobsync.dll dir="" rename="" flags=-
-copy msgina.dll dir="" rename="" flags=-
-copy msls31.dll dir="" rename="" flags=-
-copy msprivs.dll dir="" rename="" flags=-
-copy msv1_0.dll dir="" rename="" flags=-
-copy odbc32.dll dir="" rename="" flags=-
-copy odbcint.dll dir="" rename="" flags=-
-copy olesvr.dll dir="" rename="" flags=-
-copy peer.exe dir="" rename="" flags=-
-copy pentnt.exe dir="" rename="" flags=-
-copy portmon.exe dir="" rename="" flags=-
-copy print.exe dir="" rename="" flags=-
-copy pstorsvc.dll dir="" rename="" flags=-
-copy rpcss.dll dir="" rename="" flags=-
-copy schannel.dll dir="" rename="" flags=-
-copy sortkey.nls dir="" rename="" flags=-
-copy sorttbls.nls dir="" rename="" flags=-
-copy svchost.exe dir="" rename="" flags=-
-copy tzchange.exe dir="" rename="" flags=-
-copy unicode.nls dir="" rename="" flags=-
-copy userinit.exe dir="" rename="" flags=-
-copy uxtheme.dll dir="" rename="" flags=-
-copy vdmdbg.dll dir="" rename="" flags=-
-copy vga256.dll dir="" rename="" flags=-
-copy vga64k.dll dir="" rename="" flags=-
-copy xlog.exe dir="" rename="" flags=-
-copy xmlprov.dll dir="" rename="" flags=-
-copy xmlprovi.dll dir="" rename="" flags=-
+copy setupldr.bin dir="1" rename="" area=boot flags=-
+copy ntdetect.com dir="1" rename="" area=boot flags=-
+copy txtsetup.sif dir="1" rename="" area=system flags=-
+copy bootfix.bin dir="1" rename="" area=boot flags=optional
+copy setupdd.sys dir="4" rename="" area=system flags=-
+copy spddlang.sys dir="4" rename="" area=system flags=-
+copy acpi.sys dir="4" rename="" area=system flags=-
+copy ndis.sys dir="4" rename="" area=system flags=-
+copy afd.sys dir="4" rename="" area=system flags=-
+copy mup.sys dir="4" rename="" area=system flags=-
+copy dxg.sys dir="4" rename="" area=system flags=-
+copy dxgthk.sys dir="4" rename="" area=system flags=-
+copy null.sys dir="" rename="" area=system flags=-
+copy npfs.sys dir="" rename="" area=system flags=-
+copy fs_rec.sys dir="" rename="" area=system flags=-
+copy beep.sys dir="" rename="" area=system flags=-
+copy ntkrnlmp.exe dir="" rename="ntoskrnl.exe" area=system flags=-
+copy ntdll.dll dir="" rename="" area=system flags=-
+copy biosinfo.inf dir="1" rename="" area=system flags=-
+copy biosinfo.inf dir="2" rename="" area=system flags=-
+copy bootvid.dll dir="" rename="" area=system flags=-
+copy kdcom.dll dir="" rename="" area=system flags=-
+copy win32k.sys dir="" rename="" area=system flags=-
+copy csrss.exe dir="" rename="" area=system flags=-
+copy smss.exe dir="" rename="" area=system flags=-
+copy basesrv.dll dir="" rename="" area=system flags=-
+copy winsrv.dll dir="" rename="" area=system flags=-
+copy psbase.dll dir="2" rename="" area=system flags=-
+copy rsaenh.dll dir="2" rename="" area=system flags=-
+copy services.exe dir="" rename="" area=system flags=-
+copy winlogon.exe dir="" rename="" area=system flags=-
+copy lsass.exe dir="" rename="" area=system flags=-
+copy autochk.exe dir="" rename="" area=system flags=-
+copy cmd.exe dir="" rename="" area=system flags=-
+copy chcp.com dir="" rename="" area=system flags=-
+copy shutdown.exe dir="" rename="" area=system flags=-
+copy find.exe dir="2" rename="" area=system flags=-
+copy findstr.exe dir="2" rename="" area=system flags=-
+copy xcopy.exe dir="2" rename="" area=system flags=-
+copy more.com dir="2" rename="" area=system flags=-
+copy kbdclass.sys dir="" rename="" area=system flags=-
+copy c_1252.nls dir="" rename="" area=system flags=-
+copy c_437.nls dir="" rename="" area=system flags=-
+copy l_intl.nls dir="" rename="" area=system flags=-
+copy vgaoem.fon dir="2" rename="" area=system flags=-
+copy vgasys.fon dir="22" rename="" area=system flags=-
+copy vgafix.fon dir="22" rename="" area=system flags=-
+copy vgaoem.fon dir="22" rename="" area=system flags=-
+copy micross.ttf dir="22" rename="" area=system flags=-
+copy tahoma.ttf dir="22" rename="" area=system flags=-
+copy marlett.ttf dir="22" rename="" area=system flags=-
+copy serife.fon dir="22" rename="" area=system flags=-
+copy sserife.fon dir="22" rename="" area=system flags=-
+copy coure.fon dir="22" rename="" area=system flags=-
+copy lucon.ttf dir="22" rename="" area=system flags=-
+copy atmfd.dll dir="2" rename="" area=system flags=-
+copy vga.dll dir="2" rename="" area=system flags=-
+copy framebuf.dll dir="2" rename="" area=system flags=-
+copy dciman32.dll dir="2" rename="" area=system flags=-
+copy kbdus.dll dir="2" rename="" area=system flags=-
+copy imm32.dll dir="2" rename="" area=system flags=-
+copy lpk.dll dir="2" rename="" area=system flags=-
+copy usp10.dll dir="2" rename="" area=system flags=-
+copy msimg32.dll dir="2" rename="" area=system flags=-
+copy powrprof.dll dir="2" rename="" area=system flags=-
+copy apphelp.dll dir="2" rename="" area=system flags=-
+copy sxs.dll dir="2" rename="" area=system flags=-
+copy activeds.dll dir="" rename="" area=system flags=-
+copy adsldpc.dll dir="" rename="" area=system flags=-
+copy alrsvc.dll dir="" rename="" area=system flags=-
+copy clb.dll dir="" rename="" area=system flags=-
+copy clusapi.dll dir="" rename="" area=system flags=-
+copy ctype.nls dir="" rename="" area=system flags=-
+copy dnsrslvr.dll dir="" rename="" area=system flags=-
+copy esent.dll dir="" rename="" area=system flags=-
+copy fc.exe dir="" rename="" area=system flags=-
+copy fltlib.dll dir="" rename="" area=system flags=-
+copy fltmc.exe dir="" rename="" area=system flags=-
+copy gptext.dll dir="" rename="" area=system flags=-
+copy intl.cpl dir="" rename="" area=system flags=-
+copy iologmsg.dll dir="" rename="" area=system flags=-
+copy kerberos.dll dir="" rename="" area=system flags=-
+copy l_except.nls dir="" rename="" area=system flags=-
+copy locale.nls dir="" rename="" area=system flags=-
+copy locator.exe dir="" rename="" area=system flags=-
+copy mobsync.dll dir="" rename="" area=system flags=-
+copy msgina.dll dir="" rename="" area=system flags=-
+copy msls31.dll dir="" rename="" area=system flags=-
+copy msprivs.dll dir="" rename="" area=system flags=-
+copy msv1_0.dll dir="" rename="" area=system flags=-
+copy odbc32.dll dir="" rename="" area=system flags=-
+copy odbcint.dll dir="" rename="" area=system flags=-
+copy olesvr.dll dir="" rename="" area=system flags=-
+copy peer.exe dir="" rename="" area=system flags=-
+copy pentnt.exe dir="" rename="" area=system flags=-
+copy portmon.exe dir="" rename="" area=system flags=-
+copy print.exe dir="" rename="" area=system flags=-
+copy pstorsvc.dll dir="" rename="" area=system flags=-
+copy rpcss.dll dir="" rename="" area=system flags=-
+copy schannel.dll dir="" rename="" area=system flags=-
+copy sortkey.nls dir="" rename="" area=system flags=-
+copy sorttbls.nls dir="" rename="" area=system flags=-
+copy svchost.exe dir="" rename="" area=system flags=-
+copy tzchange.exe dir="" rename="" area=system flags=-
+copy unicode.nls dir="" rename="" area=system flags=-
+copy userinit.exe dir="" rename="" area=system flags=-
+copy uxtheme.dll dir="" rename="" area=system flags=-
+copy vdmdbg.dll dir="" rename="" area=system flags=-
+copy vga256.dll dir="" rename="" area=system flags=-
+copy vga64k.dll dir="" rename="" area=system flags=-
+copy xlog.exe dir="" rename="" area=system flags=-
+copy xmlprov.dll dir="" rename="" area=system flags=-
+copy xmlprovi.dll dir="" rename="" area=system flags=-
 addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Winlogon" value="Shell" data="cmd.exe"
 addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Winlogon" value="ShutdownWithoutLogon" data="1"
 addreg hive=software type=0x7 subkey="Microsoft\\Windows NT\\CurrentVersion\\Svchost" value="rpcss" data="RpcSs"
@@ -291,15 +291,15 @@ addreg hive=default type=0x4 subkey="Console" value="FontWeight" data="0x190"
 addreg hive=default type=0x4 subkey="Console" value="FontSize" data="0xc0000"
 setvalue file="txtsetup.sif" section="SetupData" key="osloadoptions" data="\"/fastdetect /minint /kernel=ntoskrnl.exe /hal=halaacpi.dll\""
 setvalue file="txtsetup.sif" section="SetupData" key="loaderprompt" data="\"Starting pebuild...\""
-copy hal.dll dir="" rename="" flags=optional
-copy halacpi.dll dir="" rename="" flags=optional
-copy atapi.sys dir="" rename="" flags=optional
-copy ntfs.sys dir="" rename="" flags=optional
-copy fastfat.sys dir="" rename="" flags=optional
-copy c_1251.nls dir="" rename="" flags=-
-copy c_866.nls dir="" rename="" flags=-
-copy vga866.fon dir="2" rename="" flags=-
-copy kbdru.dll dir="2" rename="" flags=-
+copy hal.dll dir="" rename="" area=system flags=optional
+copy halacpi.dll dir="" rename="" area=system flags=optional
+copy atapi.sys dir="" rename="" area=system flags=optional
+copy ntfs.sys dir="" rename="" area=system flags=optional
+copy fastfat.sys dir="" rename="" area=system flags=optional
+copy c_1251.nls dir="" rename="" area=system flags=-
+copy c_866.nls dir="" rename="" area=system flags=-
+copy vga866.fon dir="2" rename="" area=system flags=-
+copy kbdru.dll dir="2" rename="" area=system flags=-
 addreg hive=default type=0x1 subkey="Keyboard Layout\\Preload" value="2" data="00000419"
 addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Keyboard Layouts\\00000419" value="Layout File" data="KBDRU.DLL"
 addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Keyboard Layouts\\00000419" value="Layout Text" data="Russian"

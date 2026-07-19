@@ -11,7 +11,11 @@
 // envelope.
 package action
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/nradchenko/pe-builder/source"
+)
 
 // Kind identifies what an Action does.
 type Kind string
@@ -73,6 +77,12 @@ type Action struct {
 	// CopyFile / Mkdir: DirID is the target directory ID from the plugin's
 	// [WinntDirectories] table (a numeric ID or a plugin-local a–z letter).
 	DirID string
+	// CopyFile / Mkdir: Area selects which of the source's two top-level folders the
+	// action works in — the OS payload or the real-mode boot chain (see source.Area).
+	// A copy is read from and written to the same area, so it is one property rather
+	// than two, and the two can never be mixed. The zero value is the OS payload,
+	// which is where all but a handful of boot-chain files belong.
+	Area source.Area
 
 	// CopyFile fields ([SourceDisksFiles]).
 	Src            string // source file name or wildcard pattern
@@ -101,7 +111,7 @@ type Action struct {
 	// Mkdir fields ([WinntDirectories]).
 	Path         string // directory name/path
 	AlwaysCreate bool   // create even when empty (attribute 1)
-	FromRoot     bool   // create from the output root, not inside \i386 (attribute 2)
+	FromRoot     bool   // create at the output root, not under the area's folder (attribute 2)
 
 	// Registry fields (AddReg / DelReg / SetValue-of-registry).
 	Hive      RegHive

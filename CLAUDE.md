@@ -28,7 +28,13 @@ PE dependencies.
 - Engine packages, roughly in pipeline order:
   - `manifest/` — the HCL build manifest (load + validate).
   - `source/` — read a Windows installation source (directory or ISO) and probe its
-    identity (build number, architecture, flavor).
+    identity (build number, architecture, flavor). It also owns the source's *areas*:
+    a source keeps its files in two top-level folders — the OS payload and the
+    real-mode boot chain — which are the same `I386` folder on x86 media and split on
+    amd64 media, where the payload moves to `AMD64` and the boot chain (being real
+    mode) stays in `I386`. `Identity.Roots` resolves the pair, and every stage that
+    reads from or writes under a source folder resolves it through that rather than
+    naming one, so they cannot disagree.
   - `compress/` — decompress the source's MSCF cabinets (CAB-LZX `.??_` files,
     `DRIVER.CAB`).
   - `inf/` — a Windows setupapi-compatible `.inf` parser.
@@ -36,7 +42,9 @@ PE dependencies.
     directory, on-disk name, boot-driver lists, and the source's locale from the
     `[nls]` section).
   - `action/` — the build action IR (copy-file, mkdir, registry, text-edit) that the
-    base layer and plugins compile to.
+    base layer and plugins compile to. A copy or mkdir carries the source area it
+    works in (see `source/`); a copy is read from and written to the same area, so it
+    is one property of the action rather than two.
   - `inifile/` — apply the text/INI edit actions (e.g. the `txtsetup.sif` boot edits)
     to files in the assembled tree.
   - `plugin/` — plugin discovery, parsing, dependency resolution (auto-enable the

@@ -10,20 +10,31 @@ import (
 
 	"github.com/nradchenko/pe-builder/action"
 	"github.com/nradchenko/pe-builder/inf"
+	"github.com/nradchenko/pe-builder/source"
 )
 
-// SourceDisksFiles attribute bits (see docs/reference/03-plugin-format.md).
+// SourceDisksFiles attribute bits. 1–8 are the original format's
+// (see docs/reference/03-plugin-format.md); 16 is a pebuild extension.
 const (
 	attrShipWithPlugin = 1 // file ships with the plugin; must be present
 	attrNoDecompress   = 2 // copy the compressed archive as-is
 	attrOptional       = 4 // copy only if present
 	attrUppercase      = 8 // rename the target to uppercase
+	// attrBootArea marks a file as part of the real-mode boot chain, which lives in a
+	// different source folder from the OS payload on amd64 media. It extends the
+	// original format, which defines no bit above 8: a plugin written for the original
+	// tool never sets it and so is read unchanged, while one that does set it is not
+	// portable back — the original tool builds no amd64 source for it to matter on.
+	attrBootArea = 16
 )
 
-// WinntDirectories attribute bits.
+// WinntDirectories attribute bits. 1 and 2 are the original format's; 16 is the
+// same pebuild extension as attrBootArea, kept at the same value so one number means
+// "boot chain" in both sections.
 const (
 	dirAlwaysCreate = 1 // create even when empty
-	dirFromRoot     = 2 // create from the output root, not inside \i386
+	dirFromRoot     = 2 // create at the output root, not under the area's folder
+	dirBootArea     = 16
 )
 
 // Actions compiles a plugin's copy/registry/text sections into the action IR for
@@ -90,16 +101,19 @@ func dirsActions(f *inf.File, build int) ([]action.Action, error) {
 			Path:         l.Field(0),
 			AlwaysCreate: attr&dirAlwaysCreate != 0,
 			FromRoot:     attr&dirFromRoot != 0,
+			Area:         bootAreaAttr(attr, dirBootArea),
 		})
 	}
 	return out, nil
 }
 
-// dirTarget is a directory a plugin defines in [WinntDirectories]: its path and
-// whether it is created from the output root rather than inside \i386.
+// dirTarget is a directory a plugin defines in [WinntDirectories]: its path, whether
+// it is created at the output root rather than under its area's folder, and which
+// area that is.
 type dirTarget struct {
 	path     string
 	fromRoot bool
+	area     source.Area
 }
 
 // winntDirs indexes the plugin's [WinntDirectories] by directory ID so a copy can
@@ -108,9 +122,24 @@ func winntDirs(f *inf.File, build int) map[string]dirTarget {
 	dirs := make(map[string]dirTarget)
 	for _, l := range f.Section("WinntDirectories", build) {
 		attr, _ := l.IntField(1)
-		dirs[l.Key] = dirTarget{path: l.Field(0), fromRoot: attr&dirFromRoot != 0}
+		dirs[l.Key] = dirTarget{
+			path:     l.Field(0),
+			fromRoot: attr&dirFromRoot != 0,
+			area:     bootAreaAttr(attr, dirBootArea),
+		}
 	}
 	return dirs
+}
+
+// bootAreaAttr reads the source area from an attribute field, given the section's
+// boot-chain bit. Everything is OS payload unless explicitly flagged otherwise, so an
+// INF that says nothing — every plugin written before the bit existed — keeps its
+// files and directories where they were.
+func bootAreaAttr(attr int64, bootBit int64) source.Area {
+	if attr&bootBit != 0 {
+		return source.AreaBoot
+	}
+	return source.AreaSystem
 }
 
 // copyActions maps [SourceDisksFiles]: filename=directoryID[, renamed][, attribute].
@@ -131,10 +160,15 @@ func copyActions(f *inf.File, build int, dirs map[string]dirTarget) ([]action.Ac
 			NoDecompress:   attr&attrNoDecompress != 0,
 			Optional:       attr&attrOptional != 0,
 			Uppercase:      attr&attrUppercase != 0,
+			Area:           bootAreaAttr(attr, attrBootArea),
 		}
 		if d, ok := dirs[a.DirID]; ok {
 			a.Path = d.path
 			a.FromRoot = d.fromRoot
+			// A directory the plugin defines carries its own area, and a file in a
+			// directory is in whatever area that directory is — so it settles the copy's
+			// area, the same way it settles fromRoot.
+			a.Area = d.area
 		}
 		out = append(out, a)
 	}

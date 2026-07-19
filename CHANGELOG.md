@@ -15,6 +15,15 @@ project uses [Semantic Versioning](https://semver.org/).
   where the payload moves to `AMD64` and the boot chain stays in `I386`. The pipeline now
   reads and writes through a resolved folder pair rather than a fixed name. No change to
   what an x86 build produces: its output tree is byte-for-byte identical.
+- **The real-mode boot chain is placed apart from the OS payload.** `setupldr.bin`,
+  `ntdetect.com` and `bootfix.bin` run before any 64-bit code does and ship in a source's
+  `I386` folder whatever its architecture, so they are now read from and written to that
+  folder rather than following the payload. `txtsetup.sif` is metadata, not code, and
+  stays with the payload. On an x86 source both land in the same folder as before.
+- **Plugin format:** `[SourceDisksFiles]` attribute **16** marks a file as part of the
+  real-mode boot chain. It extends the original PE Builder's attribute set, which defines
+  nothing above 8 — a plugin written for the original tool never sets it and is read
+  unchanged.
 - **API (engine packages):** `source.SystemRoot` is **removed** — use `Identity.Roots`.
   `layout.ReadSourceFile`, `tree.Assemble`, `tree.OutputPath`, `hive.BaseHives`,
   `hive.Hives.GraftClasses`, and `boot.WriteStartnet` each take the source's `Roots` (and,

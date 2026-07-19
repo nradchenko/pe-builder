@@ -66,8 +66,10 @@ func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src s
 	want := make(map[string]bool)
 	for _, a := range acts {
 		// A [SourcePaths] copy (SrcPath set) reads an exact path, not a cabinet member,
-		// so it is left out of the cabinet search.
-		if a.Kind == action.CopyFile && a.Origin == "" && a.SrcPath == "" {
+		// so it is left out of the cabinet search. So is a boot-chain file: the cabinets
+		// are OS payload, and readSource will not answer a boot-area read from them, so
+		// wanting one here would only provoke a cabinet decode whose result is dropped.
+		if a.Kind == action.CopyFile && a.Origin == "" && a.SrcPath == "" && a.Area == source.AreaSystem {
 			want[strings.ToLower(a.Src)] = true
 		}
 	}
@@ -107,7 +109,7 @@ func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src s
 // file will land in it.
 func makeDir(a action.Action, l *layout.Layout, roots source.Roots, outRoot string) error {
 	rel := dirPath(a.DirID, a.Path, l)
-	root := filepath.Join(outRoot, roots.For(source.AreaSystem))
+	root := filepath.Join(outRoot, roots.For(a.Area))
 	if a.FromRoot {
 		root = outRoot
 	}

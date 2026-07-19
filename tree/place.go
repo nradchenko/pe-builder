@@ -98,13 +98,12 @@ func readFile(a action.Action, origins map[string]fs.FS, src source.Backing, roo
 	// A [SourcePaths] copy names an exact source path (a file whose basename is not
 	// unique): read it directly, still honoring the compressed .??_ form, rather than
 	// resolving a basename that would find the wrong file.
-	// The area is pinned to the system payload here and in outputPath, the two halves
-	// of one rule: a file is read from and written to the same area, never a mix. They
-	// are the pair to change together when an action carries its own area.
+	// The action's area is used here and in outputPath, the two halves of one rule: a
+	// file is read from and written to the same area, never a mix.
 	if a.SrcPath != "" {
-		return layout.ReadSourceFile(src, roots, source.AreaSystem, a.SrcPath)
+		return layout.ReadSourceFile(src, roots, a.Area, a.SrcPath)
 	}
-	return readSource(src, roots, cabs, name)
+	return readSource(src, roots, a.Area, cabs, name)
 }
 
 // readOrigin reads a shipped file from a plugin/build-output fs.FS. It tries the name
@@ -127,11 +126,14 @@ func readOrigin(fsys fs.FS, src string) ([]byte, bool) {
 // SP*.CAB), where many class and HID drivers ship. It reports the bytes, whether
 // they still need decompression (only the *.??_ archive form does; loose and
 // cabinet-extracted bytes are already final), and whether the file was found.
-func readSource(src source.Backing, roots source.Roots, cabs *cabinets, name string) (data []byte, compressed, found bool) {
-	if b, packed, ok := layout.ReadSourceFile(src, roots, source.AreaSystem, name); ok {
+// The cabinets are consulted only for a file in the OS payload: they are part of
+// that payload themselves, so answering from them for a boot-chain file would read
+// one area's bytes for the other's file — the crossing the area exists to prevent.
+func readSource(src source.Backing, roots source.Roots, area source.Area, cabs *cabinets, name string) (data []byte, compressed, found bool) {
+	if b, packed, ok := layout.ReadSourceFile(src, roots, area, name); ok {
 		return b, packed, true
 	}
-	if cabs != nil {
+	if cabs != nil && area == source.AreaSystem {
 		if b, ok := cabs.Find(name); ok {
 			return b, false, true
 		}
@@ -177,9 +179,8 @@ func outputPath(a action.Action, l *layout.Layout, roots source.Roots, outName s
 	if a.FromRoot {
 		return path.Join(rel, outName)
 	}
-	// The write half of the read/write area pair pinned in readFile; see the note
-	// there. Both must move together.
-	return path.Join(roots.For(source.AreaSystem), rel, outName)
+	// The write half of the read/write area pair; see the note in readFile.
+	return path.Join(roots.For(a.Area), rel, outName)
 }
 
 // rootDirID is the [WinntDirectories] directory ID for the system root (mapped to
