@@ -81,6 +81,10 @@ npfs.sys   =
 fs_rec.sys =
 beep.sys   =
 
+; The ACPI processor driver, bound to the CPU devnode by the Critical Device
+; Database entry below. It is what lets the CPU idle at all — see that entry.
+processr.sys =
+
 ; The multiprocessor kernel, installed as ntoskrnl.exe. It runs on uniprocessor
 ; machines too (a safe superset), so one kernel covers both. The HAL files come
 ; from the source *.Load derivation; the loader options below name which one to
@@ -586,6 +590,36 @@ vga64k.dll   =
 0x4,"ControlSet001\Services\Beep","Start",0x1
 0x4,"ControlSet001\Services\Beep","Type",0x1
 0x4,"ControlSet001\Services\Beep","ErrorControl",0x1
+
+; Processor — the ACPI processor driver. Values from the source CPU.INF
+; (Processor_Service_Inst).
+0x1,"ControlSet001\Services\Processor","Group","Extended Base"
+0x2,"ControlSet001\Services\Processor","ImagePath","System32\drivers\processr.sys"
+0x4,"ControlSet001\Services\Processor","Start",0x1
+0x4,"ControlSet001\Services\Processor","Type",0x1
+0x4,"ControlSet001\Services\Processor","ErrorControl",0x1
+0x1,"ControlSet001\Services\Processor","DisplayName","Processor Driver"
+
+; Bind that driver to the CPU, so the processor can idle.
+;
+; ACPI enumerates the CPU at boot and identifies it, but nothing ever attaches a
+; driver: a PE runs no INF install pass, so the devnode stays driverless. With no
+; processor driver there is no registered idle handler, and the kernel's idle loop
+; spins instead of halting — the machine runs a core flat out while doing nothing,
+; wasting power and heat on real hardware and pinning a host thread under
+; virtualization.
+;
+; The Critical Device Database binds by device ID instead of by INF install, which
+; is how the source's own hive attaches i8042prt to the PS/2 ports. ACPI\Processor
+; is the vendor-neutral compatible ID that every CPU devnode carries, so this one
+; entry covers every machine. CPU.INF's own entries cannot be used: they match
+; per-vendor hardware IDs (GenuineIntel_-_x86_Family_6_Model_9 and a hundred more),
+; and the build cannot know which CPU the image will boot on. That trades away the
+; model-specific drivers CPU.INF would pick on some CPUs (intelppm, p3, amdk7) and
+; the frequency scaling they add; processr is the generic driver and provides the
+; idle support, which is the part a PE needs.
+0x1,"ControlSet001\Control\CriticalDeviceDatabase\ACPI#Processor","Service","Processor"
+0x1,"ControlSet001\Control\CriticalDeviceDatabase\ACPI#Processor","ClassGUID","{50127DC3-0F36-415e-A6CC-4CB3BE910B65}"
 
 ; Attach the class drivers to their device setup classes (Keyboard, Mouse), so
 ; PnP layers kbdclass/mouclass onto whichever port enumerates the device.

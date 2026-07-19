@@ -13,6 +13,7 @@ copy null.sys dir="" rename="" area=system flags=-
 copy npfs.sys dir="" rename="" area=system flags=-
 copy fs_rec.sys dir="" rename="" area=system flags=-
 copy beep.sys dir="" rename="" area=system flags=-
+copy processr.sys dir="" rename="" area=system flags=-
 copy ntkrnlmp.exe dir="" rename="ntoskrnl.exe" area=system flags=-
 copy ntdll.dll dir="" rename="" area=system flags=-
 copy biosinfo.inf dir="1" rename="" area=system flags=-
@@ -272,6 +273,14 @@ addreg hive=system type=0x2 subkey="ControlSet001\\Services\\Beep" value="ImageP
 addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Beep" value="Start" data="0x1"
 addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Beep" value="Type" data="0x1"
 addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Beep" value="ErrorControl" data="0x1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\Processor" value="Group" data="Extended Base"
+addreg hive=system type=0x2 subkey="ControlSet001\\Services\\Processor" value="ImagePath" data="System32\\drivers\\processr.sys"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Processor" value="Start" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Processor" value="Type" data="0x1"
+addreg hive=system type=0x4 subkey="ControlSet001\\Services\\Processor" value="ErrorControl" data="0x1"
+addreg hive=system type=0x1 subkey="ControlSet001\\Services\\Processor" value="DisplayName" data="Processor Driver"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\CriticalDeviceDatabase\\ACPI#Processor" value="Service" data="Processor"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\CriticalDeviceDatabase\\ACPI#Processor" value="ClassGUID" data="{50127DC3-0F36-415e-A6CC-4CB3BE910B65}"
 addreg hive=system type=0x7 subkey="ControlSet001\\Control\\Class\\{4D36E96B-E325-11CE-BFC1-08002BE10318}" value="UpperFilters" data="kbdclass"
 addreg hive=system type=0x7 subkey="ControlSet001\\Control\\Class\\{4D36E96F-E325-11CE-BFC1-08002BE10318}" value="UpperFilters" data="mouclass"
 addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Keyboard Layouts\\00000409" value="Layout File" data="KBDUS.DLL"

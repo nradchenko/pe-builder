@@ -66,7 +66,11 @@ PE dependencies.
     The seed also has to carry what no import scan can see — a module the registry names by
     file name and loads at run time, like `psbase.dll` or the `rsaenh.dll` cryptographic
     provider that the SOFTWARE hive we build registers: those are staged because we create
-    the registration that would otherwise dangle.
+    the registration that would otherwise dangle. Where a driver has to reach a device that
+    only appears at run time, the seed binds it through the Critical Device Database, which
+    matches on a device ID rather than on a registry path the build would have to predict —
+    that is how the processor driver reaches the CPU that ACPI enumerates at boot, and it is
+    what lets the CPU idle rather than spin, since a PE runs no driver-install pass.
   - `tree/` — assemble the output file tree (resolve → decompress → place).
   - `hive/` — build the Windows registry hives (pure-Go `regf` read/write). The SYSTEM hive
     starts from the source's text-setup `setupreg.hiv` and then has the source's `hivesys.inf`

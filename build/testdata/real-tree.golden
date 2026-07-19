@@ -1,5 +1,5 @@
 identity: winxp build 2600 (i386)
-written: 257
+written: 258
 skipped: 
 
 BOOTFONT.BIN 4952
@@ -124,6 +124,7 @@ i386/system32/drivers/pciide.sys 3328
 i386/system32/drivers/pciidex.sys 24960
 i386/system32/drivers/pcmcia.sys 120192
 i386/system32/drivers/perc2.sys 27296
+i386/system32/drivers/processr.sys 40192
 i386/system32/drivers/ql1080.sys 40320
 i386/system32/drivers/ql10wnt.sys 33152
 i386/system32/drivers/ql12160.sys 45312
