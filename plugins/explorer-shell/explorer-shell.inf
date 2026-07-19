@@ -28,6 +28,15 @@ depends = win32-gui, storage-pnp, ramdrive, system-tools, accessories
 width  = 1024, int
 height = 768,  int
 bpp    = 32,   int, 8, 16, 24, 32
+; Start menu style: 0 = the modern two-column XP panel, 1 = the classic (Windows 2000) menu.
+; Switches the selection only — duser.dll and the panel CLSIDs are staged either way, unused in
+; classic mode, since file staging cannot be templated.
+classic_start_menu = 0, int, 0, 1
+; Paint the Windows version/build in the bottom-right of the desktop (1 = show).
+show_version       = 0, int, 0, 1
+; Drop "My Recent Documents" from the Start menu (1 = hidden). A PE has no meaningful document
+; history, so it is hidden by default.
+hide_recent_docs   = 1, int, 0, 1
 
 [Build]
 Requires = i686-w64-mingw32-gcc make
@@ -217,6 +226,8 @@ msgina.dll = 2
 0x1,"Control Panel\Desktop","DragFullWindows","0"
 0x1,"Control Panel\Desktop","FontSmoothing","0"
 0x1,"Control Panel\Desktop","MenuShowDelay","0"
+; Version/build watermark. A plain desktop paint, not one of the visual effects above.
+0x4,"Control Panel\Desktop","PaintDesktopVersion",$(show_version)
 0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","ListviewShadow",0x0
 0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","ListviewAlphaSelect",0x0
 0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","TaskbarAnimations",0x0
@@ -250,11 +261,15 @@ msgina.dll = 2
 0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","Start_NotifyNewApps",0x0
 0x4,"Software\Microsoft\Windows\CurrentVersion\Applets\Tour","RunCount",0x0
 
-; --- Start menu: the modern (XP) two-column panel. Start_ShowClassicMenu=0 selects it (the
-; NoSimpleStartMenu policy, which forced the classic menu and hid the choice, is intentionally
-; NOT set). Classic Control Panel view is kept; drop Search and Help (nothing to search / no help
-; content in the PE). See README.md § Modern Start menu. ---
-0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","Start_ShowClassicMenu",0x0
+; Start menu style: 1 = classic, 0 or absent = the modern panel. The NoSimpleStartMenu policy,
+; which would force classic and hide the choice, stays unset. See README.md § Modern Start menu.
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\StartMenu\StartPanel","DefaultStartPanelOff",$(classic_start_menu)
+; NoRecentDocsMenu drops the menu (Start_ShowRecentDocs, the Advanced value one might expect, does
+; not exist — verified against shell32); NoRecentDocsHistory stops the tracking. One option drives
+; both: tracking without the menu is wasted work, the menu without tracking would sit empty.
+0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoRecentDocsMenu",$(hide_recent_docs)
+0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoRecentDocsHistory",$(hide_recent_docs)
+; Classic Control Panel view; drop Search and Help — nothing to search, no help content in the PE.
 0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","ForceClassicControlPanel",0x1
 0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoFind",0x1
 0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoSMHelp",0x1

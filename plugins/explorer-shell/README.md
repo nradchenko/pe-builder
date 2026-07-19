@@ -142,8 +142,12 @@ things are needed, all in `explorer-shell.inf`:
   `{A2A9545D-…}` (the "Pin to Start menu" handler), both served by shell32. Their
   `InProcServer32` registration is written in `[Software.AddReg]`; without it the panel can't
   instantiate and the shell falls back to the classic menu.
-- **The selection** — `HKCU\…\Explorer\Advanced\Start_ShowClassicMenu = 0` picks the modern
-  menu, and the `NoSimpleStartMenu` policy (which would force classic) is deliberately not set.
+- **The selection** — `DefaultStartPanelOff` under `…\Explorer\StartMenu\StartPanel` (read
+  HKCU-then-HKLM): `1` selects the classic menu, `0` or *absent* the modern panel. Since a
+  `/minint` hive has no `StartMenu\StartPanel` key at all, the modern panel is what you get
+  unless the `classic_start_menu` option asks otherwise. The `NoSimpleStartMenu` policy (which
+  would force classic and hide the choice) is deliberately not set. Note there is no
+  `Start_ShowClassicMenu` value — that name appears in no shell binary and does nothing.
 
 **Right-column / panel cleanup.** The panel is trimmed to what makes sense in a PE via per-user
 `Explorer\Advanced` flags: My Music / My Pictures / Printers hidden (`Start_ShowMyMusic` /
