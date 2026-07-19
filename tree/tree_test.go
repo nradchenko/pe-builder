@@ -16,7 +16,64 @@ import (
 
 	"github.com/nradchenko/pe-builder/action"
 	"github.com/nradchenko/pe-builder/layout"
+	"github.com/nradchenko/pe-builder/source"
 )
+
+// testRoots is the x86 folder pair the fixtures below are laid out under, where the
+// system and boot areas are the same i386 folder.
+func testRoots() source.Roots {
+	return source.Identity{Arch: "i386"}.Roots()
+}
+
+// TestAssembleAmd64Roots assembles against a source whose two areas are *different*
+// folders. Every other test here uses an x86 source, where the system and boot areas
+// are both "i386" — so any confusion between them resolves to the same string and
+// passes. This is the only test that can tell them apart, and so the only one that
+// would catch the system area being read from or written to the boot folder.
+func TestAssembleAmd64Roots(t *testing.T) {
+	out := t.TempDir()
+	roots := source.Identity{Arch: "amd64"}.Roots()
+	if roots.System == roots.Boot {
+		t.Fatalf("amd64 roots must differ to make this test meaningful: %+v", roots)
+	}
+
+	// The payload is under the amd64 folder. A decoy of the same name sits in the
+	// boot folder: reading the boot area instead would find it and pass silently.
+	src := fstest.MapFS{
+		"amd64/loose.txt": {Data: []byte("amd64 payload\n")},
+		"i386/loose.txt":  {Data: []byte("boot-area decoy\n")},
+	}
+	acts := []action.Action{{Kind: action.CopyFile, Src: "loose.txt", DirID: "2"}}
+
+	res, err := Assemble(context.Background(), acts, testLayout(), src, roots, nil, out, nil)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	if diff := cmp.Diff([]string{"amd64/system32/loose.txt"}, res.Written); diff != "" {
+		t.Errorf("Written mismatch (-want +got):\n%s", diff)
+	}
+	// Read from the system area, not the boot area's decoy...
+	assertFile(t, out, "amd64/system32/loose.txt", []byte("amd64 payload\n"))
+	// ...and written under the system area, so nothing lands in the boot folder.
+	if _, err := os.Stat(filepath.Join(out, "i386")); !os.IsNotExist(err) {
+		t.Errorf("assembly created a boot-area directory; nothing in this build belongs there")
+	}
+}
+
+// TestOutputPathFollowsArch pins the output-path rule directly: the same action
+// resolves under whichever folder the source's system area names.
+func TestOutputPathFollowsArch(t *testing.T) {
+	a := action.Action{Kind: action.CopyFile, Src: "loose.txt", DirID: "2"}
+	for _, tt := range []struct{ arch, want string }{
+		{"i386", "i386/system32/loose.txt"},
+		{"amd64", "amd64/system32/loose.txt"},
+	} {
+		roots := source.Identity{Arch: tt.arch}.Roots()
+		if got := OutputPath(a, testLayout(), roots); got != tt.want {
+			t.Errorf("OutputPath(arch=%s) = %q, want %q", tt.arch, got, tt.want)
+		}
+	}
+}
 
 // testLayout is a small placement model: system32 and its drivers subdirectory.
 func testLayout() *layout.Layout {
@@ -60,7 +117,7 @@ func TestAssemble(t *testing.T) {
 		{Kind: action.CopyFile, Src: "missing.dll", Optional: true}, // absent, optional → skipped
 	}
 
-	res, err := Assemble(context.Background(), acts, testLayout(), src, nil, out, nil)
+	res, err := Assemble(context.Background(), acts, testLayout(), src, testRoots(), nil, out, nil)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -104,7 +161,7 @@ func TestAssembleOrigin(t *testing.T) {
 		{Kind: action.CopyFile, Src: "loose.txt", DirID: "2"},
 	}
 
-	res, err := Assemble(context.Background(), acts, testLayout(), src, origins, out, nil)
+	res, err := Assemble(context.Background(), acts, testLayout(), src, testRoots(), origins, out, nil)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -123,7 +180,7 @@ func TestAssembleOriginMissingIsError(t *testing.T) {
 	acts := []action.Action{
 		{Kind: action.CopyFile, Src: "loose.txt", DirID: "2", Origin: "plug"},
 	}
-	if _, err := Assemble(context.Background(), acts, testLayout(), src, origins, t.TempDir(), nil); err == nil {
+	if _, err := Assemble(context.Background(), acts, testLayout(), src, testRoots(), origins, t.TempDir(), nil); err == nil {
 		t.Fatal("Assemble placed an un-shipped Origin file from the source; want an error")
 	}
 }
@@ -142,7 +199,7 @@ func TestAssemblePluginDir(t *testing.T) {
 		{Kind: action.CopyFile, Src: "tool.exe", Origin: "plug", DirID: "q", Path: `programs\mytool`},
 		{Kind: action.CopyFile, Src: "read.me", Origin: "plug", DirID: "r", Path: "Docs", FromRoot: true},
 	}
-	res, err := Assemble(context.Background(), acts, testLayout(), testSource(t), origins, out, nil)
+	res, err := Assemble(context.Background(), acts, testLayout(), testSource(t), testRoots(), origins, out, nil)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -157,7 +214,7 @@ func TestAssemblePluginDir(t *testing.T) {
 func TestAssembleRequiredMissing(t *testing.T) {
 	src := testSource(t)
 	acts := []action.Action{{Kind: action.CopyFile, Src: "nope.dll"}}
-	_, err := Assemble(context.Background(), acts, testLayout(), src, nil, t.TempDir(), nil)
+	_, err := Assemble(context.Background(), acts, testLayout(), src, testRoots(), nil, t.TempDir(), nil)
 	if err == nil {
 		t.Fatal("Assemble with a missing required file returned no error")
 	}
@@ -182,7 +239,7 @@ func TestAssembleSourcePath(t *testing.T) {
 		{Kind: action.CopyFile, SrcPath: "asms/6000/controls/comctl32.dll", Dest: "i386/WinSxS/asm/comctl32.dll"},
 		{Kind: action.CopyFile, SrcPath: "asms/6000/controls/controls.man", Dest: "i386/WinSxS/Manifests/asm.manifest"},
 	}
-	res, err := Assemble(context.Background(), acts, testLayout(), src, nil, out, nil)
+	res, err := Assemble(context.Background(), acts, testLayout(), src, testRoots(), nil, out, nil)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -206,7 +263,7 @@ func TestAssembleSourcePathMissing(t *testing.T) {
 	acts := []action.Action{
 		{Kind: action.CopyFile, SrcPath: "asms/6000/controls/comctl32.dll", Dest: "i386/WinSxS/asm/comctl32.dll"},
 	}
-	_, err := Assemble(context.Background(), acts, testLayout(), fstest.MapFS{}, nil, t.TempDir(), nil)
+	_, err := Assemble(context.Background(), acts, testLayout(), fstest.MapFS{}, testRoots(), nil, t.TempDir(), nil)
 	if err == nil {
 		t.Fatal("missing [SourcePaths] source returned no error")
 	}
@@ -222,7 +279,7 @@ func TestMkdir(t *testing.T) {
 		{Kind: action.Mkdir, DirID: "y", Path: "docs", FromRoot: true},
 		{Kind: action.Mkdir, DirID: "z", Path: `system32\config`}, // backslash nested path
 	}
-	if _, err := Assemble(context.Background(), acts, testLayout(), testSource(t), nil, out, nil); err != nil {
+	if _, err := Assemble(context.Background(), acts, testLayout(), testSource(t), testRoots(), nil, out, nil); err != nil {
 		t.Fatal(err)
 	}
 	assertDir(t, filepath.Join(out, "i386", "programs")) // under the system root

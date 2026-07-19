@@ -157,6 +157,10 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 		return nil, fmt.Errorf("read source layout: %w", err)
 	}
 	slog.Debug("stage done", "stage", "layout", "elapsed", time.Since(t))
+	// The source's folder pair, resolved once here and threaded through the stages
+	// that read from or write under it, so they cannot disagree about where the
+	// source keeps its files.
+	roots := id.Roots()
 	// Index the source for the base layer's import-closure scanners, so the file set is
 	// computed from the source's own PE dependency graph rather than hand-listed.
 	t = time.Now()
@@ -180,7 +184,7 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 	// manifest exclude can suppress one by its destination.
 	t = time.Now()
 	pluginActs, origins, err := plugin.Compile(selected, pw, func(a action.Action) string {
-		return tree.OutputPath(a, l)
+		return tree.OutputPath(a, l, roots)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("evaluate plugins: %w", err)
@@ -189,7 +193,7 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 	acts = append(acts, pluginActs...)
 
 	t = time.Now()
-	res, err := tree.Assemble(ctx, acts, l, backing, origins, outDir, cache)
+	res, err := tree.Assemble(ctx, acts, l, backing, roots, origins, outDir, cache)
 	if err != nil && ctx.Err() != nil {
 		// A cancelled build is fatal — the tree is aborted mid-assembly — not a
 		// per-file error to be reported and shrugged off.
@@ -212,7 +216,7 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 	// honors cancellation, so a build cancelled just as tree assembly finished does
 	// not run the full hive read/serialize/write and report success.
 	t = time.Now()
-	hives, err := buildHives(ctx, backing, l, acts, needsMachineClasses(selected), outDir)
+	hives, err := buildHives(ctx, backing, l, roots, acts, needsMachineClasses(selected), outDir)
 	if err != nil {
 		return nil, fmt.Errorf("build registry hives: %w", err)
 	}
@@ -220,7 +224,7 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 	slog.Debug("stage done", "stage", "build-hives", "elapsed", time.Since(t))
 	slog.Info("built registry hives", "count", len(hives))
 
-	if err := configure(outDir, acts, res.Written); err != nil {
+	if err := configure(outDir, roots, acts, res.Written); err != nil {
 		return nil, err
 	}
 
@@ -382,11 +386,11 @@ func warnUnappliedAppends(selected []*plugin.Discovered) {
 // (chiefly txtsetup.sif's /minint switch, applied wherever the copy stage placed
 // each target) and the built-in startup script. It is tree configuration, not media
 // mastering, so it runs for every target.
-func configure(treeDir string, acts []action.Action, written []string) error {
+func configure(treeDir string, roots source.Roots, acts []action.Action, written []string) error {
 	if err := inifile.Apply(acts, treeDir, inifile.Index(written)); err != nil {
 		return fmt.Errorf("apply boot configuration: %w", err)
 	}
-	if err := boot.WriteStartnet(treeDir, base.StartnetCmd()); err != nil {
+	if err := boot.WriteStartnet(treeDir, roots, base.StartnetCmd()); err != nil {
 		return err
 	}
 	return nil

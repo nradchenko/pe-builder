@@ -8,11 +8,18 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/nradchenko/pe-builder/source"
 )
+
+// testRoots is the folder pair of the x86 source these tests read.
+func testRoots() source.Roots {
+	return source.Identity{Arch: "i386"}.Roots()
+}
 
 func TestBaseHivesFromSource(t *testing.T) {
 	b := sourceBacking(t) // skips when the ISO is absent
-	hives, err := BaseHives(b)
+	hives, err := BaseHives(b, testRoots())
 	if err != nil {
 		t.Fatalf("BaseHives: %v", err)
 	}
@@ -43,7 +50,7 @@ func TestBaseHivesFromSource(t *testing.T) {
 
 	// The machine classes graft onto HKLM\SOFTWARE\Classes on request (not part of the
 	// bare pipeline hives): hivecls.inf's HKCR lines map onto the \Classes subkey.
-	if err := hives.GraftClasses(b); err != nil {
+	if err := hives.GraftClasses(b, testRoots()); err != nil {
 		t.Fatalf("GraftClasses: %v", err)
 	}
 	classes := hives.Software.Root.Child("Classes")
@@ -91,7 +98,7 @@ func TestBaseHivesFromSource(t *testing.T) {
 // REG_DWORD.
 func TestSoftwareValueTypesFromSource(t *testing.T) {
 	b := sourceBacking(t)
-	hives, err := BaseHives(b)
+	hives, err := BaseHives(b, testRoots())
 	if err != nil {
 		t.Fatalf("BaseHives: %v", err)
 	}

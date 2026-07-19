@@ -22,10 +22,10 @@ import (
 // the output-relative path written, or — when the file is optional and absent from
 // the source — the canonical name to record as skipped. Exactly one of the two
 // strings is non-empty on success.
-func placeFile(a action.Action, l *layout.Layout, src source.Backing, cabs *cabinets, origins map[string]fs.FS, outRoot string) (written, skipped string, err error) {
+func placeFile(a action.Action, l *layout.Layout, src source.Backing, roots source.Roots, cabs *cabinets, origins map[string]fs.FS, outRoot string) (written, skipped string, err error) {
 	name := strings.ToLower(a.Src)
 
-	data, compressed, found := readFile(a, origins, src, cabs, name)
+	data, compressed, found := readFile(a, origins, src, roots, cabs, name)
 	if !found {
 		if a.Optional {
 			return "", name, nil
@@ -68,7 +68,7 @@ func placeFile(a action.Action, l *layout.Layout, src source.Backing, cabs *cabi
 	// directory is resolved from the action's ID/path and the source layout.
 	rel := a.Dest
 	if rel == "" {
-		rel = outputPath(a, l, outName)
+		rel = outputPath(a, l, roots, outName)
 	}
 	full := filepath.Join(outRoot, filepath.FromSlash(rel))
 	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
@@ -86,7 +86,7 @@ func placeFile(a action.Action, l *layout.Layout, src source.Backing, cabs *cabi
 // promised), not a silent fall-through that could pick up an unrelated source file of
 // the same name. Everything else resolves from the Windows source. Origin bytes are
 // already final (never a *.??_ archive), so they never need decompression.
-func readFile(a action.Action, origins map[string]fs.FS, src source.Backing, cabs *cabinets, name string) (data []byte, compressed, found bool) {
+func readFile(a action.Action, origins map[string]fs.FS, src source.Backing, roots source.Roots, cabs *cabinets, name string) (data []byte, compressed, found bool) {
 	if a.Origin != "" {
 		if fsys, ok := origins[a.Origin]; ok {
 			if b, ok := readOrigin(fsys, a.Src); ok {
@@ -98,10 +98,13 @@ func readFile(a action.Action, origins map[string]fs.FS, src source.Backing, cab
 	// A [SourcePaths] copy names an exact source path (a file whose basename is not
 	// unique): read it directly, still honoring the compressed .??_ form, rather than
 	// resolving a basename that would find the wrong file.
+	// The area is pinned to the system payload here and in outputPath, the two halves
+	// of one rule: a file is read from and written to the same area, never a mix. They
+	// are the pair to change together when an action carries its own area.
 	if a.SrcPath != "" {
-		return layout.ReadSourceFile(src, a.SrcPath)
+		return layout.ReadSourceFile(src, roots, source.AreaSystem, a.SrcPath)
 	}
-	return readSource(src, cabs, name)
+	return readSource(src, roots, cabs, name)
 }
 
 // readOrigin reads a shipped file from a plugin/build-output fs.FS. It tries the name
@@ -124,8 +127,8 @@ func readOrigin(fsys fs.FS, src string) ([]byte, bool) {
 // SP*.CAB), where many class and HID drivers ship. It reports the bytes, whether
 // they still need decompression (only the *.??_ archive form does; loose and
 // cabinet-extracted bytes are already final), and whether the file was found.
-func readSource(src source.Backing, cabs *cabinets, name string) (data []byte, compressed, found bool) {
-	if b, packed, ok := layout.ReadSourceFile(src, name); ok {
+func readSource(src source.Backing, roots source.Roots, cabs *cabinets, name string) (data []byte, compressed, found bool) {
+	if b, packed, ok := layout.ReadSourceFile(src, roots, source.AreaSystem, name); ok {
 		return b, packed, true
 	}
 	if cabs != nil {
@@ -150,11 +153,11 @@ func targetName(a action.Action, name string) string {
 // against a target path (e.g. a manifest exclude entry) without re-deriving the
 // placement rules. A copy that names its destination directly (Dest) returns it
 // verbatim.
-func OutputPath(a action.Action, l *layout.Layout) string {
+func OutputPath(a action.Action, l *layout.Layout, roots source.Roots) string {
 	if a.Dest != "" {
 		return a.Dest
 	}
-	return outputPath(a, l, targetName(a, strings.ToLower(a.Src)))
+	return outputPath(a, l, roots, targetName(a, strings.ToLower(a.Src)))
 }
 
 // outputPath computes the output-relative (forward-slash) path for a placed file:
@@ -163,7 +166,7 @@ func OutputPath(a action.Action, l *layout.Layout) string {
 // own path when it carries one (a plugin-defined [WinntDirectories] entry), else its
 // directory ID resolved from the source layout, else the source layout keyed by file
 // name, else system32.
-func outputPath(a action.Action, l *layout.Layout, outName string) string {
+func outputPath(a action.Action, l *layout.Layout, roots source.Roots, outName string) string {
 	dirID := a.DirID
 	if dirID == "" && a.Path == "" {
 		if e, ok := l.Resolve(a.Src); ok {
@@ -174,7 +177,9 @@ func outputPath(a action.Action, l *layout.Layout, outName string) string {
 	if a.FromRoot {
 		return path.Join(rel, outName)
 	}
-	return path.Join(systemRoot, rel, outName)
+	// The write half of the read/write area pair pinned in readFile; see the note
+	// there. Both must move together.
+	return path.Join(roots.For(source.AreaSystem), rel, outName)
 }
 
 // rootDirID is the [WinntDirectories] directory ID for the system root (mapped to

@@ -9,11 +9,12 @@
 //
 // Two output conventions are fixed here:
 //
-//   - System root = i386. The tree mirrors a Windows CD: system-root-relative
-//     directories (system32, system32\drivers, …) live under an i386 directory at
-//     the output root, so a file bound for directory ID 2 lands at
-//     <out>/i386/system32/<name>. Directories flagged "from root" in
-//     [WinntDirectories] are created at the output root instead.
+//   - The tree mirrors the source's own folder layout. System-root-relative
+//     directories (system32, system32\drivers, …) live under the source's system
+//     folder at the output root, so on an x86 source a file bound for directory ID 2
+//     lands at <out>/i386/system32/<name>, and on an amd64 source at
+//     <out>/amd64/system32/<name> (see source.Roots). Directories flagged "from
+//     root" in [WinntDirectories] are created at the output root instead.
 //   - Casing is preserved. Files keep their canonical (source) case; the uppercase
 //     rename Windows requires for CD booting (the attribute-8 flag) is applied when
 //     the ISO is mastered, not here, so the on-disk tree stays in one consistent
@@ -36,12 +37,6 @@ import (
 	"github.com/nradchenko/pe-builder/source"
 )
 
-// systemRoot is the output directory the source's system-root-relative tree is
-// placed under, mirroring a Windows installation CD's I386 folder. It is also the
-// source folder files are read from. The value is defined once, in package source,
-// and shared by the source reader, this assembler, and the hive stage.
-const systemRoot = source.SystemRoot
-
 // Result records what an assembly produced, for reporting and golden listings.
 type Result struct {
 	// Written holds the output-relative (forward-slash) paths of files written.
@@ -55,7 +50,11 @@ type Result struct {
 // Actions apply in order; a later write to the same path wins. Missing optional
 // files are skipped and recorded; other read/write failures are accumulated and
 // returned together so one bad file does not abort the build.
-func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src source.Backing, origins map[string]fs.FS, outRoot string, cache *buildcache.Cache) (*Result, error) {
+//
+// roots names the source's top-level folders, and is both where files are read from
+// and what the output tree is built under, so the tree mirrors the source's own
+// layout.
+func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src source.Backing, roots source.Roots, origins map[string]fs.FS, outRoot string, cache *buildcache.Cache) (*Result, error) {
 	res := &Result{}
 	var errs []error
 
@@ -72,7 +71,7 @@ func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src s
 			want[strings.ToLower(a.Src)] = true
 		}
 	}
-	cabs := newCabinets(src, want, cache)
+	cabs := newCabinets(src, roots, want, cache)
 
 	for _, a := range acts {
 		if err := ctx.Err(); err != nil {
@@ -80,7 +79,7 @@ func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src s
 		}
 		switch a.Kind {
 		case action.CopyFile:
-			written, skipped, err := placeFile(a, l, src, cabs, origins, outRoot)
+			written, skipped, err := placeFile(a, l, src, roots, cabs, origins, outRoot)
 			switch {
 			case err != nil:
 				errs = append(errs, err)
@@ -90,7 +89,7 @@ func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src s
 				res.Written = append(res.Written, written)
 			}
 		case action.Mkdir:
-			if err := makeDir(a, l, outRoot); err != nil {
+			if err := makeDir(a, l, roots, outRoot); err != nil {
 				errs = append(errs, err)
 			}
 		default:
@@ -106,9 +105,9 @@ func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src s
 // makeDir creates the directory named by a Mkdir action, honoring its "from root"
 // placement. AlwaysCreate is implicit — the directory is created whether or not any
 // file will land in it.
-func makeDir(a action.Action, l *layout.Layout, outRoot string) error {
+func makeDir(a action.Action, l *layout.Layout, roots source.Roots, outRoot string) error {
 	rel := dirPath(a.DirID, a.Path, l)
-	root := filepath.Join(outRoot, systemRoot)
+	root := filepath.Join(outRoot, roots.For(source.AreaSystem))
 	if a.FromRoot {
 		root = outRoot
 	}

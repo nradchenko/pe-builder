@@ -29,8 +29,11 @@ func bootSectPath(outDir string) string {
 // tree. The script is the environment's own file (not a source copy), so it is
 // written here rather than by the file-copy stage; winlogon runs it via
 // SYSTEM\Setup\CmdLine once the environment is up.
-func WriteStartnet(treeRoot string, content []byte) error {
-	dir := filepath.Join(treeRoot, source.SystemRoot, "system32")
+// The script lives in system32, part of the OS payload, so it goes in the source's
+// system area — fixed for this stage, so it is named here rather than asked of the
+// caller.
+func WriteStartnet(treeRoot string, roots source.Roots, content []byte) error {
+	dir := filepath.Join(treeRoot, roots.For(source.AreaSystem), "system32")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("boot: create system32 dir: %w", err)
 	}

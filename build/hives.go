@@ -33,11 +33,11 @@ const configFallback = "system32/config"
 // SOFTWARE and the default-user hive go in config, where the session/logon chain
 // loads them. The CLASSES hive the engine also builds is not written — a bare boot
 // to cmd.exe does not need HKCR.
-func buildHives(ctx context.Context, backing source.Backing, l *layout.Layout, acts []action.Action, includeClasses bool, outDir string) ([]string, error) {
+func buildHives(ctx context.Context, backing source.Backing, l *layout.Layout, roots source.Roots, acts []action.Action, includeClasses bool, outDir string) ([]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	hives, err := hive.BaseHives(backing)
+	hives, err := hive.BaseHives(backing, roots)
 	if err != nil {
 		return nil, fmt.Errorf("build base hives: %w", err)
 	}
@@ -45,7 +45,7 @@ func buildHives(ctx context.Context, backing source.Backing, l *layout.Layout, a
 	// HKLM\SOFTWARE\Classes so the shell can resolve its COM objects; graft them before
 	// the registry actions overlay, so a plugin can still override an individual class.
 	if includeClasses {
-		if err := hives.GraftClasses(backing); err != nil {
+		if err := hives.GraftClasses(backing, roots); err != nil {
 			return nil, fmt.Errorf("graft machine classes: %w", err)
 		}
 	}
@@ -53,7 +53,7 @@ func buildHives(ctx context.Context, backing source.Backing, l *layout.Layout, a
 		return nil, fmt.Errorf("apply registry actions: %w", err)
 	}
 
-	config := configDir(l, outDir)
+	config := configDir(l, roots, outDir)
 	system32 := filepath.Dir(config)
 	if err := os.MkdirAll(config, 0o755); err != nil {
 		return nil, fmt.Errorf("create config dir: %w", err)
@@ -95,10 +95,10 @@ func buildHives(ctx context.Context, backing source.Backing, l *layout.Layout, a
 
 // configDir resolves the absolute path of the tree's config folder under the
 // system root, preferring the source's own directory-ID table.
-func configDir(l *layout.Layout, outDir string) string {
+func configDir(l *layout.Layout, roots source.Roots, outDir string) string {
 	rel := configFallback
 	if p, ok := l.DirPath(configDirID); ok && p != "" {
 		rel = p
 	}
-	return filepath.Join(outDir, source.SystemRoot, filepath.FromSlash(rel))
+	return filepath.Join(outDir, roots.System, filepath.FromSlash(rel))
 }

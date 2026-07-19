@@ -62,8 +62,8 @@ func remapCurrentControlSet(path string) string {
 // BaseHives builds the base hives the pipeline writes from a Windows installation
 // source: SYSTEM is read from the pre-built setupreg.hiv; SOFTWARE and DEFAULT
 // start empty and are populated from hivesft.inf and hivedef.inf.
-func BaseHives(b source.Backing) (*Hives, error) {
-	sysData, err := readI386(b, "setupreg.hiv")
+func BaseHives(b source.Backing, roots source.Roots) (*Hives, error) {
+	sysData, err := readSystem(b, roots, "setupreg.hiv")
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func BaseHives(b source.Backing) (*Hives, error) {
 	// SYSTEM\CurrentControlSet paths onto the real ControlSet001, preserves the text-setup boot
 	// config (global no-clobber), and keeps win32-service Starts while dropping driver Starts
 	// (which load via txtsetup.sif). base.inf's /minint overrides still apply afterward.
-	sysINF, err := readI386(b, "hivesys.inf")
+	sysINF, err := readSystem(b, roots, "hivesys.inf")
 	if err != nil {
 		return nil, fmt.Errorf("hive: read hivesys.inf: %w", err)
 	}
@@ -88,11 +88,11 @@ func BaseHives(b source.Backing) (*Hives, error) {
 		return nil, fmt.Errorf("hive: apply hivesys.inf: %w", err)
 	}
 
-	software, err := buildFromINF(b, softwareINF)
+	software, err := buildFromINF(b, roots, softwareINF)
 	if err != nil {
 		return nil, err
 	}
-	def, err := buildFromINF(b, defaultINF)
+	def, err := buildFromINF(b, roots, defaultINF)
 	if err != nil {
 		return nil, err
 	}
@@ -110,8 +110,8 @@ func BaseHives(b source.Backing) (*Hives, error) {
 //
 // It is applied only when the build runs a shell: a bare cmd.exe boot does not need
 // HKCR, and the classes tree is large (thousands of registrations).
-func (h *Hives) GraftClasses(b source.Backing) error {
-	data, err := readI386(b, classesINF.name)
+func (h *Hives) GraftClasses(b source.Backing, roots source.Roots) error {
+	data, err := readSystem(b, roots, classesINF.name)
 	if err != nil {
 		return err
 	}
@@ -123,8 +123,8 @@ func (h *Hives) GraftClasses(b source.Backing) error {
 }
 
 // buildFromINF creates a fresh hive and populates it from its hive-population INF.
-func buildFromINF(b source.Backing, cfg baseINF) (*Hive, error) {
-	data, err := readI386(b, cfg.name)
+func buildFromINF(b source.Backing, roots source.Roots, cfg baseINF) (*Hive, error) {
+	data, err := readSystem(b, roots, cfg.name)
 	if err != nil {
 		return nil, err
 	}
@@ -135,12 +135,15 @@ func buildFromINF(b source.Backing, cfg baseINF) (*Hive, error) {
 	return h, nil
 }
 
-// readI386 reads a base-hive source file, sharing the tree assembler's loose→*.??_
-// resolution (layout.ReadSourceFile) so the two stages never diverge on where a
-// source file lives. In practice these files (setupreg.hiv, hive*.inf) always ship
-// loose, but the packed-archive fallback keeps the hive stage as robust as the tree.
-func readI386(b source.Backing, name string) ([]byte, error) {
-	data, packed, found := layout.ReadSourceFile(b, name)
+// readSystem reads a base-hive source file from the source's system area. Every file
+// the hive stage reads (setupreg.hiv, hive*.inf) is part of the OS payload, so none
+// of them is ever in the boot area — the area is fixed for this whole stage, so it is
+// named here rather than asked of each caller. It shares the tree assembler's
+// loose→*.??_ resolution (layout.ReadSourceFile) so the two stages never diverge on
+// where a source file lives. In practice these files always ship loose, but the
+// packed-archive fallback keeps the hive stage as robust as the tree.
+func readSystem(b source.Backing, roots source.Roots, name string) ([]byte, error) {
+	data, packed, found := layout.ReadSourceFile(b, roots, source.AreaSystem, name)
 	if !found {
 		return nil, fmt.Errorf("hive: source file %s not found", name)
 	}

@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/nradchenko/pe-builder/source"
 )
 
 const cacheISO = "../.cache/ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso"
@@ -67,7 +69,7 @@ func TestExtractBootImageNonISO(t *testing.T) {
 func TestWriteStartnet(t *testing.T) {
 	root := t.TempDir()
 	content := []byte("@echo off\r\necho hi>COM1\r\n")
-	if err := WriteStartnet(root, content); err != nil {
+	if err := WriteStartnet(root, source.Identity{Arch: "i386"}.Roots(), content); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(filepath.Join(root, "i386", "system32", "startnet.cmd"))

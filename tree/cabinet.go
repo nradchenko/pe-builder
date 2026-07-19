@@ -34,7 +34,11 @@ var cabNames = []string{"sp3.cab", "sp2.cab", "sp1.cab", "driver.cab"}
 // A malformed or truncated cabinet is skipped with a warning rather than failing
 // the build, so the loose tree still assembles.
 type cabinets struct {
-	src   source.Backing
+	src source.Backing
+	// roots is the source's folder pair. The cabinets are read from its system area:
+	// they are part of the OS payload — verified against amd64 media, where DRIVER.CAB
+	// and the service-pack cabinet both sit in the AMD64 folder.
+	roots source.Roots
 	want  map[string]bool // lowercased member names to extract
 	cache *buildcache.Cache
 	once  sync.Once
@@ -45,8 +49,8 @@ type cabinets struct {
 // on first lookup. Extraction is deferred, so a build needing no cabinet-only
 // file never opens a cabinet. cache (nil to disable) supplies members extracted
 // on an earlier build of the same source, avoiding the LZX folder decode.
-func newCabinets(src source.Backing, want map[string]bool, cache *buildcache.Cache) *cabinets {
-	return &cabinets{src: src, want: want, cache: cache}
+func newCabinets(src source.Backing, roots source.Roots, want map[string]bool, cache *buildcache.Cache) *cabinets {
+	return &cabinets{src: src, roots: roots, want: want, cache: cache}
 }
 
 // load opens each present cabinet once, extracts the wanted members that are not
@@ -62,7 +66,7 @@ func (c *cabinets) load() {
 	c.got = make(map[string][]byte)
 	loose := c.looseNames()
 	for _, name := range cabNames {
-		data, err := fs.ReadFile(c.src, path.Join(source.SystemRoot, name))
+		data, err := fs.ReadFile(c.src, path.Join(c.roots.For(source.AreaSystem), name))
 		if err != nil {
 			continue // this cabinet is not on the media
 		}
@@ -119,7 +123,7 @@ func (c *cabinets) load() {
 // skip members that are already available as loose files.
 func (c *cabinets) looseNames() map[string]bool {
 	set := map[string]bool{}
-	entries, err := fs.ReadDir(c.src, source.SystemRoot)
+	entries, err := fs.ReadDir(c.src, c.roots.For(source.AreaSystem))
 	if err != nil {
 		return set
 	}

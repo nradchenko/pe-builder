@@ -9,6 +9,17 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **The engine resolves a source's folders from its architecture** instead of assuming
+  `i386`. A source keeps its files in two areas — the OS payload and the real-mode boot
+  chain — which are the same folder on x86 media and different folders on amd64 media,
+  where the payload moves to `AMD64` and the boot chain stays in `I386`. The pipeline now
+  reads and writes through a resolved folder pair rather than a fixed name. No change to
+  what an x86 build produces: its output tree is byte-for-byte identical.
+- **API (engine packages):** `source.SystemRoot` is **removed** — use `Identity.Roots`.
+  `layout.ReadSourceFile`, `tree.Assemble`, `tree.OutputPath`, `hive.BaseHives`,
+  `hive.Hives.GraftClasses`, and `boot.WriteStartnet` each take the source's `Roots` (and,
+  where the choice varies by file, a `source.Area`). Only importers of the engine packages
+  are affected; the `pebuild` CLI is unchanged.
 - **A source must now be Windows XP SP3.** The accepted minimum moved up from SP1 to SP3
   (`5.1.2600.5512`), so earlier service packs are refused when the source is probed rather
   than failing somewhere deeper in the build. SP3 was the last and universal XP service

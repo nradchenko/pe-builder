@@ -16,15 +16,6 @@ import (
 // presented uniformly so the engine never depends on which.
 type Backing = fs.FS
 
-// SystemRoot is the source (and output-tree) directory that holds the
-// system-root-relative files, mirroring a Windows CD's I386 folder. It is the
-// definition the source reader, the tree assembler, and the hive stage still share.
-//
-// It names only the i386 case; Roots supersedes it by resolving both of a source's
-// top-level folders from its architecture. The remaining consumers migrate to Roots,
-// after which this is removed.
-const SystemRoot = "i386"
-
 // Area names which of a source's two top-level folders a file belongs to.
 //
 // A Windows installation source keeps its files in two areas that happen to be the
@@ -67,10 +58,10 @@ const bootRoot = "i386"
 const defaultArch = "i386"
 
 // Roots is a source's two top-level folders, resolved for one architecture. It is
-// the replacement for SystemRoot: where that names the i386 folder unconditionally,
-// this resolves each area from the probed architecture. The layout parser reads its
-// metadata folder through it; the tree assembler, hive stage, and boot stage still
-// go through SystemRoot and move over as they are converted.
+// the single definition of "which folder", shared by the layout parser, the tree
+// assembler, the hive stage, and the boot stage — all of which resolve a folder
+// through it rather than naming one, so they cannot disagree about where a source
+// keeps its files.
 type Roots struct {
 	// System is the folder for AreaSystem: the architecture's own folder.
 	System string

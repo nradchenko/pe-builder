@@ -268,20 +268,25 @@ func (l *Layout) BootDrivers() []string {
 	return out
 }
 
-// ReadSourceFile resolves a source file under the system root by name, trying its
-// loose (uncompressed) name first and its single-file *.??_ archive name second.
-// It reports the raw bytes, whether they are still the compressed archive form
-// (which the caller decompresses, unless it deliberately wants the packed bytes),
-// and whether the file was found. It is the shared loose→packed resolution both
-// the tree assembler and the hive stage read through, so the two never diverge on
-// where a source file lives or how its compressed name is formed. Cabinet-only
-// files (many drivers) are a further fallback the tree assembler layers on top.
-func ReadSourceFile(b source.Backing, name string) (data []byte, packed, found bool) {
-	loose := path.Join(source.SystemRoot, name)
+// ReadSourceFile resolves a source file by name, trying its loose (uncompressed)
+// name first and its single-file *.??_ archive name second. It reports the raw
+// bytes, whether they are still the compressed archive form (which the caller
+// decompresses, unless it deliberately wants the packed bytes), and whether the file
+// was found. It is the shared loose→packed resolution both the tree assembler and
+// the hive stage read through, so the two never diverge on where a source file lives
+// or how its compressed name is formed. Cabinet-only files (many drivers) are a
+// further fallback the tree assembler layers on top.
+//
+// area says which of the source's folders to look in, and stays the caller's choice —
+// it knows what the file is. Naming the area rather than passing a folder means a
+// caller cannot hand over a string that is not one of the source's roots.
+func ReadSourceFile(b source.Backing, roots source.Roots, area source.Area, name string) (data []byte, packed, found bool) {
+	root := roots.For(area)
+	loose := path.Join(root, name)
 	if d, err := fs.ReadFile(b, loose); err == nil {
 		return d, false, true
 	}
-	archive := path.Join(source.SystemRoot, CompressedName(name))
+	archive := path.Join(root, CompressedName(name))
 	if d, err := fs.ReadFile(b, archive); err == nil {
 		return d, true, true
 	}

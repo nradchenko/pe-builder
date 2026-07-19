@@ -276,7 +276,7 @@ func newSourceListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return printSourceList(cmd.OutOrStdout(), lay, idx, pattern, all)
+			return printSourceList(cmd.OutOrStdout(), lay, id.Roots(), idx, pattern, all)
 		},
 	}
 	cmd.Flags().BoolVarP(&all, "all", "a", false, "also list files the source's metadata does not declare")
@@ -287,7 +287,7 @@ func newSourceListCmd() *cobra.Command {
 // matching files that are on the media but absent from its metadata. An undeclared
 // file has no target: nothing places it, so it is shown with a "-" rather than the
 // system32 fallback that resolution would fall back to if a plugin named it.
-func printSourceList(w io.Writer, lay *layout.Layout, idx *pewalk.Source, pattern string, all bool) error {
+func printSourceList(w io.Writer, lay *layout.Layout, roots source.Roots, idx *pewalk.Source, pattern string, all bool) error {
 	names := make([]string, 0, len(lay.Files))
 	for name := range lay.Files {
 		names = append(names, name)
@@ -314,7 +314,7 @@ func printSourceList(w io.Writer, lay *layout.Layout, idx *pewalk.Source, patter
 			Kind:  action.CopyFile,
 			Src:   name,
 			DirID: lay.Files[name].TargetDir,
-		}, lay)
+		}, lay, roots)
 		fmt.Fprintf(tw, "%s\t%s\t%s\n", name, stored, target)
 	}
 
@@ -368,13 +368,13 @@ func newSourceDirsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			printSourceDirs(cmd.OutOrStdout(), lay)
+			printSourceDirs(cmd.OutOrStdout(), lay, id.Roots())
 			return nil
 		},
 	}
 }
 
-func printSourceDirs(w io.Writer, lay *layout.Layout) {
+func printSourceDirs(w io.Writer, lay *layout.Layout, roots source.Roots) {
 	ids := make([]string, 0, len(lay.Dirs))
 	for id := range lay.Dirs {
 		ids = append(ids, id)
@@ -391,7 +391,7 @@ func printSourceDirs(w io.Writer, lay *layout.Layout) {
 			// backslash the table itself spells it with.
 			shown = `\`
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\n", id, shown, path.Join(source.SystemRoot, rel))
+		fmt.Fprintf(tw, "%s\t%s\t%s\n", id, shown, path.Join(roots.For(source.AreaSystem), rel))
 	}
 	tw.Flush()
 }
