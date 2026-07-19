@@ -84,9 +84,10 @@ func newHiveDumpCmd() *cobra.Command {
 	return cmd
 }
 
-// hiveLocations lists, per hive name, where that hive lives in a target, in probe
-// order. The same relative paths serve an output directory, a work directory, and a
-// mastered .iso alike, since a build's tree keeps its layout when it is mastered.
+// hiveRelPaths lists, per hive name, where that hive lives relative to the folder
+// that holds a target's system area, in probe order. The same relative paths serve
+// an output directory, a work directory, and a mastered .iso alike, since a build's
+// tree keeps its layout when it is mastered.
 //
 // SYSTEM is the one that is not where its name suggests. A build writes it to
 // system32\setupreg.hiv, because in /minint mode the loader loads setupreg.hiv as the
@@ -95,28 +96,52 @@ func newHiveDumpCmd() *cobra.Command {
 // root. So SYSTEM probes both, and config\SYSTEM last for a target that does have an
 // installed-Windows layout. SETUPREG is a spelling of the same hive, kept because
 // that is the name the file has on the media.
-var hiveLocations = map[string][]string{
-	"system":   systemHivePaths,
-	"setupreg": systemHivePaths,
-	"software": {"system32/config/software", "i386/system32/config/software"},
-	"default":  {"system32/config/default", "i386/system32/config/default"},
-	"sam":      {"system32/config/sam", "i386/system32/config/sam"},
-	"security": {"system32/config/security", "i386/system32/config/security"},
+var hiveRelPaths = map[string][]string{
+	"system":   systemHiveRelPaths,
+	"setupreg": systemHiveRelPaths,
+	"software": {"system32/config/software"},
+	"default":  {"system32/config/default"},
+	"sam":      {"system32/config/sam"},
+	"security": {"system32/config/security"},
 }
 
-var systemHivePaths = []string{
+var systemHiveRelPaths = []string{
 	"system32/setupreg.hiv",
-	"i386/system32/setupreg.hiv",
 	"setupreg.hiv",
-	"i386/setupreg.hiv",
 	"system32/config/system",
-	"i386/system32/config/system",
+}
+
+// hivePaths expands a hive's relative locations across the folders that can hold
+// them, in probe order. A target names its system area either by that folder — an
+// i386 source or build, an amd64 one — or not at all, for a tree handed over already
+// rooted at the system folder, so the unprefixed form is tried first and each
+// architecture folder after it.
+//
+// The architecture folders come from the source package rather than being written
+// out here, so this agrees with the layout a build reads and writes. Naming one
+// folder is what made this command unable to find a hive in an amd64 target, whose
+// system area is AMD64 rather than I386. It searches instead of resolving a probed
+// Identity because a built PE cannot be probed: it keeps the source's folder names,
+// but the files Probe reads are decompressed and moved during the build.
+func hivePaths(hiveName string) []string {
+	rel, ok := hiveRelPaths[hiveName]
+	if !ok {
+		return nil
+	}
+	roots := append([]string{""}, source.ArchFolders()...)
+	paths := make([]string, 0, len(rel)*len(roots))
+	for _, r := range rel {
+		for _, root := range roots {
+			paths = append(paths, path.Join(root, r))
+		}
+	}
+	return paths
 }
 
 // hiveNames are the hive names a registry path may start with, for error reporting.
 func hiveNames() []string {
-	names := make([]string, 0, len(hiveLocations))
-	for n := range hiveLocations {
+	names := make([]string, 0, len(hiveRelPaths))
+	for n := range hiveRelPaths {
 		names = append(names, strings.ToUpper(n))
 	}
 	sort.Strings(names)
@@ -138,7 +163,7 @@ func splitRegPath(p string) (hiveName, keyPath string) {
 		}
 	}
 	head, rest, _ := strings.Cut(p, `\`)
-	if _, ok := hiveLocations[strings.ToLower(head)]; ok {
+	if _, ok := hiveRelPaths[strings.ToLower(head)]; ok {
 		return strings.ToLower(head), rest
 	}
 	return "", p
@@ -189,8 +214,17 @@ func readHiveData(target, file, hiveName string, bare bool) (data []byte, from s
 		return data, path.Join(target, p), nil
 	}
 
+	// A hive with no known locations is a name this command does not carry, which is
+	// a different answer from "not found in this target": reporting it as the latter
+	// would print an empty search list, reading as though nowhere was looked.
+	paths := hivePaths(hiveName)
+	if len(paths) == 0 {
+		return nil, "", fmt.Errorf("unknown hive %s: name one of %s, or use --file",
+			strings.ToUpper(hiveName), strings.Join(hiveNames(), ", "))
+	}
+
 	var tried []string
-	for _, p := range hiveLocations[hiveName] {
+	for _, p := range paths {
 		if data, err := fs.ReadFile(b, p); err == nil {
 			return data, path.Join(target, p), nil
 		}

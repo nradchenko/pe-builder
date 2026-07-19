@@ -10,6 +10,7 @@ import (
 
 	"github.com/nradchenko/pe-builder/hive"
 	"github.com/nradchenko/pe-builder/inf"
+	"github.com/nradchenko/pe-builder/source"
 )
 
 // TestOutputNameStaysInsideDirectory covers the extraction path that takes its output
@@ -147,5 +148,41 @@ func TestSplitRegPath(t *testing.T) {
 			t.Errorf("splitRegPath(%q) = (%q, %q), want (%q, %q)",
 				tc.in, gotHive, gotKey, tc.wantHive, tc.wantKey)
 		}
+	}
+}
+
+// TestHivePathsSearchEveryArchFolder covers the folder a hive is looked for in. A
+// source and a build keep their system area in the architecture's own folder, so
+// naming one folder makes every hive in an amd64 target unfindable — which is what
+// this command used to do, searching i386 alone. Each hive must be probed under
+// every architecture folder, and unprefixed first for a tree already rooted at the
+// system folder.
+func TestHivePathsSearchEveryArchFolder(t *testing.T) {
+	for name := range hiveRelPaths {
+		paths := hivePaths(name)
+		for _, folder := range source.ArchFolders() {
+			var found bool
+			for _, p := range paths {
+				if strings.HasPrefix(p, folder+"/") {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("hivePaths(%q) never looks under %q: %v", name, folder, paths)
+			}
+		}
+		if len(paths) == 0 || strings.Contains(paths[0], "/") != strings.Contains(hiveRelPaths[name][0], "/") {
+			t.Errorf("hivePaths(%q) does not try the unprefixed form first: %v", name, paths)
+		}
+	}
+}
+
+// TestHivePathsUnknownHive covers the lookup for a name no hive is registered
+// under: it must report no locations rather than a set built from an empty list,
+// which the caller reads as "found nowhere" and would report as an empty search.
+func TestHivePathsUnknownHive(t *testing.T) {
+	if got := hivePaths("nosuchhive"); got != nil {
+		t.Errorf("hivePaths(unknown) = %v, want nil", got)
 	}
 }

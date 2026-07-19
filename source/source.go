@@ -81,6 +81,22 @@ func KnownArch(arch string) bool {
 	return false
 }
 
+// ArchFolders lists every folder a source's system area can live in, in the same
+// order Probe checks them (amd64 first, since x64 media carries both folders).
+//
+// It is for a reader that must find something under the system root with no probed
+// Identity to resolve Roots from — notably a *built* PE, which keeps the source's
+// folder names but no longer satisfies Probe, since the files Probe reads are
+// decompressed and moved during the build. A reader that has an Identity resolves
+// through Roots instead, which names one folder rather than a set to search.
+func ArchFolders() []string {
+	folders := make([]string, 0, len(archFolders))
+	for _, a := range archFolders {
+		folders = append(folders, a.folder)
+	}
+	return folders
+}
+
 // Roots is a source's two top-level folders, resolved for one architecture. It is
 // the single definition of "which folder", shared by the layout parser, the tree
 // assembler, the hive stage, and the boot stage — all of which resolve a folder
