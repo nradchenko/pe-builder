@@ -111,10 +111,10 @@ func (n NLS) KLID() string {
 // identity's build number selects any .BuildNo conditional section variants and its
 // architecture selects the source folder (defaulting to i386).
 func Parse(src source.Backing, id source.Identity) (*Layout, error) {
-	arch := id.Arch
-	if arch == "" {
-		arch = "i386"
-	}
+	// The metadata is part of the OS payload, so it lives in the source's system
+	// area — the architecture's own folder, and the i386 folder when the identity
+	// carries no architecture.
+	arch := id.Roots().System
 
 	txt, err := parseSourceINF(src, arch+"/txtsetup.sif")
 	if err != nil {
