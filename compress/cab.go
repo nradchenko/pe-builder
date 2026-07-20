@@ -319,28 +319,39 @@ func (c *Cabinet) decodeFolder(idx int) ([]byte, error) {
 		uncompLen += cbUncomp
 	}
 
-	// Second pass: copy the CFDATA payloads into one preallocated buffer.
+	// Second pass: collect the CFDATA payloads. They are kept as per-block views
+	// into c.data because MSZIP decodes block by block; the methods that read one
+	// continuous stream join them below.
 	r = &cursor{b: c.data, pos: int(fld.coffCabStart)}
-	comp := make([]byte, 0, compLen)
+	blocks := make([][]byte, 0, fld.blocks)
+	blockUncomp := make([]int, 0, fld.blocks)
 	for i := 0; i < int(fld.blocks); i++ {
 		r.u32()
 		cbData := int(r.u16())
-		r.u16()
+		cbUncomp := int(r.u16())
 		r.skip(c.dataReserve)
-		comp = append(comp, r.take(cbData)...)
+		blocks = append(blocks, r.take(cbData))
+		blockUncomp = append(blockUncomp, cbUncomp)
 	}
 	if r.err != nil {
 		return nil, fmt.Errorf("folder %d: %w", idx, r.err)
 	}
+	join := func() []byte {
+		comp := make([]byte, 0, compLen)
+		for _, b := range blocks {
+			comp = append(comp, b...)
+		}
+		return comp
+	}
 
 	switch method := fld.typeCompress & compMask; method {
 	case compNone:
-		return comp, nil
+		return join(), nil
 	case compLZX:
 		windowBits := int((fld.typeCompress >> 8) & 0x1f)
-		return lzxDecode(comp, windowBits, uncompLen)
+		return lzxDecode(join(), windowBits, uncompLen)
 	case compMSZIP:
-		return nil, errors.New("MSZIP cabinet compression is not yet supported")
+		return mszipDecode(blocks, blockUncomp, uncompLen)
 	case compQuantum:
 		return nil, errors.New("unsupported Quantum cabinet compression")
 	default:

@@ -402,16 +402,18 @@ func TestCabinetUnsupportedMethod(t *testing.T) {
 	b := &cabBuilder{}
 	b.addFolder(cabBuildFile{name: "m.txt", data: []byte("data")})
 	raw := b.build()
-	// Patch folder 0's typeCompress to MSZIP (method 1) and expect a clear error.
-	// typeCompress sits at header(36) + 6 within the first CFFOLDER.
-	binary.LittleEndian.PutUint16(raw[36+6:], compMSZIP)
+	// Patch folder 0's typeCompress to Quantum (method 2) and expect a clear
+	// error. Quantum is the one method this package still does not decode; NONE,
+	// MSZIP, and LZX are all handled. typeCompress sits at header(36) + 6 within
+	// the first CFFOLDER.
+	binary.LittleEndian.PutUint16(raw[36+6:], compQuantum)
 	cab, err := ReadCabinet(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
 	f, _ := cab.Find("m.txt")
-	if _, err := cab.Data(f); err == nil || !strings.Contains(err.Error(), "MSZIP") {
-		t.Fatalf("want MSZIP-unsupported error, got %v", err)
+	if _, err := cab.Data(f); err == nil || !strings.Contains(err.Error(), "Quantum") {
+		t.Fatalf("want Quantum-unsupported error, got %v", err)
 	}
 }
 

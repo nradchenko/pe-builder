@@ -38,8 +38,11 @@ PE dependencies.
     mode) stays in `I386`. `Identity.Roots` resolves the pair, and every stage that
     reads from or writes under a source folder resolves it through that rather than
     naming one, so they cannot disagree.
-  - `compress/` — decompress the source's MSCF cabinets (CAB-LZX `.??_` files,
-    `DRIVER.CAB`).
+  - `compress/` — decompress the source's MSCF cabinets (`.??_` files, `DRIVER.CAB`,
+    the `ASMS*.CAB` assembly cabinets). A cabinet declares its compression per folder,
+    so one may mix codecs: LZX covers essentially everything on x86 media, while amd64
+    media packs the side-by-side assemblies with MSZIP (deflate per block, each block
+    decoded against its predecessor's output as a preset dictionary).
   - `inf/` — a Windows setupapi-compatible `.inf` parser.
   - `layout/` — resolve the source's `txtsetup.sif` / `layout.inf` (file → target
     directory, on-disk name, boot-driver lists, and the source's locale from the
