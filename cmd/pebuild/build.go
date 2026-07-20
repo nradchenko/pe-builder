@@ -12,7 +12,6 @@ import (
 
 	"github.com/nradchenko/pe-builder/build"
 	"github.com/nradchenko/pe-builder/buildcache"
-	"github.com/nradchenko/pe-builder/manifest"
 )
 
 func newBuildCmd() *cobra.Command {
@@ -32,16 +31,9 @@ func newBuildCmd() *cobra.Command {
 			if len(args) == 1 {
 				arg = args[0]
 			}
-			path, err := manifest.Resolve(arg)
+			m, _, err := loadManifest(arg)
 			if err != nil {
 				return err
-			}
-			m, err := manifest.Load(path)
-			if err != nil {
-				return fmt.Errorf("load %s: %w", path, err)
-			}
-			if err := manifest.Validate(m); err != nil {
-				return fmt.Errorf("%s is invalid:\n%w", path, err)
 			}
 			// The flag lets a user-supplied plugin's [Build] run without editing the
 			// manifest; either source opts in.

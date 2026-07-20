@@ -71,9 +71,15 @@ go build -o pebuild ./cmd/pebuild
 # edit source.path in examples/luna.hcl to your Windows media, then:
 ./pebuild build examples/luna.hcl
 
-# boot the result:
-qemu-system-i386 -M pc -m 512 -cdrom out/pe-theme.iso -boot d
+# boot the result in QEMU:
+./pebuild run examples/luna.hcl
 ```
+
+`run` boots an image that `build` already produced — it never builds one itself. Give it
+the manifest, and it boots the image that manifest writes; give it an `.iso`, and it boots
+that. It reads the image to pick the emulator and machine for it, so the same command
+works for a 32- or 64-bit image; [`docs/supported.md`](docs/supported.md) spells out the
+QEMU line it amounts to, if you would rather type it yourself.
 
 That boots to a **Windows Explorer desktop** — Start menu, taskbar, Control Panel — with the
 familiar XP **"Luna"** look, self-contained from CD with no attached disk. Enabling `luna` is

@@ -4,12 +4,14 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/nradchenko/pe-builder/internal/buildinfo"
+	"github.com/nradchenko/pe-builder/manifest"
 )
 
 // newRootCmd builds the full command tree. It is a constructor so tests can
@@ -38,12 +40,35 @@ func newRootCmd() *cobra.Command {
 		newVersionCmd(),
 		newValidateCmd(),
 		newBuildCmd(),
+		newRunCmd(),
 		newSourceCmd(),
 		newHiveCmd(),
 		newPluginsCmd(),
 	)
 
 	return root
+}
+
+// loadManifest resolves, loads, and validates the manifest named by arg, which is
+// empty when the command was given no argument — pebuild.hcl in the current
+// directory. It returns the manifest and the path it came from, so a caller can
+// report where a setting it objects to was read from.
+//
+// Every command that takes a manifest goes through it, so they agree on what an
+// argument means and refuse an invalid manifest identically.
+func loadManifest(arg string) (*manifest.Manifest, string, error) {
+	path, err := manifest.Resolve(arg)
+	if err != nil {
+		return nil, "", err
+	}
+	m, err := manifest.Load(path)
+	if err != nil {
+		return nil, "", fmt.Errorf("load %s: %w", path, err)
+	}
+	if err := manifest.Validate(m); err != nil {
+		return nil, "", fmt.Errorf("%s is invalid:\n%w", path, err)
+	}
+	return m, path, nil
 }
 
 // Execute runs the root command against os.Args.

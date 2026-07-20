@@ -57,6 +57,11 @@ Neither is a limitation of the build system.
 | Real hardware | **untested** — nothing here has been booted on a physical machine |
 | Other hypervisors (VirtualBox, VMware, Hyper-V) | untested |
 
+`pebuild run <manifest|image.iso>` boots a built image with the machine below, reading the
+image to settle every choice this section describes — the binary, hardware acceleration,
+and the CPU model. The commands are spelled out here because they document what it does,
+and for driving QEMU yourself.
+
 **The QEMU binary follows the image's architecture**, not the host's: a 32-bit image runs
 under `qemu-system-i386`, and a 64-bit image needs `qemu-system-x86_64`, because
 `qemu-system-i386` presents a 32-bit CPU that an x64 Windows will not boot on. Everything
@@ -72,7 +77,11 @@ qemu-system-x86_64 -enable-kvm -M pc -m 512 -cdrom out/pe-x64.iso -boot d
 
 Use `-enable-kvm` where the host supports it. It is dramatically faster than emulation, and
 it is the configuration timings in this project are quoted for. Without KVM, add `-cpu qemu64`
-for a 64-bit image so the emulated CPU advertises long mode.
+for a 64-bit image so the emulated CPU advertises long mode. (`run` uses `/dev/kvm` when it
+can open it and falls back to emulation when it cannot, adding `-cpu qemu64` where that
+fallback needs it. No `/dev/kvm` at all is quiet — a container or a CI runner has none — but
+a device that is present and will not open is reported, since that is usually group
+membership, and the difference otherwise shows up only as a much slower boot.)
 
 ### Guest requirements
 
@@ -88,6 +97,9 @@ machine presents. The two architectures differ only in the CPU:
 | Input | PS/2 keyboard and mouse | same |
 | Storage | IDE/ATAPI CD-ROM | same |
 | Memory | 128 MB minimum for a desktop image, less for `cmd.exe`; tested at 512 MB | tested at 512 MB |
+
+`run` boots with 512 MB; `--ram <MB>` sets it, and `--usb-tablet` adds a USB tablet for
+seamless mouse, which needs a guest that drives one.
 
 No network, sound, or USB input stack is configured on either. UEFI is not supported — the
 boot chain is XP's own real-mode loader, which is also why it is identical on both

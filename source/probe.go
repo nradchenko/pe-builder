@@ -17,13 +17,22 @@ import (
 // refused here rather than failing somewhere deeper in the pipeline.
 var minVersion = fileVersion{Major: 5, Minor: 1, Build: 2600, Revision: 5512}
 
+// The architectures Probe can detect, and so the only values Identity.Arch takes.
+// They are exported because a caller that selects behaviour per architecture — which
+// emulator boots an image, which binaries a toolchain builds — would otherwise
+// restate these strings, and drift from them when a third architecture appears.
+const (
+	ArchI386  = "i386"
+	ArchAMD64 = "amd64"
+)
+
 // archFolders maps a source's top-level architecture folder to the Arch value.
 // amd64 is checked first: x64 install media carries BOTH an AMD64 folder (the
 // 64-bit binaries) and an I386 folder (32-bit setup files), so an AMD64 folder is
 // the decisive signal, while 32-bit media has only I386.
 var archFolders = []struct{ folder, arch string }{
-	{"amd64", "amd64"},
-	{"i386", "i386"},
+	{ArchAMD64, ArchAMD64},
+	{ArchI386, ArchI386},
 }
 
 // flavors maps a build number to its flavor name.
@@ -63,12 +72,35 @@ func (s *source) Probe() (Identity, error) {
 
 // archFolder finds the source's architecture folder and its Arch value.
 func (s *source) archFolder() (folder, arch string, err error) {
+	folder, arch, ok := detectArchFolder(s.backing)
+	if !ok {
+		return "", "", fmt.Errorf("no source architecture folder (i386/amd64) found")
+	}
+	return folder, arch, nil
+}
+
+// DetectArch reports a tree's architecture from its top-level folders alone, and
+// whether one was found.
+//
+// It answers the architecture question for a tree Probe cannot answer it for — a
+// *built* PE, which keeps the source's folder names but no longer carries the ntdll
+// archive Probe reads a version from. The folder is the same decisive signal Probe
+// uses, so the two cannot disagree about what an amd64 tree looks like; what a caller
+// gives up by asking here is the build number and flavor, which only a source has.
+func DetectArch(b Backing) (arch string, ok bool) {
+	_, arch, ok = detectArchFolder(b)
+	return arch, ok
+}
+
+// detectArchFolder scans a backing for the first architecture folder in archFolders
+// order, so the source probe and a built tree's reader look the same way.
+func detectArchFolder(b Backing) (folder, arch string, ok bool) {
 	for _, a := range archFolders {
-		if info, err := fs.Stat(s.backing, a.folder); err == nil && info.IsDir() {
-			return a.folder, a.arch, nil
+		if info, err := fs.Stat(b, a.folder); err == nil && info.IsDir() {
+			return a.folder, a.arch, true
 		}
 	}
-	return "", "", fmt.Errorf("no source architecture folder (i386/amd64) found")
+	return "", "", false
 }
 
 // readNtdll returns ntdll's PE bytes, reading the loose uncompressed ntdll.dll if

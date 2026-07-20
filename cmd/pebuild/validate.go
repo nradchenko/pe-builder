@@ -26,19 +26,10 @@ func newValidateCmd() *cobra.Command {
 			if len(args) == 1 {
 				arg = args[0]
 			}
-			path, err := manifest.Resolve(arg)
+			m, path, err := loadManifest(arg)
 			if err != nil {
 				return err
 			}
-
-			m, err := manifest.Load(path)
-			if err != nil {
-				return fmt.Errorf("load %s: %w", path, err)
-			}
-			if err := manifest.Validate(m); err != nil {
-				return fmt.Errorf("%s is invalid:\n%w", path, err)
-			}
-
 			return printSummary(cmd.OutOrStdout(), path, m)
 		},
 	}

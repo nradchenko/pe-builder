@@ -22,7 +22,10 @@ PE dependencies.
   whichever form the media stores it in, the declared file list with each file's storage
   form and output path, the directory-ID table, and an INF section as the build's own
   parser sees it), and `hive dump` prints a key or value from a registry hive in a
-  source, a built PE, or a bare hive file.
+  source, a built PE, or a bare hive file. `run` boots an image `build` already produced —
+  named directly, or through the manifest that wrote it — in QEMU, reading the image's own
+  architecture to pick the emulator and machine; it deliberately does not build, and is a
+  plain launcher unrelated to the QMP/OCR test harness.
 - `cmd/pewalk/` — the `pewalk` command: an "ldd for PE" that computes and renders the
   import closure of a Windows binary against a source (cobra).
 - Engine packages, roughly in pipeline order:
