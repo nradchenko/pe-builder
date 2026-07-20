@@ -5,10 +5,88 @@ All notable changes to pe-builder are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.4.0] - 2026-07-20
+
+The 64-bit and desktop-maturity release. A **Windows XP Professional x64 Edition** source now
+builds and boots — the first time pe-builder produces a PE from anything other than 32-bit
+media, and a change that runs through the whole pipeline, since such a source splits its files
+across two folders where x86 media uses one. Alongside it the Explorer desktop grows up: the
+familiar **modern two-column XP Start menu**, plugins contributing grouped submenus whose
+labels come from Windows' own translations, and a general **plugin-options mechanism** so a
+manifest can configure what a plugin builds — the screen resolution, the menu style, the
+visual style's colours — with a `games` plugin to round it out. A PE also stops burning a CPU
+core while it sits idle.
+
+### Added
+
+- **Windows XP Professional x64 Edition sources build and boot.** An amd64 source produces
+  a bootable PE that starts to a `cmd.exe` prompt, verified on real media. Such a source
+  keeps its files in two folders rather than one — the OS payload in `AMD64`, the real-mode
+  boot chain in `I386` — and the build now mirrors that layout instead of assuming a single
+  `I386`. The desktop plugins remain x86-only (see *Known limitations*).
+- **Architecture-conditional INF sections.** A section may carry an `.<arch>` suffix —
+  `[SourceDisksFiles.amd64]`, `[SetValue.i386]` — and is read only when it matches the
+  source's architecture, alongside the unsuffixed section, the way a `.BuildNo` variant
+  already works. Shared entries stay unsuffixed; only genuinely architecture-specific ones
+  move. The base layer uses it for the loader's HAL and for files the 64-bit product does
+  not have. An architecture that matches no known one is now rejected rather than silently
+  compiling neither variant.
+- **`pebuild plugins info --arch`** selects which architecture's sections are reported,
+  alongside the existing `--build`.
+- **Manifest-settable plugin options.** A plugin declares its knobs in an `[Options]`
+  section — a name, a default, and optionally a type and an allowed set — and templates them
+  into its own INF values with `$(name)` placeholders; a manifest overrides them in the
+  plugin block's `options {}`. Substitution is one-to-one text into value data only, never a
+  key or a path, and an unknown option or an out-of-range value is a build error naming the
+  plugin. A plugin that declares no options is unaffected.
+- **The modern two-column XP Start menu.** The desktop now boots to the familiar XP Start
+  panel — pinned items, the right-hand column, All Programs — instead of the classic
+  Windows 2000 menu, with the classic menu available as an option. Plugin-contributed
+  entries are pinned into the panel in the order the contract lists them.
+- **Start-menu submenu paths and localized labels.** An entry's name is now a menu path, so
+  `Games\Solitaire` places it in a submenu, and a single leading backslash anchors it at the
+  menu root. Its label comes from the target's own `FileDescription` — which Windows ships
+  translated — so the menu reads in the source's language with no table of names in the
+  build, and an explicit `target|Label` overrides it.
+- **Manifest-configurable desktop and theme.** `explorer-shell` exposes the display mode
+  (`width`, `height`, `bpp`), the Start-menu style, the version watermark, and whether
+  recent documents are shown; `luna` exposes the visual style's colour scheme and size — all
+  three schemes and all three sizes already ship inside the one style file, so selecting
+  another stages nothing extra.
+- **Source and hive inspection commands.** `pebuild source extract`, `ls`, `dirs` and `inf`,
+  and `pebuild hive dump`, answer questions about a Windows source or a built PE using the
+  same readers a build runs on, rather than an ad-hoc script: a bare file name resolves
+  across the loose, compressed `.??_` and cabinet-packed forms alike, an INF section is shown
+  as the build's own parser sees it, and a hive is read from a source, a built PE, or a bare
+  file — on either architecture, since a hive is looked for across the folders that can hold
+  the system area rather than under a fixed `i386`. See
+  [`docs/inspecting.md`](docs/inspecting.md).
+- **A compatibility reference,** [`docs/supported.md`](docs/supported.md): which Windows
+  sources build and what each one produces, the output targets, and the environment an image
+  expects — marking throughout what has been verified and what has not.
+- **A `games` plugin.** Enabling `games` stages the Windows XP games a minimal PE can
+  actually run — Solitaire, Minesweeper, FreeCell and Spider Solitaire — and groups them
+  under a *Games* folder in *All Programs*. Each game's file set is computed from its own
+  import closure against the source, and its menu label comes from its `FileDescription`,
+  so the menu reads in the source's language. Hearts and Pinball are not included: they
+  need a network stack and DirectX/sound, which a minimal PE does not have.
 
 ### Changed
 
+- **The desktop starts with the modern Start menu, not the classic one.** Builds that want
+  the previous look set `classic_start_menu = 1` on `explorer-shell`.
+- **Recent documents are hidden, and no longer tracked.** A PE has no meaningful document
+  history; `hide_recent_docs = 0` restores both.
+- **The Startup folder moved out of `Start Menu\Programs`.** It was showing up as an empty
+  *Startup* submenu in All Programs; it is now a sibling of the Start Menu in the profile,
+  and still runs what is placed in it.
+- **`examples/rescue.hcl` is now `examples/reference.hcl`**, rewritten. It was never a rescue
+  image — it is the annotated tour of every manifest block and field — and it described
+  plugin options as "carried but not yet acted on", which this release makes false. It now
+  documents the full schema against real plugins.
+- **`pebuild plugins list` no longer takes `--build`.** Listing enumerates the search path
+  without parsing manifests, so the flag selected nothing; `plugins info`, which does parse,
+  keeps it.
 - **The engine resolves a source's folders from its architecture** instead of assuming
   `i386`. A source keeps its files in two areas — the OS payload and the real-mode boot
   chain — which are the same folder on x86 media and different folders on amd64 media,
@@ -35,11 +113,44 @@ project uses [Semantic Versioning](https://semver.org/).
   pack, and it supersedes the earlier ones — building a PE from SP0/SP1/SP2 media has
   almost no practical use, so they are not a target at all rather than merely untested.
 
+### Fixed
+
+- **The CPU idles instead of running flat out.** A booted PE sitting at the desktop doing
+  nothing used to run a core at 100% — wasting power and generating heat on real hardware,
+  and pinning a host thread in a virtual machine. ACPI enumerates the processor at boot, but
+  a PE runs no driver-install pass, so nothing was ever attached to it; with no processor
+  driver the kernel's idle loop spins rather than halting. The base layer now stages the
+  processor driver and binds it to the CPU by its vendor-neutral device ID, which works
+  regardless of which processor the image boots on.
+- **"Log Off" is gone from the desktop's shutdown surfaces** — listed as a rough edge in
+  0.3.0. There is only one account in a PE, so the entry did nothing. It needed more than a
+  policy: the shutdown dialog only honours the setting once `msgina` can load, and `msgina`
+  was failing because `odbc32` loads `odbcint` by name — invisible to the import scan — so
+  the shell fell back to its own dialog, which ignores the policy. The base layer now stages
+  `odbcint.dll`.
+- **The Start menu no longer opens itself on first boot.** The shell opened the panel once
+  on a fresh profile to draw attention to it; the build now starts past that prompt.
+- **A modal "Installation failed." dialog no longer blocks startup on English sources.**
+  Some sources register a "Windows Marketplace Link" component whose startup task runs an
+  installer over an `.inf` a PE does not ship. The component is removed, which is a no-op on
+  sources without it.
+
 ### Known limitations
 
-- **Windows Server 2003 sources are untested.** They are still accepted — a 2003 source is
+- **There is no sound.** No audio device is set up, and the Windows Audio service is
+  deliberately disabled — with it enabled, a system sound blocks the shell's thread and
+  cascades every folder window into *Not Responding*. Anything that plays audio runs
+  silently instead: the games are playable but mute, and this is why Pinball is not among
+  them.
+- **The plugins are x86-only, so an amd64 build is a bare `cmd.exe` PE.** Two things stand
+  in the way, and neither is a build-system problem: a plugin's INF names its destinations
+  under a literal `i386`, which is the wrong folder on an amd64 source; and the plugins that
+  ship a kernel driver (`ramdrive`, `pesuite`, and so the Explorer desktop and the Luna
+  visual style that depend on them) are compiled 32-bit, which an amd64 kernel will not
+  load, and would additionally have to satisfy its driver-signing requirement.
+- **32-bit Windows Server 2003 sources are untested.** They are accepted — a 2003 source is
   newer than the SP3 minimum — and may well build, but nothing has been verified against
-  one. Windows XP SP3 is the only source proven to work.
+  one. The sources proven to work are Windows XP SP3 (32-bit) and Windows XP x64 Edition.
 
 ## [0.3.0] - 2026-07-17
 
@@ -164,7 +275,7 @@ build runs in about 4 seconds and produces a roughly 45 MB ISO.
 - Targets Windows XP sources; other source flavors and output targets are planned.
 - No plugin system yet — a build is the base layer only.
 
-[Unreleased]: https://github.com/nradchenko/pe-builder/compare/v0.3.0...HEAD
+[0.4.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.4.0
 [0.3.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.3.0
 [0.2.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.2.0
 [0.1.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.1.0
