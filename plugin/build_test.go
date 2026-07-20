@@ -111,6 +111,86 @@ Command  = make all
 	}
 }
 
+// TestParseBuildArch covers the architecture fold: [Build.<arch>] adds to [Build]
+// for the matching architecture, so the shared Produces stays in [Build] while each
+// architecture names its own toolchain in Requires and hands the arch to the build
+// through Command. It is the compose rule the action sections use, on [Build].
+func TestParseBuildArch(t *testing.T) {
+	const src = `[Version]
+Signature="$Windows NT$"
+[PEBuilder]
+Name="X"
+[Build]
+Produces = drv.sys
+[Build.i386]
+Requires = i686-w64-mingw32-gcc make
+Command  = make ARCH=i386
+[Build.amd64]
+Requires = x86_64-w64-mingw32-gcc make
+Command  = make ARCH=amd64
+`
+	f, err := inf.Parse([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		arch, wantReq, wantCmd string
+	}{
+		// The arch section's toolchain and Command apply; the shared Produces is seen
+		// on every architecture.
+		{"i386", "i686-w64-mingw32-gcc,make", "make ARCH=i386"},
+		{"amd64", "x86_64-w64-mingw32-gcc,make", "make ARCH=amd64"},
+		// An unset architecture resolves to i386, matching how folders and action
+		// sections resolve it — a plugin never compiles with neither arch's toolchain.
+		{"", "i686-w64-mingw32-gcc,make", "make ARCH=i386"},
+	} {
+		p, err := Parse("x", f, Target{Arch: tt.arch})
+		if err != nil {
+			t.Fatalf("arch %q: %v", tt.arch, err)
+		}
+		if !containsStr(p.Build.Produces, "drv.sys") {
+			t.Errorf("arch %q: Produces = %v, want the shared drv.sys", tt.arch, p.Build.Produces)
+		}
+		if got := strings.Join(p.Build.Requires, ","); got != tt.wantReq {
+			t.Errorf("arch %q: Requires = %q, want %q", tt.arch, got, tt.wantReq)
+		}
+		if p.Build.Command != tt.wantCmd {
+			t.Errorf("arch %q: Command = %q, want %q", tt.arch, p.Build.Command, tt.wantCmd)
+		}
+	}
+}
+
+// TestParseBuildVariantWithoutBase covers a [Build.<arch>] written without the [Build]
+// it varies. Read as "not build-capable" it would be silent: the binary never compiled,
+// and the first symptom a missing-file error from the tree assembler, nowhere near the
+// cause. A build-number variant is the same mistake and is caught the same way.
+func TestParseBuildVariantWithoutBase(t *testing.T) {
+	const head = "[Version]\nSignature=\"$Windows NT$\"\n[PEBuilder]\nName=\"X\"\n"
+	for _, body := range []string{
+		"[Build.amd64]\nRequires = x86_64-w64-mingw32-gcc\nProduces = drv.sys\n",
+		"[Build.i386]\nProduces = drv.sys\n",
+		"[Build.2600]\nProduces = drv.sys\n",
+	} {
+		f, err := inf.Parse([]byte(head + body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Parse("x", f, Target{Arch: "amd64"}); err == nil {
+			t.Errorf("a variant without a base [Build] was accepted:\n%s", body)
+		}
+	}
+	// A base [Build] alone, and a base with variants, both stay valid.
+	for _, body := range []string{
+		"[Build]\nProduces = drv.sys\n",
+		"[Build]\nProduces = drv.sys\n[Build.amd64]\nCommand = make ARCH=amd64\n",
+	} {
+		f, _ := inf.Parse([]byte(head + body))
+		if _, err := Parse("x", f, Target{Arch: "amd64"}); err != nil {
+			t.Errorf("valid [Build] rejected: %v\n%s", err, body)
+		}
+	}
+}
+
 func TestParseBuildCommandVerbatim(t *testing.T) {
 	// The command is taken verbatim: quotes and commas survive (they would be
 	// stripped/truncated by INF field splitting).

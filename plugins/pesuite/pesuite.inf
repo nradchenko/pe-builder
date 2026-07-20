@@ -17,10 +17,19 @@ Name = "PE suite mask"
 Enable = 0
 
 ; Compiled from the bundled pesuite.c at build time rather than shipping a binary; MinGW-w64, no
-; WDK. See README.md § Build — it names the proven toolchain and kernel versions.
+; WDK. See README.md § Build — it names the proven toolchain and kernel versions. The driver is
+; the same on both architectures; only the toolchain differs, so the shared [Build] holds the
+; output and each [Build.<arch>] names that architecture's compiler and hands ARCH to the Makefile.
 [Build]
-Requires = i686-w64-mingw32-gcc make
 Produces = pesuite.sys
+
+[Build.i386]
+Requires = i686-w64-mingw32-gcc make
+Command  = make ARCH=i386
+
+[Build.amd64]
+Requires = x86_64-w64-mingw32-gcc make
+Command  = make ARCH=amd64
 
 [SourceDisksFiles]
 pesuite.sys = 4

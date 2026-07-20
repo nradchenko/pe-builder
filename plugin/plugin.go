@@ -90,9 +90,10 @@ func Parse(name string, f *inf.File, t Target) (*Plugin, error) {
 	}
 
 	p := &Plugin{Name: name}
-	// The sections below declare what the plugin *is* — its identity, what it builds,
-	// what it depends on — rather than what it places, so they resolve per build only.
-	// Architecture variants apply to the sections that compile to actions.
+	// These sections declare the plugin's identity and depends graph — what it *is*,
+	// not what it places — so they resolve per build only; architecture variants are
+	// for the sections that compile to actions. [Build] is the exception (see
+	// parseBuild): it invokes a toolchain, which is arch-specific.
 	pb := sectionMap(f.Section("PEBuilder", t.Build))
 	p.Display = pb["name"]
 	p.Help = pb["help"]
@@ -102,7 +103,11 @@ func Parse(name string, f *inf.File, t Target) (*Plugin, error) {
 	}
 
 	p.Update = parseUpdate(f, t.Build)
-	p.Build = parseBuild(f, t.Build)
+	build, err := parseBuild(f, t)
+	if err != nil {
+		return nil, fmt.Errorf("plugin %q: %w", name, err)
+	}
+	p.Build = build
 	p.Closure = parseClosure(f, t.Build)
 
 	opts, err := parseOptions(f, t.Build)
@@ -164,14 +169,32 @@ func parseUpdate(f *inf.File, build int) Update {
 	return u
 }
 
-// parseBuild reads the optional [Build] section. Requires/Produces are space- or
-// comma-separated lists; Command defaults to "make".
-func parseBuild(f *inf.File, build int) BuildSpec {
+// parseBuild reads the optional [Build] section for the target. Requires/Produces are
+// space- or comma-separated lists; Command defaults to "make".
+//
+// [Build] is the one metadata section that is architecture-aware: it invokes a
+// toolchain, which is inherently arch-specific (a cross-compiler and its target
+// differ per architecture), so [Build.<arch>] folds over [Build] the same way an
+// action section's arch variant does. The shared [Build] carries what is common (the
+// Produces list — a driver has the same name on either arch); the arch section names
+// that architecture's toolchain in Requires, so the presence check tests the compiler
+// actually needed, and its Command hands the architecture to the build (e.g.
+// "make ARCH=amd64"). A base [Build] is still required — it is what declares the
+// plugin build-capable and holds the shared Produces.
+func parseBuild(f *inf.File, t Target) (BuildSpec, error) {
 	if !f.HasSection("Build") {
-		return BuildSpec{}
+		// A variant without the base section it varies is almost certainly a mistake, and
+		// a silent one: the plugin would be read as not build-capable, its binary never
+		// compiled, and the first sign of trouble would be a missing-file error from the
+		// tree assembler, nowhere near the cause. Name it here instead.
+		if v := variantSections(f, "Build"); len(v) > 0 {
+			return BuildSpec{}, fmt.Errorf("[%s] without a [Build] section: the base section declares "+
+				"the plugin build-capable and holds the shared Produces", v[0])
+		}
+		return BuildSpec{}, nil
 	}
 	b := BuildSpec{Present: true, Command: "make"}
-	for _, l := range f.Section("Build", build) {
+	for _, l := range t.sections(f, "Build") {
 		switch strings.ToLower(l.Key) {
 		case "requires":
 			b.Requires = append(b.Requires, tokens(l)...)
@@ -181,13 +204,28 @@ func parseBuild(f *inf.File, build int) BuildSpec {
 			// Take the command verbatim (Raw), so quotes and commas survive to the
 			// shell — INF field splitting would strip/truncate them. An INF ';' comment
 			// still ends the line, so ';'-separated sequencing is unavailable; put
-			// multi-step logic in the Makefile instead.
+			// multi-step logic in the Makefile instead. The arch section's Command comes
+			// after the base section's, so it wins — an arch build overrides the default.
 			if v := strings.TrimSpace(l.Raw()); v != "" {
 				b.Command = v
 			}
 		}
 	}
-	return b
+	return b, nil
+}
+
+// variantSections returns the conditional variants of a section that the file declares —
+// the "[<base>.<something>]" forms, whether that something is an architecture or a build
+// number. It exists to catch a variant written without its base section.
+func variantSections(f *inf.File, base string) []string {
+	prefix := strings.ToLower(base) + "."
+	var out []string
+	for _, s := range f.Sections() {
+		if strings.HasPrefix(s, prefix) {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // tokens splits an INF line's fields further on whitespace, so a Requires/Produces

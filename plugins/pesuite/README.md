@@ -83,22 +83,43 @@ If it ever proves too late, the escalation is `[AddLine] "txtsetup.sif","BusExte
 
 ## Build
 
-MinGW-w64 builds a loadable XP kernel driver with no WDK and no MSVC. **Proven with:**
+MinGW-w64 builds a loadable XP kernel driver with no WDK and no MSVC.
+
+The driver source is architecture-neutral; only the toolchain differs. `make ARCH=i386`
+(the default) and `make ARCH=amd64` select it, and the plugin's `[Build.<arch>]` sections
+name each architecture's compiler and pass the matching `ARCH` — so the presence check
+tests the compiler actually needed rather than a superset. The whole per-architecture
+difference is one switch at the top of the `Makefile`: the toolchain triple, the arch
+define (`_X86_` / `_AMD64_`), the entry-point name (x64 has no `_…@8` stdcall
+decoration), the native subsystem version (5.01 / 5.02), and the DDK include path. An
+`ARCH` the recipe has no flags for is an error, not a fallback — a driver silently built
+for the wrong architecture would not load, and would look like a driver that did nothing.
+
+**Proven with:**
 
 | | Version |
 |---|---|
-| Compiler | `i686-w64-mingw32-gcc (GCC) 13-win32` — Debian/Ubuntu `gcc-mingw-w64-i686` 13.2.0 |
-| Linker | `GNU ld (GNU Binutils) 2.41.90.20240122` — `binutils-mingw-w64-i686` |
+| Compiler (i386) | `i686-w64-mingw32-gcc (GCC) 13-win32` — Debian/Ubuntu `gcc-mingw-w64-i686` 13.2.0 |
+| Compiler (amd64) | `x86_64-w64-mingw32-gcc (GCC) 13-win32` — Debian/Ubuntu `gcc-mingw-w64-x86-64` |
+| Linker | `GNU ld (GNU Binutils) 2.41.90.20240122` — `binutils-mingw-w64-i686` / `-x86-64` |
 | Kernel it loads against | `ntoskrnl.exe` **5.1.2600.5512** (`xpsp.080413-2111`), i.e. XP SP3 — staged from the source's `ntkrnlmp.exe` (the base layer installs the multiprocessor kernel under the uniprocessor name). Proven on both the Russian and English VL sources: at this version their kernels differ only in the localized `.rsrc` section — every code and data section is byte-identical. |
 
 Those are the versions it was proven on, not the versions it is pinned to — **nothing here is
 hardcoded to that kernel by address.** The base comes from the DDK's `KI_USER_SHARED_DATA`, which
-the header defines per architecture (`0xffdf0000` on x86; it carries the x64 value too), so it is
+the header defines per architecture (`0xffdf0000` on x86, `0xfffff78000000000` on x64), so it is
 the architecture's ABI rather than anything RE'd. The one literal, `SuiteMask` at **`+0x2d0`**, is
 corroborated by the DDK's own `KUSER_SHARED_DATA`, whose layout carries no version conditionals
 before that field — and user mode reads the same page at `0x7ffe0000`, which makes those early
 offsets a public contract that does not move within a kernel line. The driver should therefore
 hold across XP service packs and editions.
+
+That `+0x2d0` holds on x64 as well, checked rather than assumed: the x64 kernel's own product
+init reads that address, ORs in `0x10`, sets bit 8, and writes it back — the same
+`VER_SUITE_TERMINAL | VER_SUITE_SINGLEUSERTS` this driver sets, at the same offset. The
+neighbouring fields the offset was originally corroborated against (`NtProductType +0x264`,
+`ProductTypeIsValid +0x268`, `NXSupportPolicy +0x2d5`, `ActiveConsoleId +0x2d8`) sit where they do
+on x86. On an XP x64 source the driver has been built, staged system-start, booted, and confirmed
+to have set the bit.
 
 What is version-bound is the rest of the chain, not this: `Luna.msstyles` is XP-only, and the
 shell ordinals the applier calls are per-build export tables.

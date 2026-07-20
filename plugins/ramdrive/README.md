@@ -110,11 +110,26 @@ PE, so a demand-start driver is never loaded (the service reads `NEVER_STARTED`)
 
 ## Build
 
-`ramdrive.sys` is cross-compiled with the **MinGW-w64 i686** toolchain — no WDK, no MSVC
-(`apt install gcc-mingw-w64-i686`). It is a freestanding native-subsystem PE with entry
-point `DriverEntry` that keeps its `.reloc` section, exports no symbols, and carries a valid
-PE checksum — all load requirements for an XP kernel driver. Verified with **GCC 13.2**,
-**GNU binutils (ld) 2.41**, and **mingw-w64 headers 11.0**.
+`ramdrive.sys` is cross-compiled with a **MinGW-w64** toolchain — no WDK, no MSVC. It is a
+freestanding native-subsystem PE with entry point `DriverEntry` that keeps its `.reloc`
+section, exports no symbols, and carries a valid PE checksum — all load requirements for an
+XP kernel driver. Verified with **GCC 13.2**, **GNU binutils (ld) 2.41**, and **mingw-w64
+headers 11.0**.
+
+The driver source is architecture-neutral; only the toolchain differs. `make ARCH=i386`
+(the default, `apt install gcc-mingw-w64-i686`) and `make ARCH=amd64` (`gcc-mingw-w64-x86-64`)
+select it, and the plugin's `[Build.<arch>]` sections name each architecture's compiler and
+pass the matching `ARCH`. One switch at the top of the `Makefile` carries the whole
+difference: toolchain triple, arch define, entry-point decoration (x64 has no `_…@8`),
+native subsystem version, and DDK include path. An `ARCH` the recipe has no flags for is an
+error rather than a fallback, so a wrong-architecture driver cannot be built silently.
+
+**The amd64 build is not yet boot-proven.** It compiles, and its source carries no
+pointer-width assumptions (offsets are `LARGE_INTEGER`, the backing is capped well inside
+`ULONG`), but unlike `pesuite` — a leaf that writes one word — this driver has dispatch and
+completion paths that can fault, and the recipe suppresses unwind tables
+(`-fno-asynchronous-unwind-tables`), which x64 uses for exception dispatch and stack walks.
+Treat x64 as untested until it has been booted.
 
 The exact compiler/linker flags, and the couple of MinGW-ddk header workarounds the build
 needs, are documented in the `Makefile` and source comments.
