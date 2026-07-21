@@ -25,6 +25,41 @@ func discoverAll(t *testing.T) (map[string]*Discovered, []*Discovered) {
 	return byName, disc
 }
 
+// TestDiscoverKeepsArchUnbuildablePlugin pins the altitude of the missing-[Build.<arch>]
+// rule. A plugin that scopes its build by architecture but declares no variant for the
+// target cannot be BUILT for it — but it must still be discovered, because Discover drops
+// any plugin whose manifest fails to parse (discover.go: parse error -> continue). If the
+// rule were enforced at parse time, such a plugin would vanish from the search path: absent
+// from `plugins list`, and a manifest enabling it would report "plugin not found" rather
+// than naming the real problem. The refusal belongs to RunBuild, which is the only
+// operation it actually breaks (see TestRunBuildRejectsMissingArchVariant).
+func TestDiscoverKeepsArchUnbuildablePlugin(t *testing.T) {
+	const manifest = `[Version]
+Signature="$Windows NT$"
+[PEBuilder]
+Name="i386 only"
+[Build]
+Produces = drv.sys
+[Build.i386]
+Requires = i686-w64-mingw32-gcc
+Command  = make ARCH=i386
+`
+	sp := SearchPath{EmbeddedSource{FS: fstest.MapFS{
+		"i386only/i386only.inf": {Data: []byte(manifest)},
+	}, Label: "test"}}
+
+	disc, err := Discover(sp, Target{Arch: "amd64"})
+	if err != nil {
+		t.Fatalf("discovery reported an error for a plugin that only lacks an amd64 build: %v", err)
+	}
+	if len(disc) != 1 {
+		t.Fatalf("discovered %d plugins, want 1 — an i386-only plugin must stay visible on amd64", len(disc))
+	}
+	if got := disc[0].Build().MissingArchVariant; got != "amd64" {
+		t.Errorf("MissingArchVariant = %q, want amd64", got)
+	}
+}
+
 func TestDiscoverNamesAndOrder(t *testing.T) {
 	_, disc := discoverAll(t)
 	var names []string

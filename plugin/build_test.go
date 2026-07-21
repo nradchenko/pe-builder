@@ -6,6 +6,7 @@ package plugin
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -14,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/nradchenko/pe-builder/inf"
+	"github.com/nradchenko/pe-builder/source"
 )
 
 func TestBuiltinPoweroff(t *testing.T) {
@@ -53,7 +55,7 @@ func TestBuiltinPoweroff(t *testing.T) {
 		t.Skip("mingw i686 toolchain not present; skipping the compile")
 	}
 	d := &Discovered{Name: canonical, Source: BuiltinLabel, FS: fsys, Units: []*Plugin{p}}
-	built, err := RunBuild(context.Background(), d, t.TempDir())
+	built, err := RunBuild(context.Background(), d, t.TempDir(), "i386")
 	if err != nil {
 		t.Fatalf("poweroff build failed: %v", err)
 	}
@@ -220,14 +222,190 @@ func TestParseBuildDefaultCommand(t *testing.T) {
 // declares the given [Build] spec.
 func buildPlugin(t *testing.T, spec BuildSpec) *Discovered {
 	t.Helper()
+	return buildPluginWithFile(t, "", nil, spec)
+}
+
+// buildPluginWithFile is buildPlugin with an extra file shipped in the plugin's directory,
+// for a build command that needs an input it did not compile itself.
+func buildPluginWithFile(t *testing.T, name string, data []byte, spec BuildSpec) *Discovered {
+	t.Helper()
 	srcDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(srcDir, "source.c"), []byte("int main(){}"), 0o644); err != nil {
 		t.Fatal(err)
+	}
+	if name != "" {
+		if err := os.WriteFile(filepath.Join(srcDir, name), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return &Discovered{
 		Name:  "demo",
 		FS:    os.DirFS(srcDir),
 		Units: []*Plugin{{Name: "demo", Build: spec}},
+	}
+}
+
+// TestParseBuildMarksMissingArchVariant checks which plugins are flagged as unbuildable for
+// the target architecture — the flag RunBuild refuses on (TestRunBuildRejectsMissingArchVariant
+// covers the refusal itself). Parsing must stay tolerant: every case here has to PARSE, since
+// a parse error would drop the plugin from discovery entirely.
+func TestParseBuildMarksMissingArchVariant(t *testing.T) {
+	const head = "[Version]\nSignature=\"$Windows NT$\"\n[PEBuilder]\nName=\"X\"\n"
+	const onlyI386 = "[Build]\nProduces = drv.sys\n[Build.i386]\nRequires = i686-w64-mingw32-gcc\nCommand = make ARCH=i386\n"
+
+	for _, tt := range []struct {
+		name, body, arch, want string
+	}{
+		{"scoped to i386, built for amd64", onlyI386, "amd64", "amd64"},
+		{"scoped to i386, built for i386", onlyI386, "i386", ""},
+		// An unscoped [Build] applies to every architecture and is never flagged.
+		{"unscoped", "[Build]\nRequires = make\nProduces = drv.sys\n", "amd64", ""},
+		// A build-number variant is not architecture scoping and must not trigger the rule.
+		{"build-number variant only", "[Build]\nProduces = drv.sys\n[Build.2600]\nCommand = make x\n", "amd64", ""},
+		// An unset architecture resolves to i386, matching folders and action sections.
+		{"unset arch resolves to i386", onlyI386, "", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p, err := parseTargetArch(t, head+tt.body, tt.arch)
+			if err != nil {
+				t.Fatalf("must still parse (a parse error drops the plugin from discovery): %v", err)
+			}
+			if p.Build.MissingArchVariant != tt.want {
+				t.Errorf("MissingArchVariant = %q, want %q", p.Build.MissingArchVariant, tt.want)
+			}
+		})
+	}
+}
+
+func parseTargetArch(t *testing.T, src, arch string) (*Plugin, error) {
+	t.Helper()
+	f, err := inf.Parse([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Parse("x", f, Target{Arch: arch})
+}
+
+// fakePE returns the bytes of a file that is a valid enough PE for a machine-type check:
+// the MZ stamp, an e_lfanew pointing at the PE signature, and the COFF Machine field.
+func fakePE(machine uint16) []byte {
+	b := make([]byte, 0x50)
+	b[0], b[1] = 'M', 'Z'
+	binary.LittleEndian.PutUint32(b[0x3c:], 0x40)
+	copy(b[0x40:], []byte{'P', 'E', 0, 0})
+	binary.LittleEndian.PutUint16(b[0x44:], machine)
+	return b
+}
+
+// TestMachineForCoversEveryArch pins the two architecture lists together. checkMachine
+// returns nil for any architecture missing from machineFor, so adding one to
+// source.archFolders — the natural single place to add an architecture, and what decides
+// which [Build.<arch>] sections are recognised — would silently disable the
+// wrong-architecture guard for exactly the newest and least-tested target. Nothing else
+// connects the two: they live in different packages and neither fails to compile.
+func TestMachineForCoversEveryArch(t *testing.T) {
+	for _, folder := range source.ArchFolders() {
+		arch := folder // the folder name is the arch name for every architecture so far
+		if _, ok := machineFor[arch]; !ok {
+			t.Errorf("machineFor has no entry for architecture %q, so a build for it would "+
+				"skip the wrong-architecture check entirely", arch)
+		}
+	}
+	// A literal expectation too, so an emptied ArchFolders() cannot make the loop above
+	// vacuous and leave this test green while checking nothing.
+	if machineFor["amd64"] != 0x8664 || machineFor["i386"] != 0x014c {
+		t.Errorf("machineFor = %v, want i386 0x014c and amd64 0x8664", machineFor)
+	}
+}
+
+// TestRunBuildRejectsMissingArchVariant checks that a plugin scoping its build by
+// architecture without a variant for the target is refused when BUILT, and — the point of
+// the altitude — still parses, so it stays discoverable and describable. Refusing it at
+// parse time would drop it from the search path entirely (Discover skips a manifest that
+// fails to parse), so a manifest naming it would report "plugin not found" rather than the
+// real reason, and `plugins list` would omit it.
+func TestRunBuildRejectsMissingArchVariant(t *testing.T) {
+	const src = "[Version]\nSignature=\"$Windows NT$\"\n[PEBuilder]\nName=\"X\"\n" +
+		"[Build]\nProduces = drv.sys\n[Build.i386]\nRequires = i686-w64-mingw32-gcc\nCommand = make ARCH=i386\n"
+	f, err := inf.Parse([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := Parse("demo", f, Target{Arch: "amd64"})
+	if err != nil {
+		t.Fatalf("an i386-only plugin must still PARSE for an amd64 target: %v", err)
+	}
+	if p.Build.MissingArchVariant != "amd64" {
+		t.Errorf("MissingArchVariant = %q, want amd64", p.Build.MissingArchVariant)
+	}
+
+	d := &Discovered{Name: "demo", FS: os.DirFS(t.TempDir()), Units: []*Plugin{p}}
+	_, err = RunBuild(context.Background(), d, t.TempDir(), "amd64")
+	if err == nil {
+		t.Fatal("building a plugin with no [Build.amd64] for an amd64 target was accepted")
+	}
+	if !strings.Contains(err.Error(), "amd64") || !strings.Contains(err.Error(), "demo") {
+		t.Errorf("error %q should name both the plugin and the architecture", err)
+	}
+
+	// The architecture it does declare builds normally.
+	pi386, err := Parse("demo", f, Target{Arch: "i386"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pi386.Build.MissingArchVariant != "" {
+		t.Errorf("MissingArchVariant = %q for the declared architecture, want empty",
+			pi386.Build.MissingArchVariant)
+	}
+}
+
+// TestRunBuildRejectsWrongArchOutput checks that a build whose output is for the wrong
+// architecture fails loudly. Nothing else catches it: make decides by timestamp and no
+// plugin Makefile makes its outputs depend on ARCH, so building for one architecture and
+// then another in the same directory leaves the first one's binary in place. The staged
+// binary would simply not run, with nothing in the build output explaining why.
+func TestRunBuildRejectsWrongArchOutput(t *testing.T) {
+	for _, tt := range []struct {
+		name, arch string
+		machine    uint16
+		wantErr    bool
+	}{
+		{"amd64 output for an i386 build", "i386", 0x8664, true},
+		{"i386 output for an amd64 build", "amd64", 0x014c, true},
+		{"i386 output for an i386 build", "i386", 0x014c, false},
+		{"amd64 output for an amd64 build", "amd64", 0x8664, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// The image is shipped in the plugin's own directory, which RunBuild
+			// materializes into the build dir, so the command is a plain copy and the
+			// test depends on nothing beyond sh.
+			d := buildPluginWithFile(t, "image.bin", fakePE(tt.machine), BuildSpec{
+				Present:  true,
+				Requires: []string{"sh"},
+				Produces: []string{"out.exe"},
+				Command:  "cp image.bin out.exe",
+			})
+			_, err := RunBuild(context.Background(), d, t.TempDir(), tt.arch)
+			if tt.wantErr && err == nil {
+				t.Errorf("a %#04x image was accepted for a %s build", tt.machine, tt.arch)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("a matching image was rejected: %v", err)
+			}
+		})
+	}
+}
+
+// A produced file that is not a PE at all has no machine type and must pass unremarked.
+func TestRunBuildIgnoresNonPEOutput(t *testing.T) {
+	d := buildPlugin(t, BuildSpec{
+		Present:  true,
+		Requires: []string{"sh"},
+		Produces: []string{"out.txt"},
+		Command:  "printf 'just text' > out.txt",
+	})
+	if _, err := RunBuild(context.Background(), d, t.TempDir(), "amd64"); err != nil {
+		t.Errorf("a non-PE output was rejected: %v", err)
 	}
 }
 
@@ -239,7 +417,7 @@ func TestRunBuildSuccess(t *testing.T) {
 		Command:  "printf built > out.txt",
 	})
 
-	built, err := RunBuild(context.Background(), d, t.TempDir())
+	built, err := RunBuild(context.Background(), d, t.TempDir(), "i386")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +449,7 @@ func TestRunBuildDoesNotTouchSource(t *testing.T) {
 			Present: true, Produces: []string{"out.txt"}, Command: "printf x > out.txt",
 		}}},
 	}
-	if _, err := RunBuild(context.Background(), d, t.TempDir()); err != nil {
+	if _, err := RunBuild(context.Background(), d, t.TempDir(), "i386"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(srcDir, "out.txt")); err == nil {
@@ -281,7 +459,7 @@ func TestRunBuildDoesNotTouchSource(t *testing.T) {
 
 func TestRunBuildNoSection(t *testing.T) {
 	d := &Discovered{Name: "plain", Units: []*Plugin{{Name: "plain"}}}
-	built, err := RunBuild(context.Background(), d, t.TempDir())
+	built, err := RunBuild(context.Background(), d, t.TempDir(), "i386")
 	if err != nil || built != nil {
 		t.Fatalf("RunBuild on a [Build]-less plugin = (%v, %v), want (nil, nil)", built, err)
 	}
@@ -294,7 +472,7 @@ func TestRunBuildMissingTool(t *testing.T) {
 		Produces: []string{"out.txt"},
 		Command:  "printf x > out.txt",
 	})
-	_, err := RunBuild(context.Background(), d, t.TempDir())
+	_, err := RunBuild(context.Background(), d, t.TempDir(), "i386")
 	if err == nil {
 		t.Fatal("RunBuild with a missing required tool returned no error")
 	}
@@ -311,7 +489,7 @@ func TestRunBuildProducesCaseTolerant(t *testing.T) {
 		Produces: []string{"OUT.TXT"},
 		Command:  "printf x > out.txt",
 	})
-	if _, err := RunBuild(context.Background(), d, t.TempDir()); err != nil {
+	if _, err := RunBuild(context.Background(), d, t.TempDir(), "i386"); err != nil {
 		t.Errorf("case-mismatched Produces failed: %v", err)
 	}
 }
@@ -319,7 +497,7 @@ func TestRunBuildProducesCaseTolerant(t *testing.T) {
 func TestRunBuildNilFS(t *testing.T) {
 	// A build-capable plugin with no source directory is a clean error, not a panic.
 	d := &Discovered{Name: "x", Units: []*Plugin{{Name: "x", Build: BuildSpec{Present: true, Command: "true"}}}}
-	if _, err := RunBuild(context.Background(), d, t.TempDir()); err == nil {
+	if _, err := RunBuild(context.Background(), d, t.TempDir(), "i386"); err == nil {
 		t.Error("RunBuild with a nil FS returned no error")
 	}
 }
@@ -330,7 +508,7 @@ func TestRunBuildMissingProduces(t *testing.T) {
 		Produces: []string{"never-made.exe"},
 		Command:  "true",
 	})
-	_, err := RunBuild(context.Background(), d, t.TempDir())
+	_, err := RunBuild(context.Background(), d, t.TempDir(), "i386")
 	if err == nil {
 		t.Fatal("RunBuild that did not produce its file returned no error")
 	}

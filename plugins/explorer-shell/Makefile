@@ -1,12 +1,32 @@
 # Copyright 2026 Nikita Radchenko
 # SPDX-License-Identifier: Apache-2.0
 #
-# Cross-compile the Explorer-shell binaries (32-bit Windows PE):
+# Cross-compile the Explorer-shell binaries for a Windows PE:
 #   peshell.exe — the Setup\CmdLine launcher
 #   peshut.dll  — the ExitWindowsEx power-off hook (loaded via AppInit_DLLs)
-# Requires the MinGW-w64 i686 toolchain:  apt install gcc-mingw-w64-i686
+# Requires a MinGW-w64 toolchain:
+#   i386:   apt install gcc-mingw-w64-i686
+#   amd64:  apt install gcc-mingw-w64-x86-64
+#
+# ARCH selects the target architecture (i386 or amd64), defaulting to i386; the plugin's
+# [Build.<arch>] Command passes it. These are user-mode binaries, so the architecture
+# changes nothing but the toolchain — no arch define, no entry-point decoration, no
+# subsystem version, unlike the driver plugins.
+#
+# Both must match the PE's architecture. peshut.dll especially: it is injected into other
+# processes through AppInit_DLLs, and a process only loads a DLL of its own bitness — a
+# 32-bit hook cannot enter a native amd64 explorer, and there is no WOW64 path for it.
+ARCH ?= i386
 
-CC      := i686-w64-mingw32-gcc
+ifeq ($(ARCH),amd64)
+  TRIPLE := x86_64-w64-mingw32
+else ifeq ($(ARCH),i386)
+  TRIPLE := i686-w64-mingw32
+else
+  $(error unknown ARCH '$(ARCH)' — expected i386 or amd64)
+endif
+
+CC      := $(TRIPLE)-gcc
 # -Wl,--no-insert-timestamp zeroes the PE TimeDateStamp for reproducible output.
 LDFLAGS := -Wl,--no-insert-timestamp
 

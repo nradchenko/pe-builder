@@ -15,6 +15,7 @@ import (
 
 	"github.com/nradchenko/pe-builder/action"
 	"github.com/nradchenko/pe-builder/inf"
+	"github.com/nradchenko/pe-builder/source"
 )
 
 // Plugin is a parsed plugin: its identity and dialog metadata from [PEBuilder], the
@@ -61,6 +62,14 @@ type BuildSpec struct {
 	// is taken verbatim; a ';' (an INF comment) cannot appear in it, so multi-step
 	// logic belongs in the Makefile.
 	Command string
+	// MissingArchVariant names the architecture the plugin cannot be built for: it is
+	// set when the plugin scopes [Build] by architecture but declares no variant for the
+	// target. Parsing stays deliberately tolerant here so such a plugin is still
+	// discovered, listed and describable — refusing it at parse time would drop it from
+	// the search path entirely (Discover skips a manifest that fails to parse), so a
+	// manifest naming it would report "plugin not found" instead of the real reason.
+	// RunBuild is where it is refused, because that is the only operation it breaks.
+	MissingArchVariant string
 }
 
 // Update is the vendor [Update] section: a per-vendor relationship/versioning
@@ -194,6 +203,17 @@ func parseBuild(f *inf.File, t Target) (BuildSpec, error) {
 		return BuildSpec{}, nil
 	}
 	b := BuildSpec{Present: true, Command: "make"}
+
+	// A plugin that scopes its build by architecture but declares no variant for the target
+	// cannot be built for it: falling back to the base section would take its defaults — no
+	// Requires, so the toolchain-presence check is skipped entirely, and Command defaulting
+	// to "make", so the plugin's Makefile builds for whatever IT defaults to, staging a
+	// binary of the wrong architecture with no diagnostic anywhere. Record it rather than
+	// failing here (see MissingArchVariant); RunBuild refuses it. Build-number variants
+	// ([Build.2600]) are not architecture scoping and do not count.
+	if arch := source.ResolveArch(t.Arch); archVariants(f, "Build") > 0 && !f.HasSection("Build."+arch) {
+		b.MissingArchVariant = arch
+	}
 	for _, l := range t.sections(f, "Build") {
 		switch strings.ToLower(l.Key) {
 		case "requires":
@@ -226,6 +246,24 @@ func variantSections(f *inf.File, base string) []string {
 		}
 	}
 	return out
+}
+
+// archVariants counts the variants of a section that are scoped by ARCHITECTURE, as
+// distinct from the build-number variants that share the same "[<base>.<something>]"
+// spelling. Only an architecture variant implies the section must be scoped for the
+// architecture being built; a plugin with just a [Build.2600] is not making that claim.
+func archVariants(f *inf.File, base string) int {
+	prefix := strings.ToLower(base) + "."
+	n := 0
+	for _, s := range f.Sections() {
+		if !strings.HasPrefix(s, prefix) {
+			continue
+		}
+		if source.KnownArch(strings.TrimPrefix(s, prefix)) {
+			n++
+		}
+	}
+	return n
 }
 
 // tokens splits an INF line's fields further on whitespace, so a Requires/Produces

@@ -111,7 +111,7 @@ func Build(ctx context.Context, m *manifest.Manifest, opts ...Option) (*Report, 
 	// files are available as origins when the tree is placed. The builds run in a scratch
 	// directory outside the output tree (so they are never mastered into the ISO), cleaned
 	// up once the tree — which reads their produced files as origins — is assembled.
-	cleanupBuilds, err := runPluginBuilds(ctx, selected, m)
+	cleanupBuilds, err := runPluginBuilds(ctx, selected, m, id.Arch)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +313,7 @@ func selectPlugins(m *manifest.Manifest, id source.Identity) ([]plugin.Selected,
 // directories (a no-op when nothing was built). A built-in (embedded) plugin builds
 // automatically; a user-supplied plugin's [Build] runs an arbitrary command, so it is
 // refused unless the manifest opts in with build.allow_plugin_builds.
-func runPluginBuilds(ctx context.Context, selected []plugin.Selected, m *manifest.Manifest) (func(), error) {
+func runPluginBuilds(ctx context.Context, selected []plugin.Selected, m *manifest.Manifest, arch string) (func(), error) {
 	cleanup := func() {}
 	var buildRoot string
 
@@ -340,7 +340,7 @@ func runPluginBuilds(ctx context.Context, selected []plugin.Selected, m *manifes
 			buildRoot = root
 			cleanup = func() { os.RemoveAll(buildRoot) }
 		}
-		built, err := plugin.RunBuild(ctx, d, buildRoot)
+		built, err := plugin.RunBuild(ctx, d, buildRoot, arch)
 		if err != nil {
 			cleanup()
 			return nil, err

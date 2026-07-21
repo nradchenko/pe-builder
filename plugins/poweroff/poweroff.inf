@@ -16,9 +16,18 @@ Signature = "$Windows NT$"
 Name = "poweroff"
 Enable = 1
 
+; The same source on either architecture; only the toolchain differs, so the shared [Build]
+; holds the output and each [Build.<arch>] names that architecture's compiler.
 [Build]
-Requires = i686-w64-mingw32-gcc make
 Produces = poweroff.exe
+
+[Build.i386]
+Requires = i686-w64-mingw32-gcc make
+Command  = make ARCH=i386
+
+[Build.amd64]
+Requires = x86_64-w64-mingw32-gcc make
+Command  = make ARCH=amd64
 
 [SourceDisksFiles]
 poweroff.exe = 2

@@ -38,9 +38,20 @@ show_version       = 0, int, 0, 1
 ; history, so it is hidden by default.
 hide_recent_docs   = 1, int, 0, 1
 
+; Both binaries are the same source on either architecture; only the toolchain differs, so
+; the shared [Build] holds the outputs and each [Build.<arch>] names that architecture's
+; compiler and hands ARCH to the Makefile. They must match the PE: peshut.dll is injected
+; via AppInit_DLLs, and cross-bitness injection is impossible.
 [Build]
-Requires = i686-w64-mingw32-gcc make
 Produces = peshell.exe peshut.dll
+
+[Build.i386]
+Requires = i686-w64-mingw32-gcc make
+Command  = make ARCH=i386
+
+[Build.amd64]
+Requires = x86_64-w64-mingw32-gcc make
+Command  = make ARCH=amd64
 
 ; Seed each module so its static import closure is staged (explorer for the shell itself). The
 ; control-panel applets are loaded by name at runtime (never in an import closure), so each is

@@ -303,13 +303,13 @@ func buildCapable(t *testing.T, provenance string) plugin.Selected {
 func TestRunPluginBuildsTrustGate(t *testing.T) {
 	// A user-supplied build-capable plugin is refused without the opt-in.
 	user := []plugin.Selected{buildCapable(t, "project")}
-	if _, err := runPluginBuilds(context.Background(), user, &manifest.Manifest{}); err == nil {
+	if _, err := runPluginBuilds(context.Background(), user, &manifest.Manifest{}, "i386"); err == nil {
 		t.Error("user-supplied [Build] ran without allow_plugin_builds")
 	}
 	// With the opt-in it builds.
 	user = []plugin.Selected{buildCapable(t, "project")}
 	m := &manifest.Manifest{Build: manifest.Build{AllowPluginBuilds: true}}
-	cleanup, err := runPluginBuilds(context.Background(), user, m)
+	cleanup, err := runPluginBuilds(context.Background(), user, m, "i386")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +320,7 @@ func TestRunPluginBuildsTrustGate(t *testing.T) {
 
 	// A built-in build-capable plugin builds automatically, no opt-in.
 	builtin := []plugin.Selected{buildCapable(t, plugin.BuiltinLabel)}
-	cleanup2, err := runPluginBuilds(context.Background(), builtin, &manifest.Manifest{})
+	cleanup2, err := runPluginBuilds(context.Background(), builtin, &manifest.Manifest{}, "i386")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,7 +338,7 @@ func TestRunPluginBuildsScratchOutsideWorkDir(t *testing.T) {
 	selected := []plugin.Selected{buildCapable(t, plugin.BuiltinLabel)}
 	m := &manifest.Manifest{Build: manifest.Build{WorkDir: workDir}}
 
-	cleanup, err := runPluginBuilds(context.Background(), selected, m)
+	cleanup, err := runPluginBuilds(context.Background(), selected, m, "i386")
 	if err != nil {
 		t.Fatalf("runPluginBuilds errored: %v", err)
 	}
@@ -391,7 +391,7 @@ func TestAssembleBuiltPlugin(t *testing.T) {
 	}
 
 	selected := []plugin.Selected{buildCapable(t, plugin.BuiltinLabel)}
-	cleanup, err := runPluginBuilds(context.Background(), selected, &manifest.Manifest{})
+	cleanup, err := runPluginBuilds(context.Background(), selected, &manifest.Manifest{}, "i386")
 	if err != nil {
 		t.Fatal(err)
 	}
