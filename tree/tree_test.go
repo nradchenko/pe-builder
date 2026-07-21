@@ -337,6 +337,44 @@ func TestAssembleSourcePathMissing(t *testing.T) {
 	}
 }
 
+// TestWriteStaysInsideOutputTree checks that a destination climbing out of the output tree
+// is refused rather than written. Nothing upstream rejects "..": normalizeTreePath only
+// swaps separators and trims the ends, so a plugin's [SourcePaths] destination, a manifest
+// inject target, or a [WinntDirectories] entry can all name a path outside the work
+// directory, which the build would then write with its own privileges. Both the copy and
+// the mkdir site are covered, since each assembles its path separately.
+func TestWriteStaysInsideOutputTree(t *testing.T) {
+	src := fstest.MapFS{"i386/comctl32.dll": {Data: []byte("payload\n")}}
+	for _, tt := range []struct {
+		name string
+		act  action.Action
+	}{
+		{"copy with Dest climbing out", action.Action{
+			Kind: action.CopyFile, SrcPath: "comctl32.dll", Dest: "../escaped.dll"}},
+		{"copy with Dest climbing out via a subdirectory", action.Action{
+			Kind: action.CopyFile, SrcPath: "comctl32.dll", Dest: "i386/../../escaped.dll"}},
+		{"mkdir climbing out", action.Action{
+			Kind: action.Mkdir, Path: "../escaped-dir", FromRoot: true}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			out := t.TempDir()
+			// A sibling of the output tree: if the guard fails, this is where the write
+			// lands, so assert on the filesystem rather than only on the error.
+			outside := filepath.Dir(out)
+			_, err := Assemble(context.Background(), []action.Action{tt.act}, testLayout(),
+				src, testRoots(), nil, out, nil)
+			if err == nil {
+				t.Fatal("a destination outside the output tree was accepted")
+			}
+			for _, leaked := range []string{"escaped.dll", "escaped-dir"} {
+				if _, statErr := os.Stat(filepath.Join(outside, leaked)); statErr == nil {
+					t.Errorf("wrote %q outside the output tree", leaked)
+				}
+			}
+		})
+	}
+}
+
 func TestMkdir(t *testing.T) {
 	out := t.TempDir()
 	acts := []action.Action{

@@ -18,6 +18,27 @@ import (
 	"github.com/nradchenko/pe-builder/source"
 )
 
+// underRoot reports full unchanged when it stays inside outRoot, and an error when it
+// climbs out. Every path the build writes is assembled from plugin-supplied pieces — a
+// [WinntDirectories] entry, a [SourcePaths] or manifest-inject destination — and nothing
+// upstream rejects "..": normalizeTreePath only swaps separators and trims the ends. So a
+// destination of "../../etc/x" would otherwise resolve outside the work directory and be
+// written with the build's own privileges. Every write in this package goes through it —
+// placeFile, makeDir and Overlay — rather than each producer sanitizing its own input, so
+// a new way to name a destination cannot reintroduce the hole.
+//
+// The check is lexical: it compares cleaned paths and does not resolve symlinks, so it
+// stops a path that spells its way out, not a symlink that points out. Containing the
+// latter means not following links while writing, which is a separate concern.
+func underRoot(outRoot, full string) (string, error) {
+	clean := filepath.Clean(full)
+	root := filepath.Clean(outRoot)
+	if clean != root && !strings.HasPrefix(clean, root+string(filepath.Separator)) {
+		return "", fmt.Errorf("refusing to write outside the output tree: %q", clean)
+	}
+	return clean, nil
+}
+
 // placeFile resolves, reads, decompresses, and writes one copy action. It returns
 // the output-relative path written, or — when the file is optional and absent from
 // the source — the canonical name to record as skipped. Exactly one of the two
@@ -70,7 +91,10 @@ func placeFile(a action.Action, l *layout.Layout, src source.Backing, roots sour
 	if rel == "" {
 		rel = outputPath(a, l, roots, outName)
 	}
-	full := filepath.Join(outRoot, filepath.FromSlash(rel))
+	full, err := underRoot(outRoot, filepath.Join(outRoot, filepath.FromSlash(rel)))
+	if err != nil {
+		return "", "", fmt.Errorf("place %q: %w", rel, err)
+	}
 	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 		return "", "", fmt.Errorf("create dir for %q: %w", name, err)
 	}
@@ -101,7 +125,13 @@ func readFile(a action.Action, origins map[string]fs.FS, src source.Backing, roo
 	// The action's area is used here and in outputPath, the two halves of one rule: a
 	// file is read from and written to the same area, never a mix.
 	if a.SrcPath != "" {
-		return layout.ReadSourceFile(src, roots, a.Area, a.SrcPath)
+		// An exact path resolves the same way a name does — loose, then the *.??_ archive,
+		// then the cabinets — so it goes through readSource rather than repeating that
+		// order here. Where the source packs a tree into a cabinet, as amd64 media do with
+		// the side-by-side assemblies, the same path names a member inside it. It is the
+		// path, not the basename, that identifies the member: several assemblies hold a
+		// file of the same name.
+		return readSource(src, roots, a.Area, cabs, a.SrcPath)
 	}
 	return readSource(src, roots, a.Area, cabs, name)
 }

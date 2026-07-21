@@ -29,7 +29,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/nradchenko/pe-builder/action"
 	"github.com/nradchenko/pe-builder/buildcache"
@@ -65,13 +64,20 @@ func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src s
 	// out of the cabinet search.
 	want := make(map[string]bool)
 	for _, a := range acts {
-		// A [SourcePaths] copy (SrcPath set) reads an exact path, not a cabinet member,
-		// so it is left out of the cabinet search. So is a boot-chain file: the cabinets
-		// are OS payload, and readSource will not answer a boot-area read from them, so
-		// wanting one here would only provoke a cabinet decode whose result is dropped.
-		if a.Kind == action.CopyFile && a.Origin == "" && a.SrcPath == "" && a.Area == source.AreaSystem {
-			want[strings.ToLower(a.Src)] = true
+		// A boot-chain file is left out: the cabinets are OS payload, and readSource will
+		// not answer a boot-area read from them, so wanting one here would only provoke a
+		// cabinet decode whose result is dropped.
+		if a.Kind != action.CopyFile || a.Origin != "" || a.Area != source.AreaSystem {
+			continue
 		}
+		// A [SourcePaths] copy names a member by its full path within the cabinet, which
+		// is how a file whose basename repeats is addressed — the side-by-side assemblies
+		// each hold a comctl32.dll, distinguished only by their assembly directory.
+		if a.SrcPath != "" {
+			want[cabKey(a.SrcPath)] = true
+			continue
+		}
+		want[cabKey(a.Src)] = true
 	}
 	cabs := newCabinets(src, roots, want, cache)
 
@@ -113,7 +119,12 @@ func makeDir(a action.Action, l *layout.Layout, roots source.Roots, outRoot stri
 	if a.FromRoot {
 		root = outRoot
 	}
-	full := filepath.Join(root, filepath.FromSlash(rel))
+	full, err := underRoot(outRoot, filepath.Join(root, filepath.FromSlash(rel)))
+	if err != nil {
+		// Worded apart from the MkdirAll failure below: a directory that climbs out of the
+		// tree is a plugin doing something it should not, not a filesystem problem.
+		return fmt.Errorf("create dir %s: %w", rel, err)
+	}
 	if err := os.MkdirAll(full, 0o755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", rel, err)
 	}
@@ -143,7 +154,13 @@ func Overlay(ctx context.Context, outRoot, customDir string) ([]string, error) {
 		if rel == "." {
 			return nil
 		}
-		dst := filepath.Join(outRoot, rel)
+		// Contained by construction (rel comes from Rel over a walk of customDir), but
+		// checked anyway so every write in the package goes through the one rule — a
+		// symlinked directory inside customDir is enough to make "by construction" false.
+		dst, err := underRoot(outRoot, filepath.Join(outRoot, rel))
+		if err != nil {
+			return err
+		}
 		if d.IsDir() {
 			return os.MkdirAll(dst, 0o755)
 		}

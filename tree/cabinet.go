@@ -16,11 +16,16 @@ import (
 	"github.com/nradchenko/pe-builder/source"
 )
 
-// cabNames are the source's multi-file driver cabinets, in precedence order:
-// a service-pack cabinet supersedes the base DRIVER.CAB, so it is consulted
-// first. A file present loosely in the source still wins over both (see
-// readSource) — the loose copy is the slipstreamed, current one.
-var cabNames = []string{"sp3.cab", "sp2.cab", "sp1.cab", "driver.cab"}
+// cabNames are the source's multi-file cabinets, in precedence order: a service-pack
+// cabinet supersedes the base DRIVER.CAB, so it is consulted first. A file present
+// loosely in the source still wins over all of them (see readSource) — the loose copy
+// is the slipstreamed, current one.
+//
+// ASMS01.CAB holds the side-by-side assemblies. x86 media lay those out loosely under
+// ASMS\, but amd64 media pack them here, so it is the only place the amd64 v6
+// Common-Controls assembly can be read from. It is consulted last: it shares no member
+// with the driver cabinets, so its position only decides which wins if that ever changes.
+var cabNames = []string{"sp3.cab", "sp2.cab", "sp1.cab", "driver.cab", "asms01.cab"}
 
 // cabinets extracts the members named in a wanted set from the source's driver
 // cabinets, for files (many class and HID drivers) that ship only inside
@@ -83,7 +88,7 @@ func (c *cabinets) load() {
 			fp = compress.Fingerprint(data[:n])
 		}
 		for _, f := range cab.Files() {
-			ln := strings.ToLower(f.Name)
+			ln := cabKey(f.Name)
 			if !c.want[ln] {
 				continue
 			}
@@ -135,9 +140,19 @@ func (c *cabinets) looseNames() map[string]bool {
 
 // Find returns the extracted bytes of the named member, and whether it was found.
 // The bytes are the file's final content (the cabinet's compression is already
-// undone), so the caller does not decompress again.
+// undone), so the caller does not decompress again. name is either a bare member name
+// or a member's full path within the cabinet (see cabKey).
 func (c *cabinets) Find(name string) ([]byte, bool) {
 	c.once.Do(c.load)
-	b, ok := c.got[strings.ToLower(name)]
+	b, ok := c.got[cabKey(name)]
 	return b, ok
+}
+
+// cabKey normalizes a cabinet member name so the two sides agree. A cabinet stores a
+// member under a path with backslashes when it carries one — the side-by-side
+// assemblies are stored that way, each under its assembly directory — while a plugin
+// writes that path with either separator and the engine's own paths use forward
+// slashes. Lowercasing matches the case-insensitivity the rest of the resolution has.
+func cabKey(name string) string {
+	return strings.ToLower(strings.ReplaceAll(name, `\`, "/"))
 }
