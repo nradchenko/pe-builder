@@ -12,7 +12,7 @@ mounted directory or an `.iso`.
 | Source | Builds | Boots to `cmd.exe` | Explorer desktop | Luna theme | Wallpaper |
 |---|---|---|---|---|---|
 | **Windows XP SP3 (32-bit)** | yes | verified | verified | verified | verified |
-| **Windows XP Professional x64 Edition (SP2)** | yes | verified | no — see below | no — see below | no — see below |
+| **Windows XP Professional x64 Edition (SP2)** | yes | verified | verified | verified | untested |
 | Windows Server 2003 (32-bit) | accepted | untested | untested | untested | untested |
 | Windows Server 2003 (x64) | accepted | untested | untested | untested | untested |
 | Windows XP SP0 / SP1 / SP2 | **rejected** | — | — | — | — |
@@ -29,18 +29,21 @@ media has almost no practical use and is not a target.
 **Server 2003 is accepted but unproven.** It is newer than the floor, so nothing rejects it
 and it may well build — but no image has been verified from it.
 
-### Why an x64 build is `cmd.exe` only
+### What differs on an x64 build
 
-The plugins are 32-bit, and two things stand in the way of running them on an amd64 source:
+An amd64 source produces the same themed desktop a 32-bit one does. Plugins that ship code
+are compiled for the target architecture, so building one needs the 64-bit cross-compiler
+(`gcc-mingw-w64-x86-64`) rather than the 32-bit one.
 
-- A plugin's INF names its destination paths under a literal `i386`, which is the wrong
-  folder on an amd64 source, where the OS payload lives in `AMD64`.
-- The plugins that ship a kernel driver — `ramdrive` and `pesuite`, and so the Explorer
-  desktop along with the Luna visual style and the wallpaper layered on it — are compiled
-  32-bit. An amd64 kernel will not load them, and they would additionally have to satisfy its
-  driver-signing requirement.
+One known gap: **Folder Options and Taskbar properties do nothing.** Both open through the
+same shell entry point, which posts a message to the shell window; Explorer receives it and
+does not act on it. Everything upstream is verified — the shell window is registered, the
+message is delivered, and Explorer has the v6 Common-Controls assembly loaded — so the fault
+is inside Explorer's own handling of the message. Both work on a 32-bit build. The rest of
+Control Panel is unaffected.
 
-Neither is a limitation of the build system.
+The `wallpaper` plugin ships no compiled code, so nothing stops it building for an amd64
+source; it is marked untested above only because no image has been booted to confirm it.
 
 ## Output
 
@@ -106,10 +109,10 @@ boot chain is XP's own real-mode loader, which is also why it is identical on bo
 architectures and why a 64-bit source still keeps that part of itself in `I386`.
 
 A desktop image needs no attached disk: it carries a RAM-backed volume for its writable
-profile. That applies to 32-bit images only, since the desktop plugins do not run on x64.
+profile.
 
 ## Build host
 
 pe-builder is Linux-first and builds on any platform Go supports. Building an image whose
 plugins ship as source — the desktop plugins do — additionally needs the MinGW-w64
-cross-compiler (`gcc-mingw-w64-i686`). A bare `cmd.exe` image needs only Go.
+cross-compiler for the target architecture. A bare `cmd.exe` image needs only Go.

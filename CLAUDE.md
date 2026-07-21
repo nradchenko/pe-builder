@@ -156,7 +156,7 @@ PE dependencies.
   via `go-licenses`; run it through `make licenses`.
 - `docs/` — project documentation.
   - `docs/supported.md` — the compatibility matrix: which Windows sources are supported and
-    what each produces (XP SP3 32-bit reaches the themed desktop; XP x64 reaches `cmd.exe`),
+    what each produces (XP SP3 32-bit and XP x64 both reach the themed desktop),
     the output targets, and the guest hardware an image expects. Keep it current when a
     source, target, or environment changes status — it is where "does X work?" is answered,
     and it distinguishes **verified** from **untested** deliberately.
