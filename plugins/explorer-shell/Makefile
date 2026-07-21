@@ -30,6 +30,17 @@ CC      := $(TRIPLE)-gcc
 # -Wl,--no-insert-timestamp zeroes the PE TimeDateStamp for reproducible output.
 LDFLAGS := -Wl,--no-insert-timestamp
 
+# peshut.dll is injected before the host process's CRT is initialized, so on amd64 it must
+# not link one in: MinGW's startup stubs would pull in msvcrt and the process would abort
+# with R6030. Freestanding, it imports only kernel32/advapi32. x86 stays on the stock link
+# line — it is the build that was verified by booting. See README.md § Shutdown.
+PESHUT_FLAGS :=
+PESHUT_LIBS  := -ladvapi32
+ifeq ($(ARCH),amd64)
+  PESHUT_FLAGS := -nostdlib -nodefaultlibs -Wl,--entry,DllMain
+  PESHUT_LIBS  := -ladvapi32 -lkernel32
+endif
+
 .PHONY: all clean
 
 all: peshell.exe peshut.dll
@@ -38,7 +49,7 @@ peshell.exe: peshell.c startmenu.c startmenu.h
 	$(CC) -O2 -s -mwindows -Wall -Wextra $(LDFLAGS) -o $@ peshell.c startmenu.c -lole32 -luuid -lshell32 -ladvapi32 -lversion
 
 peshut.dll: peshut.c
-	$(CC) -shared -O2 -s -Wall -Wextra $(LDFLAGS) -o $@ $< -ladvapi32
+	$(CC) -shared -O2 -s -Wall -Wextra $(LDFLAGS) $(PESHUT_FLAGS) -o $@ $< $(PESHUT_LIBS)
 
 clean:
 	rm -f peshell.exe peshut.dll

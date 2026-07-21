@@ -147,6 +147,46 @@ inline-patches `user32!ExitWindowsEx` so any shutdown/restart request instead dr
 kernel's ACPI path directly (`NtShutdownSystem`) — the same primitive as the `poweroff`
 plugin. Restart maps to reboot, everything else to power-off.
 
+### The patch, per architecture
+
+The hook fully replaces `ExitWindowsEx` and never calls the original, so the prologue bytes
+it overwrites are never executed and no trampoline is needed. That is what lets the patch be
+whatever length each architecture requires — a hook that had to preserve the original could
+not simply consume 14 bytes of it.
+
+- **x86** writes the classic 5-byte `jmp rel32`. The XP prologue is exactly 5 bytes
+  (`mov edi,edi; push ebp; mov ebp,esp`), so nothing after it is disturbed.
+- **amd64** writes `jmp qword ptr [rip+0]` followed by the 8-byte target, 14 bytes in all.
+  A `rel32` cannot be used: the two modules are placed independently in a 64-bit address
+  space and are routinely further apart than a 32-bit displacement can express, so it would
+  silently encode a truncated offset and corrupt the function in every process that loads
+  the DLL. The amd64 entry is 14+ bytes of register-saving prologue and has 16 bytes of
+  `nop` padding ahead of it, so the write stays inside the function either way.
+
+`WINAPI` is `__stdcall` on x86 and a no-op on amd64, where the two arguments arrive in
+`ecx`/`edx` exactly as the real `ExitWindowsEx` reads them — so callers jump straight in on
+both, and the replacement needs no signature change.
+
+### Why the amd64 build is freestanding
+
+`AppInit_DLLs` is loaded by user32 from its own `DLL_PROCESS_ATTACH`, **before the host
+process's C runtime is initialized**. MinGW's startup stubs pull in `msvcrt` even though
+nothing in `peshut.c` calls it, and touching an uninitialized CRT there aborts the process
+with `R6030`. The amd64 build therefore links with `-nostdlib -nodefaultlibs` and
+`DllMain` as its entry point, importing only `kernel32` and `advapi32`; the source is pure
+Win32 API, so it loses nothing. Relocations are unaffected — the code is RIP-relative and
+`RELOCS_STRIPPED` stays clear — so the DLL can still be rebased, which matters for one
+injected into every process.
+
+x86 is deliberately left on the stock link line: it is the build that was verified by
+booting, and its output is expected to stay byte-identical.
+
+**A correction worth recording**, because it was believed and acted on: the `R6030` was
+*not* caused by the truncated `rel32`. That was assumed from the fact that removing peshut
+made the crash go away, and never measured — a correctly encoded 14-byte jump reproduced it
+exactly. Two separate bugs sat on top of each other, and fixing only the visible one left
+the crash in place.
+
 **Log Off** is meaningless here — only the SYSTEM user exists — and it appears on two separate
 surfaces, each needing its own HKLM policy: `StartMenuLogoff` removes the modern menu's button,
 `NoLogoff` the shutdown dialog's row. Two traps:
