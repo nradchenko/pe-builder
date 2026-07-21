@@ -75,6 +75,11 @@ plugin "games" {
   enabled = false
 }
 
+# A plugin with nothing to configure: enabling it is the whole of it.
+plugin "wallpaper" {
+  enabled = true
+}
+
 # The override layers. These edit what an enabled plugin contributes, without modifying the
 # plugin itself — an escape hatch for adjusting a plugin you did not write.
 plugin "accessories" {

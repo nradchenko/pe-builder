@@ -134,6 +134,13 @@ PE dependencies.
   and the Themes service, then selects it in the registry. A visual-style plugin ships no code:
   it only selects a style, and peshell applies it — the theme hook belongs to the client that
   asks for it and dies with that client, so the applier has to be the long-lived shell process.
+  `wallpaper` (depends on `explorer-shell`) puts the XP default wallpaper on that desktop,
+  which otherwise comes up on a flat colour. It ships no code: it stages the image and the
+  Active Desktop surface that paints it (the classic path draws bitmaps only, and the image
+  is a JPEG), then declares the wallpaper values, the COM server to register, and the
+  Active-Desktop policy to lift — peshell does the applying, as it does for the visual style,
+  because a PE has no winlogon to apply per-user desktop settings at logon. The engine it
+  stages is why it is a separate plugin: a build that does not enable it pays nothing.
   Standing apart from that desktop chain, `games` is an optional plugin that stages the XP
   games a minimal PE can actually run (Solitaire, Minesweeper, FreeCell, Spider Solitaire)
   from a `[Closure]` seed each, grouping them under a `Games` submenu via the path-encoded

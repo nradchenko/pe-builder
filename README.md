@@ -100,6 +100,15 @@ plugin "explorer-shell" {
 }
 ```
 
+Add `wallpaper` for the XP desktop wallpaper, on either look — it brings the components that
+paint one, so it adds roughly 4 MB to the ISO and stays opt-in:
+
+```hcl
+plugin "wallpaper" {
+  enabled = true
+}
+```
+
 With no plugins at all ([`examples/minimal.hcl`](examples/minimal.hcl)) the ISO boots to an
 interactive `cmd.exe`, and needs no cross-compiler.
 

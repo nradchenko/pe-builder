@@ -9,14 +9,14 @@ than assumed to work.
 You supply the installation source; pe-builder ships no Microsoft files. A source is a
 mounted directory or an `.iso`.
 
-| Source | Builds | Boots to `cmd.exe` | Explorer desktop | Luna theme |
-|---|---|---|---|---|
-| **Windows XP SP3 (32-bit)** | yes | verified | verified | verified |
-| **Windows XP Professional x64 Edition (SP2)** | yes | verified | no — see below | no — see below |
-| Windows Server 2003 (32-bit) | accepted | untested | untested | untested |
-| Windows Server 2003 (x64) | accepted | untested | untested | untested |
-| Windows XP SP0 / SP1 / SP2 | **rejected** | — | — | — |
-| Windows 2000 and earlier | **rejected** | — | — | — |
+| Source | Builds | Boots to `cmd.exe` | Explorer desktop | Luna theme | Wallpaper |
+|---|---|---|---|---|---|
+| **Windows XP SP3 (32-bit)** | yes | verified | verified | verified | verified |
+| **Windows XP Professional x64 Edition (SP2)** | yes | verified | no — see below | no — see below | no — see below |
+| Windows Server 2003 (32-bit) | accepted | untested | untested | untested | untested |
+| Windows Server 2003 (x64) | accepted | untested | untested | untested | untested |
+| Windows XP SP0 / SP1 / SP2 | **rejected** | — | — | — | — |
+| Windows 2000 and earlier | **rejected** | — | — | — | — |
 
 The 32-bit XP path is verified against both English and Russian volume-licence media, which
 behave identically apart from one Active Setup component present only on some locales.
@@ -36,9 +36,9 @@ The plugins are 32-bit, and two things stand in the way of running them on an am
 - A plugin's INF names its destination paths under a literal `i386`, which is the wrong
   folder on an amd64 source, where the OS payload lives in `AMD64`.
 - The plugins that ship a kernel driver — `ramdrive` and `pesuite`, and so the Explorer
-  desktop and the Luna visual style that depend on them — are compiled 32-bit. An amd64
-  kernel will not load them, and they would additionally have to satisfy its driver-signing
-  requirement.
+  desktop along with the Luna visual style and the wallpaper layered on it — are compiled
+  32-bit. An amd64 kernel will not load them, and they would additionally have to satisfy its
+  driver-signing requirement.
 
 Neither is a limitation of the build system.
 

@@ -1,0 +1,63 @@
+; Copyright 2026 Nikita Radchenko
+; SPDX-License-Identifier: Apache-2.0
+;
+; wallpaper — a desktop wallpaper for the Explorer desktop, which otherwise renders on a flat
+; background colour.
+;
+; Stages and configures only: it ships no code and needs no toolchain. Explorer reads the values
+; written below when the shell starts. See README.md.
+;
+; Off by default. Enabling it auto-enables the desktop it decorates.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "Desktop wallpaper"
+Enable = 0
+
+; explorer-shell = the desktop this decorates, and the process that reads these values.
+[Update]
+depends = explorer-shell
+
+; The XP default wallpaper, plus the Active Desktop surface that paints it: mshtml is the HTML
+; engine and mshtml.tlb its type library. The classic desktop paints bitmaps only, so a JPEG
+; needs this path — see README.md § Why Active Desktop.
+;
+; Both mshtml files are needed: dropping the .tlb leaves the desktop bare. IE's image decoder
+; (imgutil.dll) is not — mshtml decodes this wallpaper without it.
+;
+; The media stores each compressed under an 8.3 name (BLISS.JP_, MSHTML.DL_), which the engine
+; resolves from the bare name; dir ID 2 is system32, the flat directory a PE runs from.
+; See README.md § Why system32 and not Web\Wallpaper.
+[SourceDisksFiles]
+bliss.jpg  = 2
+mshtml.dll = 2
+mshtml.tlb = 2
+
+; --- COM registration (SOFTWARE hive) ---
+; Staged but inert until its classes exist: nothing on the media registers mshtml, and the baked
+; hive carries no CLSID for it. peshell registers every DLL named here after its own validated
+; shell sequence; the value name is the file and the data is unused.
+; See README.md § Why Active Desktop.
+[Software.AddReg]
+0x1,"pe-builder\SelfRegister","mshtml.dll",""
+
+; --- Wallpaper selection for the (default) user the PE runs as (DEFAULT hive) ---
+; DEFAULT because the PE runs as SYSTEM with no profile loaded, so HKCU is HKU\.DEFAULT.
+;
+; Wallpaper must stay REG_EXPAND_SZ (0x2) — the PE's system drive is X:, not C:, so an absolute
+; path baked at build time would be wrong at run time. WallpaperStyle and TileWallpaper are
+; REG_SZ even though they hold digits: XP writes and reads them as strings.
+;
+; Style 2 = stretch, with tiling off: the image is scaled to whatever resolution the manifest
+; selects rather than leaving a border. See README.md § Fit.
+[Default.AddReg]
+0x2,"Control Panel\Desktop","Wallpaper","%SystemRoot%\System32\bliss.jpg"
+0x1,"Control Panel\Desktop","WallpaperStyle","2"
+0x1,"Control Panel\Desktop","TileWallpaper","0"
+
+; The desktop plugin turns Active Desktop off, because its surface needs an HTML engine a plain
+; desktop does not stage. This plugin stages that engine, so it lifts the policy for itself —
+; written after the desktop's own value, which a deps-first plugin order guarantees.
+0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoActiveDesktop",0x0
