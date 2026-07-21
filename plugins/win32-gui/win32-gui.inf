@@ -28,16 +28,42 @@ oleaut32.dll
 ; binds directly to the source's own 6.0.0.0 assembly (I386\ASMS\6000) — the v6 comctl32
 ; and its manifest — with no publisher policy. Sourced by exact path because comctl32.dll
 ; and the manifest share basenames with other files a name lookup would reach first.
-[SourcePaths]
+;
+[SourcePaths.i386]
 ASMS\6000\MSFT\WINDOWS\COMMON\CONTROLS\COMCTL32.DLL = i386\WinSxS\x86_Microsoft.Windows.Common-Controls_6595b64144ccf1df_6.0.0.0_x-ww_1382d70a\comctl32.dll
 ASMS\6000\MSFT\WINDOWS\COMMON\CONTROLS\CONTROLS.MAN = i386\WinSxS\Manifests\x86_Microsoft.Windows.Common-Controls_6595b64144ccf1df_6.0.0.0_x-ww_1382d70a.manifest
 
-; Bind the two shells that host property sheets to the assembly above. Staging an assembly is
-; not enough: a process only gets it by asking, and the loader honours a manifest only at
-; resource id 1 — rundll32.exe (which hosts every Control Panel applet) carries none, and
-; explorer.exe carries one at id 123. So neither gets an activation context, and their property
-; sheets draw the v5 tab control and buttons around themed pages. These external manifests are
-; ours (attribute 1 = shipped with the plugin), and give each host the context it never asks for.
-[SourceDisksFiles]
+; The same assembly on an amd64 source: packed inside ASMS01.CAB rather than laid out loose,
+; so each path names a member of that cabinet. Not optional here — without it no shell binary
+; starts at all. See README.md § Architecture.
+[SourcePaths.amd64]
+amd64_microsoft.windows.common-controls_6595b64144ccf1df_6.0.3790.3959_x-ww_0a7b2435\comctl32.dll = amd64\WinSxS\amd64_Microsoft.Windows.Common-Controls_6595b64144ccf1df_6.0.3790.3959_x-ww_0a7b2435\comctl32.dll
+manifests\amd64_microsoft.windows.common-controls_6595b64144ccf1df_6.0.3790.3959_x-ww_0a7b2435.manifest = amd64\WinSxS\Manifests\amd64_Microsoft.Windows.Common-Controls_6595b64144ccf1df_6.0.3790.3959_x-ww_0a7b2435.manifest
+policies\amd64_policy.6.0.microsoft.windows.common-controls_6595b64144ccf1df_x-ww_bd997995\6.0.3790.3959.policy = amd64\WinSxS\Policies\amd64_policy.6.0.Microsoft.Windows.Common-Controls_6595b64144ccf1df_x-ww_bd997995\6.0.3790.3959.policy
+; The same policy again, under setuppolicies. Not a duplicate for safety: setup mode reads
+; policies from there and not from Policies, so this copy is the one that makes the bind
+; work. A real install ships no catalog beside it, so neither do we.
+; See README.md § Where the policy has to live.
+policies\amd64_policy.6.0.microsoft.windows.common-controls_6595b64144ccf1df_x-ww_bd997995\6.0.3790.3959.policy = amd64\WinSxS\setuppolicies\amd64_policy.6.0.Microsoft.Windows.Common-Controls_6595b64144ccf1df_x-ww_bd997995\6.0.3790.3959.policy
+; The catalogs beside the manifest and the policy. Staged for parity with a real install,
+; not because the bind needs them. See README.md § Catalogs.
+manifests\amd64_microsoft.windows.common-controls_6595b64144ccf1df_6.0.3790.3959_x-ww_0a7b2435.cat = amd64\WinSxS\Manifests\amd64_Microsoft.Windows.Common-Controls_6595b64144ccf1df_6.0.3790.3959_x-ww_0a7b2435.cat
+policies\amd64_policy.6.0.microsoft.windows.common-controls_6595b64144ccf1df_x-ww_bd997995\6.0.3790.3959.cat = amd64\WinSxS\Policies\amd64_policy.6.0.Microsoft.Windows.Common-Controls_6595b64144ccf1df_x-ww_bd997995\6.0.3790.3959.cat
+
+; Bind the shells that host property sheets to the assembly above. Staging an assembly is not
+; enough: a process only gets it by asking, and the loader honours a manifest only at resource
+; id 1. These external manifests are ours (attribute 1 = shipped with the plugin) and give a
+; host the context it never asks for. An assembly reference names an architecture, so which
+; host needs one differs per architecture — see README.md § The external manifests.
+;
+; x86: neither host qualifies, so both would otherwise draw v5 controls around themed pages.
+[SourceDisksFiles.i386]
 rundll32.exe.manifest = 2,, 1
 explorer.exe.manifest = 1,, 1
+
+; amd64: explorer already has a correct manifest at id 1, and an embedded one wins over an
+; external file, so it needs nothing. rundll32 still has none, and here that is not cosmetic —
+; with no context its applets do not start at all. Shipped under its own name, staged as
+; rundll32.exe.manifest.
+[SourceDisksFiles.amd64]
+rundll32.amd64.manifest = 2, rundll32.exe.manifest, 1

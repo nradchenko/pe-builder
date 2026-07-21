@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Copyright 2026 Nikita Radchenko
+     SPDX-License-Identifier: Apache-2.0
+
+     The amd64 form of rundll32.exe.manifest, staged under that name on an amd64 build.
+     Same job as the x86 file beside it — rundll32 hosts every Control Panel applet and
+     carries no manifest of its own, so this supplies the activation context it never asks
+     for — but the assembly it binds to is architecture-specific, and a reference naming
+     the wrong architecture resolves to nothing.
+
+     On amd64 that is not a cosmetic difference. rundll32 has no embedded manifest at all
+     here, so this file is its ONLY context: name x86 and every applet fails to start with
+     "the application configuration is incorrect" (14001), rather than merely drawing v5
+     controls. See README.md § Architecture. -->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <!-- Our own identity, deliberately not a Microsoft one — see rundll32.exe.manifest. -->
+  <assemblyIdentity
+      type="win32"
+      name="pe-builder.rundll32"
+      version="1.0.0.0"
+      processorArchitecture="amd64"/>
+  <description>Run a DLL as an app</description>
+  <dependency>
+    <dependentAssembly>
+      <!-- Version 6.0.0.0 as on x86: the amd64 media ship 6.0.3790.3959 and the publisher
+           policy redirects this reference to it. That redirect is why the policy has to be
+           staged into WinSxS\setuppolicies — see README.md § Where the policy has to live. -->
+      <assemblyIdentity
+          type="win32"
+          name="Microsoft.Windows.Common-Controls"
+          version="6.0.0.0"
+          processorArchitecture="amd64"
+          publicKeyToken="6595b64144ccf1df"
+          language="*"/>
+    </dependentAssembly>
+  </dependency>
+</assembly>
