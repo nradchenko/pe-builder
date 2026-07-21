@@ -115,7 +115,9 @@ PE dependencies.
   `[Closure]` seed and contributing Start-menu entries through the shell's registry contract;
   and `explorer-shell` boots to a Windows Explorer desktop instead
   of a bare prompt — it ships `peshell` (a build-capable launcher that self-registers the
-  shell/COM components at runtime, sets up the profile, applies the visual style the registry
+  shell/COM components at runtime — plus, through a registry contract of its own, any COM
+  server another plugin stages and declares, since one left unregistered is staged but inert —
+  sets up the profile, applies the visual style the registry
   selects, builds the Start menu from the registry contract other plugins contribute to —
   creating each shortcut, its submenu folders, and pinning the root-anchored ones into the
   modern panel — and runs explorer) and `peshut` (a hook so the shell's Turn Off powers the

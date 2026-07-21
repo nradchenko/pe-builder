@@ -55,6 +55,21 @@ to initialize. `peshell` runs the shell and IE COM DLLs' own `DllInstall` self-r
 namespace come up. `ie4uinit.exe` in that pass reads `ieuinit.inf` (staged via
 `[SourceDisksFiles]`).
 
+That sequence is validated only as a whole — its order is load-bearing, so it is fixed in
+`peshell.c` and nothing outside can reorder it.
+
+A plugin that stages a COM server of its own declares it under
+`HKLM\SOFTWARE\pe-builder\SelfRegister`, one value per DLL, the value name being the file (the
+data is unused). `peshell` enumerates that key and calls each one's `DllRegisterServer` **after**
+the fixed sequence. The point is that no plugin's code names another plugin's files: `wallpaper`
+stages an HTML engine and says so itself, and a build without that plugin has no key, so the
+pass is a no-op.
+
+Entries are registered in sorted name order. They are meant to be self-contained servers whose
+relative order does not matter, but registry value enumeration order is a property of the hive's
+value list rather than a guarantee — sorting means that if one entry ever does depend on another,
+it fails the same way every time instead of intermittently.
+
 ## Visual style
 
 `peshell` applies the visual style the registry selects, before it launches Explorer — the same

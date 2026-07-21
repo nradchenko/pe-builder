@@ -15,6 +15,11 @@
 typedef HRESULT (WINAPI *DLLINSTALL)(BOOL, LPCWSTR);
 typedef HRESULT (WINAPI *DLLREGISTER)(void);
 
+/* Bounds for the plugin-declared self-registration list (see self_register_declared). Both are
+ * generous for a contract whose entries are bare DLL file names. */
+#define SELFREG_MAX  16
+#define SELFREG_NAME 64
+
 static const char *kProfileDirs[] = {
     "", "\\Desktop", "\\Start Menu", "\\Start Menu\\Programs",
     /* Startup lives at the profile root, not under Programs, so the (empty) auto-run folder is
@@ -74,6 +79,37 @@ static void dll_register(const char *dll){
     if(p) p();
 }
 
+/* Register the COM servers plugins declare under HKLM\SOFTWARE\pe-builder\SelfRegister — one
+ * value per DLL, the value name being the file. See README.md § Self-registration for the
+ * contract and why this sits outside the fixed sequence below. */
+static void self_register_declared(void){
+    HKEY k;
+    if(RegOpenKeyExA(HKEY_LOCAL_MACHINE,"SOFTWARE\\pe-builder\\SelfRegister",0,KEY_READ,&k)!=ERROR_SUCCESS) return;
+    char dll[SELFREG_MAX][SELFREG_NAME]; int n=0;
+    for(DWORD i=0;; i++){
+        char name[SELFREG_NAME]; DWORD nl=sizeof name;
+        LONG r=RegEnumValueA(k,i,name,&nl,NULL,NULL,NULL,NULL);
+        if(r==ERROR_NO_MORE_ITEMS) break;
+        /* A name too big for the buffer comes back ERROR_MORE_DATA — skip that one and keep
+         * going, rather than abandon the rest (as the Start-menu walk does). */
+        if(r!=ERROR_SUCCESS) continue;
+        if(n==SELFREG_MAX){
+            /* Say so rather than drop it quietly — the resulting failure surfaces far from here. */
+            OutputDebugStringA("peshell: SelfRegister list truncated, raise SELFREG_MAX\n");
+            break;
+        }
+        lstrcpynA(dll[n++],name,SELFREG_NAME);
+    }
+    RegCloseKey(k);
+    for(int i=1;i<n;i++){                      /* insertion sort; n is a handful */
+        char t[SELFREG_NAME]; lstrcpynA(t,dll[i],SELFREG_NAME);
+        int j=i-1;
+        while(j>=0 && lstrcmpiA(dll[j],t)>0){ lstrcpynA(dll[j+1],dll[j],SELFREG_NAME); j--; }
+        lstrcpynA(dll[j+1],t,SELFREG_NAME);
+    }
+    for(int i=0;i<n;i++) dll_register(dll[i]);
+}
+
 /* The shell/COM self-registration pass (see README.md § Self-registration). Only the complete
  * sequence is validated, so keep inetcpl's DllInstall and ie4uinit even though they look
  * IE-specific. */
@@ -98,6 +134,7 @@ static void self_register_shell(void){
      * recognises "/UserInstall" and "/InstallVS:" and ignores anything else, so registering it
      * that way is a silent no-op. Done last so it cannot perturb the sequence above. */
     dll_register("themeui.dll");
+    self_register_declared();   /* plugin-declared servers, after the validated sequence */
 }
 
 static BOOL run_and_wait(const char *cmdline){
