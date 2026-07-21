@@ -9,6 +9,9 @@
 #define WINVER 0x0501
 #include <windows.h>
 #include <objbase.h>
+/* Before shlobj.h: it gates IActiveDesktop (and WALLPAPEROPT/AD_APPLY_*) behind _WININET_,
+ * which this header defines. Headers only — nothing here links against wininet. */
+#include <wininet.h>
 #include <shlobj.h>
 #include "startmenu.h"
 
@@ -352,10 +355,11 @@ static void splash_close(void){ if(g_splash){ PostMessageA(g_splash,WM_CLOSE,0,0
 typedef DWORD (WINAPI *THEMECONNECT)(DWORD);
 typedef HRESULT (WINAPI *SETSYSVS)(LPCWSTR,LPCWSTR,LPCWSTR,DWORD);
 
-/* Read one ThemeManager value, expanding it if it is a REG_EXPAND_SZ path. Returns FALSE unless
- * `out` ends up holding the whole value: a caller that acts on a half-expanded path would fail
- * later and silently (a theme that just never appears), so refuse it here instead. */
-static BOOL theme_value(HKEY k,const WCHAR *name,WCHAR *out,DWORD count){
+/* Read one string value from an open key, expanding it if it is a REG_EXPAND_SZ path. Returns
+ * FALSE unless `out` ends up holding the whole value: a caller that acts on a half-expanded path
+ * would fail later and silently (a theme or wallpaper that just never appears), so refuse it
+ * here instead. Used for every registry-declared path this file acts on. */
+static BOOL reg_string(HKEY k,const WCHAR *name,WCHAR *out,DWORD count){
     WCHAR raw[MAX_PATH]; DWORD type=0,cb=sizeof raw;
     if(RegQueryValueExW(k,name,NULL,&type,(BYTE*)raw,&cb)!=ERROR_SUCCESS) return FALSE;
     /* Only a string is a string — a value of any other type would otherwise be copied out as
@@ -405,11 +409,11 @@ static void apply_visual_style(void){
     /* DllName is a REG_EXPAND_SZ (%SystemRoot%\...): expand it, never rebuild the path by hand —
      * this PE boots from CD and its system drive is not C:. */
     WCHAR flag[8],style[MAX_PATH],color[64],size[64];
-    BOOL on = theme_value(k,L"ThemeActive",flag,8) && flag[0]=='1'
-              && theme_value(k,L"DllName",style,MAX_PATH);
+    BOOL on = reg_string(k,L"ThemeActive",flag,8) && flag[0]=='1'
+              && reg_string(k,L"DllName",style,MAX_PATH);
     if(on){
-        if(!theme_value(k,L"ColorName",color,64)) lstrcpyW(color,L"NormalColor");
-        if(!theme_value(k,L"SizeName",size,64))   lstrcpyW(size,L"NormalSize");
+        if(!reg_string(k,L"ColorName",color,64)) lstrcpyW(color,L"NormalColor");
+        if(!reg_string(k,L"SizeName",size,64))   lstrcpyW(size,L"NormalSize");
     }
     RegCloseKey(k);
     if(!on) return;
@@ -430,6 +434,56 @@ static void apply_visual_style(void){
      * costs the theme. */
     if(theme_connect(15000)!=0) return;
     set_visual_style(style,color,size,0);
+}
+
+/* Push the wallpaper the registry names onto the desktop — nothing else in a PE reads those
+ * values. See README.md § Wallpaper for the contract and why it goes through IActiveDesktop.
+ *
+ * Best-effort and self-limiting: no wallpaper value means nothing to do, and on a build that
+ * stages no HTML engine the CoCreateInstance just fails. COM is already initialized on this
+ * thread by self_register_shell's OleInitialize. */
+static void apply_wallpaper(void){
+    HKEY k;
+    if(RegOpenKeyExA(HKEY_CURRENT_USER,"Control Panel\\Desktop",0,KEY_READ,&k)!=ERROR_SUCCESS) return;
+    /* Wallpaper is a REG_EXPAND_SZ (%SystemRoot%\...) for the same reason DllName above is: the
+     * system drive is not C:. reg_string does the expansion and refuses a truncated result. */
+    WCHAR path[MAX_PATH],flag[8];
+    BOOL on = reg_string(k,L"Wallpaper",path,MAX_PATH);
+    /* The registry's encoding is not the API's: TileWallpaper is a flag of its own, and it wins
+     * over WallpaperStyle, whose 2 means stretch. Neither is required — a missing or unreadable
+     * one just leaves the default. */
+    DWORD style=WPSTYLE_CENTER;
+    if(on){
+        if(reg_string(k,L"TileWallpaper",flag,8) && flag[0]=='1') style=WPSTYLE_TILE;
+        else if(reg_string(k,L"WallpaperStyle",flag,8) && flag[0]=='2') style=WPSTYLE_STRETCH;
+    }
+    RegCloseKey(k);
+    if(!on) return;
+
+    IActiveDesktop *ad=NULL;
+    if(FAILED(CoCreateInstance(&CLSID_ActiveDesktop,NULL,CLSCTX_INPROC_SERVER,
+                               &IID_IActiveDesktop,(void**)&ad)) || !ad) return;
+    WALLPAPEROPT opt; opt.dwSize=sizeof opt; opt.dwStyle=style;
+    ad->lpVtbl->SetWallpaper(ad,path,0);
+    ad->lpVtbl->SetWallpaperOptions(ad,&opt,0);
+    ad->lpVtbl->ApplyChanges(ad,AD_APPLY_ALL);
+    ad->lpVtbl->Release(ad);
+}
+
+/* Start Explorer, wait for its taskbar, apply the desktop settings that need a live shell, then
+ * block until it exits. Returns FALSE if it could not be started at all. Every launch goes
+ * through here, so a desktop that comes back after Explorer dies is set up like the first. */
+static BOOL launch_desktop(BOOL first){
+    STARTUPINFOA si; PROCESS_INFORMATION pi;
+    ZeroMemory(&si,sizeof si); si.cb=sizeof si; si.lpDesktop=(LPSTR)"WinSta0\\Default";
+    char cl[64]; lstrcpynA(cl,"explorer.exe",64);
+    if(!CreateProcessA(NULL,cl,NULL,NULL,FALSE,0,NULL,NULL,&si,&pi)) return FALSE;
+    for(int k=0;k<600;k++){ if(FindWindowA("Shell_TrayWnd",NULL)) break; Sleep(300); }
+    apply_wallpaper();
+    if(first) splash_close();
+    WaitForSingleObject(pi.hProcess,INFINITE);
+    CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+    return TRUE;
 }
 
 /* Widen an ANSI path for the shell APIs. Returns FALSE on failure so the caller skips the item
@@ -645,21 +699,13 @@ int WINAPI WinMain(HINSTANCE i,HINSTANCE p,LPSTR c,int s){
 
     splash_status("Launching the desktop...");
 
-    /* First launch: keep the status window up until the taskbar (Shell_TrayWnd) actually
-     * paints, then close it — the desktop is now visible, so the splash has done its job. */
-    {
-        STARTUPINFOA si; PROCESS_INFORMATION pi;
-        ZeroMemory(&si,sizeof si); si.cb=sizeof si; si.lpDesktop=(LPSTR)"WinSta0\\Default";
-        char cl[64]; lstrcpynA(cl,"explorer.exe",64);
-        if(CreateProcessA(NULL,cl,NULL,NULL,FALSE,0,NULL,NULL,&si,&pi)){
-            for(int k=0;k<600;k++){ if(FindWindowA("Shell_TrayWnd",NULL)) break; Sleep(300); }
-            splash_close();
-            WaitForSingleObject(pi.hProcess,INFINITE);
-            CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
-        } else splash_close();
-    }
+    /* On the first launch the status window stays up until the taskbar (Shell_TrayWnd) actually
+     * paints, then closes — the desktop is visible, so the splash has done its job. Every launch
+     * goes through the same helper, so a desktop that comes back after Explorer dies is set up
+     * the same way the first one was. */
+    if(!launch_desktop(TRUE)) splash_close();
     for(int deaths=0; deaths<4; deaths++){
-        if(!run_and_wait("explorer.exe")) break;
+        if(!launch_desktop(FALSE)) break;
         Sleep(500);
     }
     run_and_wait("cmd.exe");
