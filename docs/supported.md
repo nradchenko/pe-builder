@@ -12,7 +12,7 @@ mounted directory or an `.iso`.
 | Source | Builds | Boots to `cmd.exe` | Explorer desktop | Luna theme | Wallpaper |
 |---|---|---|---|---|---|
 | **Windows XP SP3 (32-bit)** | yes | verified | verified | verified | verified |
-| **Windows XP Professional x64 Edition (SP2)** | yes | verified | verified | verified | untested |
+| **Windows XP Professional x64 Edition (SP2)** | yes | verified | verified | verified | no — see below |
 | Windows Server 2003 (32-bit) | accepted | untested | untested | untested | untested |
 | Windows Server 2003 (x64) | accepted | untested | untested | untested | untested |
 | Windows XP SP0 / SP1 / SP2 | **rejected** | — | — | — | — |
@@ -35,15 +35,17 @@ An amd64 source produces the same themed desktop a 32-bit one does. Plugins that
 are compiled for the target architecture, so building one needs the 64-bit cross-compiler
 (`gcc-mingw-w64-x86-64`) rather than the 32-bit one.
 
-One known gap: **Folder Options and Taskbar properties do nothing.** Both open through the
-same shell entry point, which posts a message to the shell window; Explorer receives it and
-does not act on it. Everything upstream is verified — the shell window is registered, the
-message is delivered, and Explorer has the v6 Common-Controls assembly loaded — so the fault
-is inside Explorer's own handling of the message. Both work on a 32-bit build. The rest of
-Control Panel is unaffected.
+Two known gaps, both amd64-only and both working on a 32-bit build:
 
-The `wallpaper` plugin ships no compiled code, so nothing stops it building for an amd64
-source; it is marked untested above only because no image has been booted to confirm it.
+- **Folder Options and Taskbar properties do nothing.** Both open through the same shell
+  entry point, which posts a message to the shell window; Explorer receives it and does not
+  act on it. Everything upstream is verified — the shell window is registered, the message is
+  delivered, and Explorer has the v6 Common-Controls assembly loaded — so the fault is inside
+  Explorer's own handling of the message. The rest of Control Panel is unaffected.
+- **The `wallpaper` plugin does not render.** The desktop comes up on a flat colour instead
+  of the image. The plugin builds and stages its files, and the wallpaper is configured in
+  the registry, but the Active Desktop surface does not paint it on amd64. The cause is not
+  yet established.
 
 ## Output
 
@@ -110,6 +112,22 @@ architectures and why a 64-bit source still keeps that part of itself in `I386`.
 
 A desktop image needs no attached disk: it carries a RAM-backed volume for its writable
 profile.
+
+## Known limitations
+
+These apply to any build. The amd64-only gaps are under
+[What differs on an x64 build](#what-differs-on-an-x64-build) above.
+
+- **No sound.** No audio device is configured, and the Windows Audio service is deliberately
+  disabled: with it enabled, a system sound blocks in `waveOut` on a service stuck in
+  `START_PENDING`, which hangs the shell's tray thread and cascades every folder window into
+  *Not Responding*. Anything that would play audio runs silently instead — the bundled games
+  are playable but mute, and this is why Pinball is not among them.
+- **Task Manager shows unreadable characters in its User Name column,** for every process
+  except *System Idle Process*. The cause is not established; the leading suspicion is that a
+  PE ships empty SAM and SECURITY hives (deliberately — see the note in `build/hives.go`), so
+  there is no account database to resolve a process owner against. Cosmetic: only that column
+  is affected, and the rest of Task Manager works.
 
 ## Build host
 
