@@ -1,8 +1,8 @@
 # pe-builder
 
 An open-source, cross-platform tool for building bootable **Windows PE**
-environments from a Windows installation source — a modern, Linux-first revival of
-the ideas behind the classic, discontinued **Bart's PE Builder**.
+environments — a Windows **live CD** — from a Windows installation source. A modern,
+Linux-first revival of the ideas behind the classic, discontinued **Bart's PE Builder**.
 
 > **Status: early development.** A build already produces a bootable PE — an interactive
 > `cmd.exe`, a Windows Explorer desktop, or that desktop with the XP **"Luna" visual style**
