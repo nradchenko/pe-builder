@@ -4,6 +4,10 @@ An open-source, cross-platform tool for building bootable **Windows PE**
 environments — a Windows **live CD** — from a Windows installation source. A modern,
 Linux-first revival of the ideas behind the classic, discontinued **Bart's PE Builder**.
 
+![A Windows XP live desktop built with pe-builder: the Luna visual style, the modern Start
+menu, About Windows showing Service Pack 3, and the CD drive's properties — all running from a
+~68 MB CD with no attached disk.](docs/images/desktop.png)
+
 > **Status: early development.** A build already produces a bootable PE — an interactive
 > `cmd.exe`, a Windows Explorer desktop, or that desktop with the XP **"Luna" visual style**
 > (all early proofs of concept).
