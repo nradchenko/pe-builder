@@ -1,9 +1,8 @@
 # Copyright 2026 Nikita Radchenko
 # SPDX-License-Identifier: Apache-2.0
 #
-# Builds the pesuite driver with a MinGW-w64 toolchain — no WDK, no MSVC:
-#   i386:   apt install gcc-mingw-w64-i686
-#   amd64:  apt install gcc-mingw-w64-x86-64
+# Builds the pesuite driver with a MinGW-w64 toolchain — no WDK, no MSVC
+# (see docs/install.md for the per-platform setup).
 #
 #   pesuite.sys — a system-start kernel driver that sets VER_SUITE_TERMINAL in the shared
 #                 SuiteMask, the bit the WinStation session subsystem is gated on.

@@ -1,9 +1,8 @@
 # Copyright 2026 Nikita Radchenko
 # SPDX-License-Identifier: Apache-2.0
 #
-# Cross-compile poweroff.exe for the /minint PE. Requires a MinGW-w64 toolchain:
-#   i386:   apt install gcc-mingw-w64-i686
-#   amd64:  apt install gcc-mingw-w64-x86-64
+# Cross-compile poweroff.exe for the /minint PE. Needs a MinGW-w64 toolchain
+# (see docs/install.md for the per-platform setup).
 #
 # ARCH selects the target architecture (i386 or amd64), defaulting to i386; the plugin's
 # [Build.<arch>] Command passes it. This is a user-mode binary, so the architecture

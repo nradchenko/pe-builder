@@ -117,8 +117,8 @@ XP kernel driver. Verified with **GCC 13.2**, **GNU binutils (ld) 2.41**, and **
 headers 11.0**.
 
 The driver source is architecture-neutral; only the toolchain differs. `make ARCH=i386`
-(the default, `apt install gcc-mingw-w64-i686`) and `make ARCH=amd64` (`gcc-mingw-w64-x86-64`)
-select it, and the plugin's `[Build.<arch>]` sections name each architecture's compiler and
+(the default) and `make ARCH=amd64` select it, and the plugin's `[Build.<arch>]` sections
+name each architecture's compiler and
 pass the matching `ARCH`. One switch at the top of the `Makefile` carries the whole
 difference: toolchain triple, arch define, entry-point decoration (x64 has no `_…@8`),
 native subsystem version, and DDK include path. An `ARCH` the recipe has no flags for is an

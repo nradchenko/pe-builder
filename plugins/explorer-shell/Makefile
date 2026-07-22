@@ -4,9 +4,7 @@
 # Cross-compile the Explorer-shell binaries for a Windows PE:
 #   peshell.exe — the Setup\CmdLine launcher
 #   peshut.dll  — the ExitWindowsEx power-off hook (loaded via AppInit_DLLs)
-# Requires a MinGW-w64 toolchain:
-#   i386:   apt install gcc-mingw-w64-i686
-#   amd64:  apt install gcc-mingw-w64-x86-64
+# Needs a MinGW-w64 toolchain (see docs/install.md for the per-platform setup).
 #
 # ARCH selects the target architecture (i386 or amd64), defaulting to i386; the plugin's
 # [Build.<arch>] Command passes it. These are user-mode binaries, so the architecture

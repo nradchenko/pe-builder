@@ -2,9 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Cross-compile ramdrive.sys (a native NT kernel driver) for the /minint PE, using
-# only a MinGW-w64 toolchain — no WDK, no MSVC:
-#   i386:   apt install gcc-mingw-w64-i686
-#   amd64:  apt install gcc-mingw-w64-x86-64
+# only a MinGW-w64 toolchain — no WDK, no MSVC (see docs/install.md for the setup).
 #
 # The driver is a freestanding PE with the NT-native subsystem, entry point
 # DriverEntry, and imports bound against ntoskrnl.exe/hal.dll (mingw ships the

@@ -140,6 +140,5 @@ These apply to any build. The amd64-only gaps are under
 
 ## Build host
 
-pe-builder is Linux-first and builds on any platform Go supports. Building an image whose
-plugins ship as source — the desktop plugins do — additionally needs the MinGW-w64
-cross-compiler for the target architecture. A bare `cmd.exe` image needs only Go.
+See [`docs/install.md`](install.md) for build prerequisites and per-platform setup (Linux,
+Windows, macOS).

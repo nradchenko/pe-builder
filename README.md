@@ -63,16 +63,12 @@ Images are developed and tested in **QEMU**; booting on physical hardware is unt
 ## Quick start
 
 You need Go and a Windows XP SP3 installation source (an `.iso` or an extracted
-directory). A desktop image also needs the MinGW-w64 cross-compiler, which builds the
-plugins that ship as source rather than as binaries (`apt install gcc-mingw-w64-i686`).
+directory). A desktop image also needs the MinGW-w64 cross-compiler.
 Point the example manifest at your source and build:
 
-> **Platforms.** pe-builder is developed and tested on **Linux**, and the released Linux
-> binaries are the supported ones. The code is pure Go and cross-compiles to macOS and
-> Windows — those binaries are published too, but as **experimental**: they build, and are
-> not otherwise tested, so please open an issue if something does not work.
-> On Windows the smoothest path is **WSL2** (a normal Linux install inside Windows), where
-> everything above works unchanged, `apt` and all.
+> **Platforms.** Linux is the primary, tested platform. Windows is tested too — all image
+> types build and boot, with some environment setup — and macOS is experimental (it builds,
+> but is not yet run). See [`docs/install.md`](docs/install.md) for per-platform setup.
 
 ```sh
 go build -o pebuild ./cmd/pebuild
@@ -187,6 +183,8 @@ The text and JSON formats scale to the full closure without this concern.
 
 ## Documentation
 
+- [`docs/install.md`](docs/install.md) — building on each platform (Linux, Windows, macOS)
+  and the toolchain a desktop image needs.
 - [`docs/supported.md`](docs/supported.md) — which Windows sources are supported and what
   each one produces, the output targets, and the hardware an image expects.
 - [`docs/inspecting.md`](docs/inspecting.md) — inspecting a source or a build:
