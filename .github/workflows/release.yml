@@ -1,0 +1,53 @@
+# Copyright 2026 Nikita Radchenko
+# SPDX-License-Identifier: Apache-2.0
+#
+# Cuts a release when a v* tag is pushed: cross-compiles the binaries, archives
+# them with the license bundle, and drafts a GitHub release whose notes are the
+# matching CHANGELOG.md section. See .goreleaser.yaml.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # create the release and upload artifacts
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # goreleaser needs full history and tags
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Extract this tag's CHANGELOG section
+        # Pull the "## [x.y.z]" block for the pushed tag into notes.md, so the
+        # hand-written changelog is the release body verbatim. Fails loudly if the
+        # tag has no section, rather than shipping an empty release.
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { grab=1; next }
+            grab && /^## \[/       { exit }
+            grab                   { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::no CHANGELOG.md section for $version"; exit 1
+          fi
+          echo "----- release notes -----"; cat notes.md
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean --release-notes=notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

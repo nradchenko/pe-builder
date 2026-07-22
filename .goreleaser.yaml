@@ -1,0 +1,80 @@
+# Copyright 2026 Nikita Radchenko
+# SPDX-License-Identifier: Apache-2.0
+#
+# Release build for pe-builder. Cross-compiles pebuild and pewalk (both pure Go),
+# archives them per platform with the license bundle, and publishes on a v* tag.
+# Run by .github/workflows/release.yml. Validate locally with `goreleaser check`.
+
+version: 2
+
+project_name: pe-builder
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: pebuild
+    main: ./cmd/pebuild
+    binary: pebuild
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X github.com/nradchenko/pe-builder/internal/buildinfo.Version={{ .Version }}
+      - -X github.com/nradchenko/pe-builder/internal/buildinfo.Commit={{ .ShortCommit }}
+      - -X github.com/nradchenko/pe-builder/internal/buildinfo.Date={{ .Date }}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    # Windows ships amd64 only — Windows-on-ARM is not a target for XP-PE tooling.
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+  - id: pewalk
+    main: ./cmd/pewalk
+    binary: pewalk
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X github.com/nradchenko/pe-builder/internal/buildinfo.Version={{ .Version }}
+      - -X github.com/nradchenko/pe-builder/internal/buildinfo.Commit={{ .ShortCommit }}
+      - -X github.com/nradchenko/pe-builder/internal/buildinfo.Date={{ .Date }}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  # One archive per platform holding both binaries plus the legal bundle, so a
+  # user who downloads a single archive has the licenses that travel with it.
+  - id: default
+    ids: [pebuild, pewalk]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE
+      - NOTICE
+      - THIRD-PARTY-LICENSES
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: SHA256SUMS
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  # CHANGELOG.md is hand-written and authoritative; never autogenerate from commits.
+  disable: true
+
+release:
+  draft: true

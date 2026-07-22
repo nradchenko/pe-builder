@@ -1,0 +1,26 @@
+pe-builder
+Copyright 2026 Nikita Radchenko
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this software except in compliance with the License. A copy of the License is in
+the LICENSE file.
+
+This product is an independent, clean-room reimplementation of the ideas behind
+Bart's PE Builder. It incorporates no code from that tool and bundles no
+Microsoft or other third-party installation media; it operates only on a Windows
+installation source the user supplies.
+
+The compiled binaries statically link third-party Go modules. The full text of
+every such module's license is reproduced in the THIRD-PARTY-LICENSES file that
+ships alongside them.
+
+------------------------------------------------------------------------------
+
+This product includes software from the project below, whose own NOTICE file is
+reproduced here as its license requires:
+
+  Alrux Go EXTensions (AGExt) - package levenshtein
+  Copyright 2016 ALRUX Inc.
+
+  This product includes software developed at ALRUX Inc.
+  (http://www.alrux.com/).
