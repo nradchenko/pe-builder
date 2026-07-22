@@ -35,13 +35,16 @@ An amd64 source produces the same themed desktop a 32-bit one does. Plugins that
 are compiled for the target architecture, so building one needs the 64-bit cross-compiler
 (`gcc-mingw-w64-x86-64`) rather than the 32-bit one.
 
-Two known gaps, both amd64-only and both working on a 32-bit build:
+Three known gaps, all amd64-only and all working on a 32-bit build:
 
 - **Folder Options and Taskbar properties do nothing.** Both open through the same shell
   entry point, which posts a message to the shell window; Explorer receives it and does not
   act on it. Everything upstream is verified — the shell window is registered, the message is
   delivered, and Explorer has the v6 Common-Controls assembly loaded — so the fault is inside
   Explorer's own handling of the message. The rest of Control Panel is unaffected.
+- **A drive's Properties dialog does not work.** Right-clicking a drive and choosing
+  **Properties** — the General/Hardware sheet that opens normally on a 32-bit build — does not
+  work on amd64. The cause is not yet established.
 - **The `wallpaper` plugin does not render.** The desktop comes up on a flat colour instead
   of the image. The plugin builds and stages its files, and the wallpaper is configured in
   the registry, but the Active Desktop surface does not paint it on amd64. The cause is not
