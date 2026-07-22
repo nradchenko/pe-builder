@@ -15,5 +15,7 @@ docs/internal/
 # --- build / output artifacts ---
 /bin/
 /dist/
+/out/
+/pebuild
 *.iso
 *.img
