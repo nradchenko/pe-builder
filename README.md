@@ -63,6 +63,13 @@ directory). A desktop image also needs the MinGW-w64 cross-compiler, which build
 plugins that ship as source rather than as binaries (`apt install gcc-mingw-w64-i686`).
 Point the example manifest at your source and build:
 
+> **Platforms.** pe-builder is developed and tested on **Linux**, and the released Linux
+> binaries are the supported ones. The code is pure Go and cross-compiles to macOS and
+> Windows — those binaries are published too, but as **experimental**: they build, and are
+> not otherwise tested, so please open an issue if something does not work.
+> On Windows the smoothest path is **WSL2** (a normal Linux install inside Windows), where
+> everything above works unchanged, `apt` and all.
+
 ```sh
 go build -o pebuild ./cmd/pebuild
 
