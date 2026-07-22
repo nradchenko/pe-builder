@@ -17,6 +17,7 @@ mounted directory or an `.iso`.
 | Windows Server 2003 (x64) | accepted | untested | untested | untested | untested |
 | Windows XP SP0 / SP1 / SP2 | **rejected** | — | — | — | — |
 | Windows 2000 and earlier | **rejected** | — | — | — | — |
+| Windows Fundamentals for Legacy PCs | **out of scope** | — | — | — | — |
 
 The 32-bit XP path is verified against both English and Russian volume-licence media, which
 behave identically apart from one Active Setup component present only on some locales.
@@ -28,6 +29,11 @@ media has almost no practical use and is not a target.
 
 **Server 2003 is accepted but unproven.** It is newer than the floor, so nothing rejects it
 and it may well build — but no image has been verified from it.
+
+**Windows Fundamentals for Legacy PCs is out of scope**, despite being XP-based. Its OS ships
+as a Windows Imaging (`.wim`) image under `Setup\WIM`, and its `I386` holds a WinPE boot
+environment for the deployment tool rather than the file payload a build reads. Supporting it
+would mean a WIM reader and a second, image-based source model.
 
 ### What differs on an x64 build
 
