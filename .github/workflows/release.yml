@@ -33,24 +33,26 @@ jobs:
         # hand-written changelog is the release body verbatim. A prerelease tag
         # (e.g. v0.5.0-rc.1) has no section of its own, so strip the suffix and
         # use the base release's notes. Fails loudly if even that has no section,
-        # rather than shipping an empty release.
+        # rather than shipping an empty release. Written under RUNNER_TEMP, not the
+        # working tree, so goreleaser's dirty-state check does not see it.
         run: |
           version="${GITHUB_REF_NAME#v}"
           base="${version%%-*}"
+          notes="${RUNNER_TEMP}/notes.md"
           awk -v v="$base" '
             $0 ~ "^## \\[" v "\\]" { grab=1; next }
             grab && /^## \[/       { exit }
             grab                   { print }
-          ' CHANGELOG.md > notes.md
-          if [ ! -s notes.md ]; then
+          ' CHANGELOG.md > "$notes"
+          if [ ! -s "$notes" ]; then
             echo "::error::no CHANGELOG.md section for $base"; exit 1
           fi
-          echo "----- release notes ($base) -----"; cat notes.md
+          echo "----- release notes ($base) -----"; cat "$notes"
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
-          args: release --clean --release-notes=notes.md
+          args: release --clean --release-notes=${{ runner.temp }}/notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
