@@ -12,15 +12,15 @@ import (
 	"github.com/nradchenko/pe-builder/source"
 )
 
-const cacheISO = "../.cache/ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso"
+const testISO = "../testdata/iso/ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso"
 
-// openISO opens the cached ISO as an io.ReaderAt for the boot-image parser, or
+// openISO opens the test ISO as an io.ReaderAt for the boot-image parser, or
 // skips the test when it is absent.
 func openISO(t *testing.T) *os.File {
 	t.Helper()
-	f, err := os.Open(cacheISO)
+	f, err := os.Open(testISO)
 	if err != nil {
-		t.Skip("real source ISO not present under .cache; skipping")
+		t.Skip("real source ISO not present under testdata/iso; skipping")
 	}
 	t.Cleanup(func() { f.Close() })
 	return f

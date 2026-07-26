@@ -3,6 +3,9 @@
 # Third-party freeware binaries used for reference (do not distribute)
 .cache/
 
+# Local Windows test source: the developer symlinks real media in for real-source tests
+/testdata/iso/
+
 # Local, developer-specific instructions
 CLAUDE.local.md
 

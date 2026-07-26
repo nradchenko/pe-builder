@@ -19,13 +19,13 @@ import (
 // realSource opens the Windows source used for the closure regression. It is a real
 // installation medium, not a fixture, because the closure's regression target — the
 // known-good boot file set — is a property of a real source. The path comes from
-// PEBUILD_TEST_SOURCE, falling back to the developer cache; the test skips when
-// neither is present, so `go test ./...` stays green without the (git-ignored) media.
+// PEBUILD_TEST_SOURCE, falling back to a symlinked ISO under testdata/iso; the test
+// skips when neither is present, so `go test ./...` stays green without the (git-ignored) media.
 func realSource(t *testing.T) (source.Backing, source.Identity, *layout.Layout, *pewalk.Source) {
 	t.Helper()
 	path := os.Getenv("PEBUILD_TEST_SOURCE")
 	if path == "" {
-		cache := filepath.Join("..", ".cache", "ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso")
+		cache := filepath.Join("..", "testdata", "iso", "ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso")
 		if _, err := os.Stat(cache); err == nil {
 			path = cache
 		}

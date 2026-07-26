@@ -11,19 +11,19 @@ import (
 	"github.com/nradchenko/pe-builder/source"
 )
 
-// cacheISO is the real XP SP3 source ISO symlinked under .cache for local runs.
+// testISO is the real XP SP3 source ISO symlinked under testdata/iso for local runs.
 // The Microsoft hive material (setupreg.hiv, hive*.inf) is never committed, so
 // tests that need it read it from this ISO and skip when it is absent (e.g. CI).
-const cacheISO = "../.cache/ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso"
+const testISO = "../testdata/iso/ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso"
 
-// sourceBacking opens the cache ISO as a source backing, skipping the test when
+// sourceBacking opens the test ISO as a source backing, skipping the test when
 // the ISO is not present.
 func sourceBacking(t *testing.T) source.Backing {
 	t.Helper()
-	if _, err := os.Stat(cacheISO); err != nil {
-		t.Skip("real source ISO not present under .cache; skipping")
+	if _, err := os.Stat(testISO); err != nil {
+		t.Skip("real source ISO not present under testdata/iso; skipping")
 	}
-	src, err := source.Open(cacheISO)
+	src, err := source.Open(testISO)
 	if err != nil {
 		t.Fatalf("open source ISO: %v", err)
 	}
