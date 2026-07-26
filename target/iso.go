@@ -131,7 +131,7 @@ func (iso) Emit(ctx context.Context, treeDir string, opts Options) error {
 // which the boot chain requires — while UntranslatedFilenames keeps them full-length.
 func uppercaseTree(dir string) error {
 	var paths []string
-	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(dir, func(p string, _ fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}

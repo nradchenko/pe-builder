@@ -164,9 +164,12 @@ func TestWalkClosure(t *testing.T) {
 	if got := res.Nodes["cabmod.dll"].Origin.Kind; got != OriginCab {
 		t.Errorf("cabmod.dll origin = %v, want cabinet", got)
 	}
-	// leaf.dll is imported by both app.exe and gui.dll but appears once.
-	if !res.Nodes["leaf.dll"].Seed {
-		// not a seed, just ensure it exists once
+	// leaf.dll is imported by both app.exe and gui.dll but appears once (map-keyed),
+	// and is a normal dependency, not a seed.
+	if node, ok := res.Nodes["leaf.dll"]; !ok {
+		t.Error("leaf.dll missing from nodes")
+	} else if node.Seed {
+		t.Error("leaf.dll = seed, want non-seed")
 	}
 	if got := len(res.Missing()); got != 1 {
 		t.Errorf("Missing count = %d, want 1", got)

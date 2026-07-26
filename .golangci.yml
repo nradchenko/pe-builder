@@ -12,6 +12,11 @@ linters:
     - misspell
     - revive
     - unconvert
+  exclusions:
+    # Standard errcheck exclusions (fmt.Fprint*, Flush, Close, os.Remove): the
+    # error that matters on each write path is checked explicitly.
+    presets:
+      - std-error-handling
 
 formatters:
   enable:

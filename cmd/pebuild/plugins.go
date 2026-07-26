@@ -71,7 +71,7 @@ func newPluginsListCmd() *cobra.Command {
 			"source each resolves from. A more specific source shadows a less specific\n" +
 			"one of the same name.",
 		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			sp, err := plugin.ManagementSearchPath(dir)
 			if err != nil {
 				return err

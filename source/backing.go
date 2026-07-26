@@ -82,8 +82,8 @@ func (c *dirCache) lookup(fsys fs.FS, dir, name string) (string, bool, error) {
 		}
 		c.mu.Unlock()
 	}
-	real, found := m[strings.ToLower(name)]
-	return real, found, nil
+	realName, found := m[strings.ToLower(name)]
+	return realName, found, nil
 }
 
 // normalize converts backslashes to forward slashes and reduces the path to the
