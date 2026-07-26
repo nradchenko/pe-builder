@@ -10,8 +10,9 @@ menu, About Windows showing Service Pack 3, and the CD drive's properties — al
 
 > **Status: early development.** A build already produces a bootable PE — an interactive
 > `cmd.exe`, a Windows Explorer desktop, or that desktop with the XP **"Luna" visual style**
-> (all early proofs of concept).
-> Formats, commands, and structure are subject to change, and there are no releases yet.
+> (all early proofs of concept). Tagged releases, with prebuilt binaries, are on the
+> [releases page](https://github.com/nradchenko/pe-builder/releases); formats, commands, and
+> structure may still change between them.
 
 ## What this is
 
