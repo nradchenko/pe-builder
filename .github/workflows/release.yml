@@ -30,19 +30,22 @@ jobs:
 
       - name: Extract this tag's CHANGELOG section
         # Pull the "## [x.y.z]" block for the pushed tag into notes.md, so the
-        # hand-written changelog is the release body verbatim. Fails loudly if the
-        # tag has no section, rather than shipping an empty release.
+        # hand-written changelog is the release body verbatim. A prerelease tag
+        # (e.g. v0.5.0-rc.1) has no section of its own, so strip the suffix and
+        # use the base release's notes. Fails loudly if even that has no section,
+        # rather than shipping an empty release.
         run: |
           version="${GITHUB_REF_NAME#v}"
-          awk -v v="$version" '
+          base="${version%%-*}"
+          awk -v v="$base" '
             $0 ~ "^## \\[" v "\\]" { grab=1; next }
             grab && /^## \[/       { exit }
             grab                   { print }
           ' CHANGELOG.md > notes.md
           if [ ! -s notes.md ]; then
-            echo "::error::no CHANGELOG.md section for $version"; exit 1
+            echo "::error::no CHANGELOG.md section for $base"; exit 1
           fi
-          echo "----- release notes -----"; cat notes.md
+          echo "----- release notes ($base) -----"; cat notes.md
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
