@@ -5,6 +5,114 @@ All notable changes to pe-builder are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-07-26
+
+The 64-bit release. An amd64 Windows source now builds the **full themed desktop** — Explorer
+with the Luna visual style, working Control Panel applets, a RAM drive, and a Start menu that
+powers the machine off — the same image an x86 build gets. Bart's PE Builder and the tradition
+that grew around it built 32-bit images only; a live Windows environment of this kind has not
+existed in 64-bit.
+
+Reaching it took three things the build could not do before — compiling a plugin's payload for
+the target architecture, decoding the MSZIP cabinets amd64 media pack their side-by-side
+assemblies with, and addressing a cabinet member by its exact internal path — and four fixes
+without which no shell binary would start at all. The x86-only limitation listed in 0.4.0 is
+lifted. `pebuild run`, which boots a built image in QEMU from one command, lands alongside.
+
+### Added
+
+- **The desktop plugins build for amd64.** `explorer-shell`, `poweroff`, `ramdrive` and
+  `pesuite` now compile for the target architecture rather than a fixed 32-bit toolchain, so
+  an amd64 build gets the same desktop an x86 build does. A build-capable plugin scopes its
+  build with `[Build.<arch>]`, each naming that architecture's compiler in `Requires` and
+  passing the architecture to its `Command`; the shared `[Build]` keeps what does not vary.
+- **MSZIP cabinet decoding.** amd64 media pack the side-by-side assemblies with MSZIP, where
+  x86 SP3 media use LZX throughout, so those cabinets could not be read at all.
+- **Cabinet members are addressable by their full internal path.** A source may pack a whole
+  tree into one cabinet — amd64 media keep the side-by-side assemblies in `ASMS01.CAB` — and
+  several assemblies each contain a `comctl32.dll`, distinguished only by their directory. A
+  `[SourcePaths]` entry naming an exact path now reaches into a cabinet when the path is not
+  a loose file.
+- **A `wallpaper` plugin** puts the XP default wallpaper on the desktop, which otherwise comes
+  up on a flat colour. It ships no code and needs no toolchain, and enabling it pulls in the
+  desktop it decorates. The wallpaper is a JPEG and the classic desktop path paints bitmaps
+  only, so the plugin stages the Active Desktop surface that can paint one — which is why it is
+  a separate plugin, off by default: it adds about 4 MB to the image, and a build that does not
+  enable it pays nothing. The image is scaled to whatever resolution the manifest selects.
+- **Plugins can register COM servers of their own.** A plugin that stages one declares it under
+  `HKLM\SOFTWARE\pe-builder\SelfRegister`, one value per DLL, and the shell registers each after
+  its own validated start-up sequence — which stays fixed and unreorderable. Entries register in
+  sorted name order: they are self-contained servers whose order should not matter, so pinning it
+  keeps any latent dependency between them failing reproducibly rather than intermittently.
+- **`pebuild run`** boots a built image in QEMU. The argument is either an `.iso` or the
+  manifest that wrote one — told apart by content, so a name that disagrees with what a file
+  actually is does not decide it — and with no argument, `pebuild.hcl` in the current
+  directory. It reads the image's own architecture to pick the emulator and machine, so one
+  command covers both: a 64-bit image gets `qemu-system-x86_64` (and, where the host cannot
+  accelerate it, a CPU model that advertises long mode), which a 32-bit emulator could never
+  boot. Hardware acceleration is used when `/dev/kvm` is available and quietly falls back to
+  emulation when it is not. `--ram` sizes guest memory and `--usb-tablet` adds a tablet for
+  seamless mouse. It deliberately does not build: a manifest naming no built image says so,
+  and points at building it.
+- **Prebuilt binaries.** This is the first release to ship prebuilt `pebuild` and `pewalk`
+  binaries. Linux and Windows are tested; macOS cross-compiles but is not runtime-verified, so
+  it is experimental. Building from source is documented per platform in
+  [`docs/install.md`](docs/install.md).
+
+### Fixed
+
+- **Shell binaries start on amd64.** Every shell binary an amd64 source ships requires the v6
+  Common-Controls side-by-side assembly, and the loader fails a process outright when it
+  cannot be resolved — so `explorer`, `notepad`, `taskmgr` and the rest did not start at all.
+  It is not the cosmetic difference it is on x86, where the assembly only decides whether
+  property sheets draw themed controls. The assembly, its manifest, the publisher policy and
+  their catalogs are now staged from the cabinet that holds them.
+- **The publisher policy is staged where a PE looks for it.** A PE runs with
+  `Setup\SetupType=1`, and in setup mode the loader reads publisher policies from
+  `WinSxS\setuppolicies` rather than `WinSxS\Policies`. With only the latter staged the
+  policy is never consulted: the assembly resolves when asked for by its own version, and
+  every request needing the version redirect fails with `14001`, however correct the files
+  are. This affects amd64 only — x86 media carry an assembly of the version its binaries ask
+  for, so the bind is direct and no policy is involved.
+- **Control Panel applets open on amd64.** `rundll32.exe`, which hosts every applet, carries
+  no manifest of its own on either architecture, and an assembly reference names an
+  architecture — so the x86 manifest shipped for it resolved to nothing on amd64 and every
+  applet failed to start. It now gets an architecture-matched one.
+- **"Turn Off Computer" powers the machine off on amd64.** The `ExitWindowsEx` hook was built
+  and staged for x86 only. Two things stopped it working: a 5-byte relative jump cannot span
+  a 64-bit address space, so the patch silently corrupted the function in every process that
+  loaded it; and the hook is injected before the host process's C runtime is initialized,
+  which aborted the process outright once the toolchain linked one in. The x86 binary is
+  unchanged.
+
+### Changed
+
+- **A plugin that cannot be built for the target architecture is refused by the build**, not
+  by the parser, and the error names the plugin and the missing section. It stays visible to
+  `pebuild plugins list` and `plugins info`, since a plugin that is never built is still a
+  plugin worth describing.
+- **A plugin build's output is checked against the target architecture.** `make` decides by
+  timestamp and no Makefile makes its outputs depend on the architecture, so building a
+  plugin for one architecture and then another in the same directory leaves the first one's
+  binary in place — which would then simply not run, with nothing in the build output
+  explaining why. Each produced file's machine type is now verified.
+- **The build refuses to write outside its output tree.** Destinations are assembled from
+  plugin-supplied pieces, and nothing rejected a path climbing out of the tree with `..`.
+
+### Known limitations
+
+Full detail for each is in [`docs/supported.md`](docs/supported.md).
+
+- **Folder Options and Taskbar properties do nothing on amd64** — both work on x86.
+- **A drive's Properties dialog does not work on amd64** — it works on x86.
+- **The `wallpaper` plugin does not render on amd64** — the desktop shows a flat colour; it
+  works on x86.
+- **Task Manager's User Name column shows unreadable characters** for all but *System Idle
+  Process* (cosmetic).
+- **There is no sound**, on either architecture — unchanged from 0.4.0.
+- **32-bit Windows Server 2003 sources remain untested.** The proven sources are Windows XP
+  SP3 (32-bit) and Windows XP Professional x64 Edition.
+
 ## [0.4.0] - 2026-07-20
 
 The 64-bit and desktop-maturity release. A **Windows XP Professional x64 Edition** source now
@@ -275,6 +383,7 @@ build runs in about 4 seconds and produces a roughly 45 MB ISO.
 - Targets Windows XP sources; other source flavors and output targets are planned.
 - No plugin system yet — a build is the base layer only.
 
+[0.5.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.5.0
 [0.4.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.4.0
 [0.3.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.3.0
 [0.2.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.2.0
