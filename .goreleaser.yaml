@@ -73,8 +73,11 @@ snapshot:
   version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
 
 changelog:
-  # CHANGELOG.md is hand-written and authoritative; never autogenerate from commits.
-  disable: true
+  # Do NOT set `disable: true`: goreleaser reads --release-notes (the body, from
+  # CHANGELOG.md) inside this pipe, so disabling it empties the release body.
+  disable: false
 
 release:
   draft: true
+  # -rc/-beta tags are marked pre-release; a plain version is a full release.
+  prerelease: auto

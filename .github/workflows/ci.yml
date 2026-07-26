@@ -5,6 +5,7 @@ name: CI
 
 on:
   push:
+    branches: [main] # tag pushes are handled by release.yml
   pull_request:
 
 permissions:
