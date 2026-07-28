@@ -32,12 +32,12 @@ goals:
 
 ## Bring your own Windows
 
-Like the original, pe-builder ships **no Microsoft files**. You supply your own
-licensed Windows installation source — Windows XP SP3, or Windows XP Professional x64
-Edition. The tool only reads and repackages files from the source you provide.
+Like the original, pe-builder ships **no Microsoft files**. You supply your own licensed
+Windows installation source, 32- or 64-bit; the tool only reads and repackages files from
+the source you provide.
 
-See [`docs/supported.md`](docs/supported.md) for what each source produces, and for the
-hardware an image expects.
+See [`docs/supported.md`](docs/supported.md) for which sources are supported and what each
+produces, and for the hardware an image expects.
 
 ## Status
 
@@ -63,7 +63,7 @@ Images are developed and tested in **QEMU**; booting on physical hardware is unt
 
 ## Quick start
 
-You need Go and a Windows XP SP3 installation source (an `.iso` or an extracted
+You need Go and a supported Windows installation source (an `.iso` or an extracted
 directory). A desktop image also needs the MinGW-w64 cross-compiler.
 Point the example manifest at your source and build:
 

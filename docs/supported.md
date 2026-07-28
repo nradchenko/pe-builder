@@ -13,8 +13,8 @@ mounted directory or an `.iso`.
 |---|---|---|---|---|---|
 | **Windows XP SP3 (32-bit)** | yes | verified | verified | verified | verified |
 | **Windows XP Professional x64 Edition (SP2)** | yes | verified | verified | verified | no — see below |
-| Windows Server 2003 (32-bit) | accepted | untested | untested | untested | untested |
-| Windows Server 2003 (x64) | accepted | untested | untested | untested | untested |
+| **Windows Server 2003 R2 SP2 (32-bit)** | yes | verified | verified | verified | not at boot — see below |
+| **Windows Server 2003 R2 SP2 (x64)** | yes | verified | verified | verified | no — see below |
 | Windows XP SP0 / SP1 / SP2 | **rejected** | — | — | — | — |
 | Windows 2000 and earlier | **rejected** | — | — | — | — |
 | Windows Fundamentals for Legacy PCs | **out of scope** | — | — | — | — |
@@ -27,8 +27,14 @@ media ships `ntdll` at); anything older is refused when the source is probed. SP
 last and universal XP service pack and supersedes the earlier ones, so building from SP0–SP2
 media has almost no practical use and is not a target.
 
-**Server 2003 is accepted but unproven.** It is newer than the floor, so nothing rejects it
-and it may well build — but no image has been verified from it.
+**Server 2003 reaches the themed Luna desktop on both architectures**, verified from R2 SP2
+volume-licence media — the media ships `luna.msstyles` just as XP does. It shares a codebase
+with XP x64 — both are build 3790 — and shares that codebase's known gaps; see
+[Known gaps on build 3790](#known-gaps-on-build-3790) below.
+
+A build takes its product identity from the source, so a Server 2003 one reports itself as a
+server: it boots under the server splash and names Server 2003 in System Properties, rather
+than presenting as XP.
 
 **Windows Fundamentals for Legacy PCs is out of scope**, despite being XP-based. Its OS ships
 as a Windows Imaging (`.wim`) image under `Setup\WIM`, and its `I386` holds a WinPE boot
@@ -41,7 +47,18 @@ An amd64 source produces the same themed desktop a 32-bit one does. Plugins that
 are compiled for the target architecture, so building one needs the 64-bit cross-compiler
 (`gcc-mingw-w64-x86-64`) rather than the 32-bit one.
 
-Three known gaps, all amd64-only and all working on a 32-bit build:
+### Known gaps on build 3790
+
+These gaps track the **source's codebase, not its architecture**. Build 3790 is shared by
+Windows Server 2003 and XP Professional x64 — the latter is that codebase with a workstation
+product type — so a 32-bit Server 2003 build hits them just as a 64-bit one does, while a
+32-bit XP build (2600) does not.
+
+| Gap | XP 2600 (x86) | 3790 (x86) | 3790 (x64) |
+|---|---|---|---|
+| Folder Options / Taskbar properties | works | fails | fails |
+| A drive's Properties dialog | works | fails | fails |
+| `wallpaper` renders | works | **not at boot**, applies manually | fails |
 
 - **Folder Options and Taskbar properties do nothing.** Both open through the same shell
   entry point, which posts a message to the shell window; Explorer receives it and does not
@@ -49,12 +66,25 @@ Three known gaps, all amd64-only and all working on a 32-bit build:
   delivered, and Explorer has the v6 Common-Controls assembly loaded — so the fault is inside
   Explorer's own handling of the message. The rest of Control Panel is unaffected.
 - **A drive's Properties dialog does not work.** Right-clicking a drive and choosing
-  **Properties** — the General/Hardware sheet that opens normally on a 32-bit build — does not
-  work on amd64. The cause is not yet established.
-- **The `wallpaper` plugin does not render.** The desktop comes up on a flat colour instead
-  of the image. The plugin builds and stages its files, and the wallpaper is configured in
-  the registry, but the Active Desktop surface does not paint it on amd64. The cause is not
-  yet established.
+  **Properties** — the General/Hardware sheet that opens normally on a 2600 build — does
+  nothing. The cause is not yet established.
+- **The `wallpaper` plugin does not render at boot.** The desktop comes up on a flat colour
+  instead of the image. The plugin builds and stages its files, and the wallpaper is
+  configured in the registry — verified in the built hives: `Wallpaper` is a `REG_EXPAND_SZ`
+  pointing at `bliss.jpg`, `mshtml.dll` is queued for self-registration, and the desktop's
+  `NoActiveDesktop` policy is lifted back to `0`.
+
+  Unlike the gaps above, this one does **not** split cleanly along the codebase, and the
+  32-bit 3790 build is what shows why: there, **the wallpaper can be applied by hand after
+  boot and renders correctly**. So the Active Desktop surface, the HTML engine, and the image
+  all work on 3790/x86 — only the applying-at-boot step fails, which is peshell's, not
+  Windows'. On x64 it does not appear at all. Whether those are one fault or two is open: it
+  turns on whether a manual apply also works on x64, which has not been tried. If it does,
+  this is a single boot-time-apply bug; if it does not, the boot-apply failure follows the
+  codebase and a second, rendering failure follows the architecture.
+
+Because these reproduce on a 32-bit 3790 build, they can now be investigated without 64-bit
+debugging — and any theory resting on something amd64-specific is already falsified.
 
 ## Output
 
@@ -124,14 +154,25 @@ profile.
 
 ## Known limitations
 
-These apply to any build. The amd64-only gaps are under
-[What differs on an x64 build](#what-differs-on-an-x64-build) above.
+These apply to any build. Gaps specific to the Server 2003 codebase are under
+[Known gaps on build 3790](#known-gaps-on-build-3790) above.
 
 - **No sound.** No audio device is configured, and the Windows Audio service is deliberately
   disabled: with it enabled, a system sound blocks in `waveOut` on a service stuck in
   `START_PENDING`, which hangs the shell's tray thread and cascades every folder window into
   *Not Responding*. Anything that would play audio runs silently instead — the bundled games
   are playable but mute, and this is why Pinball is not among them.
+- **My Documents has no desktop icon** — it is hidden deliberately, because the icon does not
+  work: double-clicking it does nothing. **The folder itself is fine and still reachable from
+  the Start menu**, which is why only the icon is removed.
+
+  The split is the useful clue: the Start-menu entry opens a filesystem path, while the desktop
+  icon is a namespace object (`{450D8FBA-AD25-11D0-98A8-0800361B1103}`) that must be
+  instantiated through COM. So the profile directory and the `Personal` path are both good, and
+  it is the shell folder object that does not come up. Consistent with the built `SOFTWARE`
+  hive carrying no `Classes\CLSID` entry for it on any source — though that alone proves
+  little, since peshell's self-registration creates shell classes at run time and only the
+  *runtime* hive would settle it.
 - **Task Manager shows unreadable characters in its User Name column,** for every process
   except *System Idle Process*. The cause is not established; the leading suspicion is that a
   PE ships empty SAM and SECURITY hives (deliberately — see the note in `build/hives.go`), so
