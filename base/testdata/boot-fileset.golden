@@ -97,7 +97,6 @@ oprghdlr.sys
 pciidex.sys
 peer.exe
 pentnt.exe
-portmon.exe
 powrprof.dll
 print.exe
 profmap.dll
@@ -130,7 +129,6 @@ svchost.exe
 sxs.dll
 tahoma.ttf
 txtsetup.sif
-tzchange.exe
 ulib.dll
 umpnpmgr.dll
 unicode.nls

@@ -107,8 +107,6 @@ copy dxgthk.sys dir="4" rename="" area=system flags=-
 copy olesvr.dll dir="" rename="" area=system flags=-
 copy peer.exe dir="" rename="" area=system flags=-
 copy pentnt.exe dir="" rename="" area=system flags=-
-copy portmon.exe dir="" rename="" area=system flags=-
-copy tzchange.exe dir="" rename="" area=system flags=-
 copy vdmdbg.dll dir="" rename="" area=system flags=-
 copy vga256.dll dir="" rename="" area=system flags=-
 copy vga64k.dll dir="" rename="" area=system flags=-

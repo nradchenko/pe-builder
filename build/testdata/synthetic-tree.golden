@@ -1,5 +1,5 @@
 identity: winxp build 2600 (i386)
-written: 116
+written: 114
 skipped: [cabonly.sys]
 hives: [i386/system32/SETUPREG.HIV i386/system32/config/SOFTWARE i386/system32/config/DEFAULT i386/system32/config/SAM i386/system32/config/SECURITY]
 
@@ -84,7 +84,6 @@ i386/system32/odbcint.dll
 i386/system32/olesvr.dll
 i386/system32/peer.exe
 i386/system32/pentnt.exe
-i386/system32/portmon.exe
 i386/system32/powrprof.dll
 i386/system32/print.exe
 i386/system32/processr.sys
@@ -104,7 +103,6 @@ i386/system32/startnet.cmd
 i386/system32/svchost.exe
 i386/system32/sxs.dll
 i386/system32/tahoma.ttf
-i386/system32/tzchange.exe
 i386/system32/unicode.nls
 i386/system32/userinit.exe
 i386/system32/usp10.dll
