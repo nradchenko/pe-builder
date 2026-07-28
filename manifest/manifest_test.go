@@ -84,6 +84,11 @@ plugin "shell" {
 		},
 	}
 
+	// The digest is asserted on its own (TestDecodeFingerprints); pinning the literal
+	// hash here would make every unrelated edit to the fixture a hash update.
+	want.Path = got.Path
+	want.Digest = got.Digest
+
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("Decode mismatch (-want +got):\n%s", diff)
 	}
@@ -109,8 +114,46 @@ plugin "p" {}
 		},
 	}
 
+	// The digest is asserted on its own (TestDecodeFingerprints); pinning the literal
+	// hash here would make every unrelated edit to the fixture a hash update.
+	want.Path = got.Path
+	want.Digest = got.Digest
+
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("defaults mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// A decoded manifest carries its own fingerprint: the file it came from (informational)
+// and a digest of its source bytes, which is the identity a build receipt records.
+func TestDecodeFingerprints(t *testing.T) {
+	src := []byte("source { path = \"/isos/winxp.iso\" }\noutput { path = \"./out/rescue.iso\" }\n")
+	got, err := Decode(src, "test.hcl")
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if got.Path != "test.hcl" {
+		t.Errorf("Path = %q, want test.hcl", got.Path)
+	}
+	if !strings.HasPrefix(got.Digest, "sha256:") {
+		t.Errorf("Digest = %q, want a sha256-tagged digest", got.Digest)
+	}
+
+	// The same bytes give the same digest; a change that decodes to the same manifest
+	// still reads as a different manifest, because the text is what is fingerprinted.
+	again, err := Decode(src, "elsewhere.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Digest != got.Digest {
+		t.Errorf("the same source hashed differently: %s vs %s", again.Digest, got.Digest)
+	}
+	spaced, err := Decode(append(src, '\n'), "test.hcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spaced.Digest == got.Digest {
+		t.Error("a changed manifest hashed the same")
 	}
 }
 

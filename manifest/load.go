@@ -12,6 +12,8 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
+
+	"github.com/nradchenko/pe-builder/internal/enginehash"
 )
 
 // raw* types mirror the HCL schema for gohcl decoding. They stay unexported so the
@@ -81,8 +83,8 @@ func Load(path string) (*Manifest, error) {
 	return Decode(src, path)
 }
 
-// Decode parses and defaults manifest source bytes. filename is used only in
-// diagnostics.
+// Decode parses and defaults manifest source bytes. filename is recorded as the
+// manifest's path and used in diagnostics.
 func Decode(src []byte, filename string) (*Manifest, error) {
 	file, diags := hclparse.NewParser().ParseHCL(src, filename)
 	if diags.HasErrors() {
@@ -94,7 +96,16 @@ func Decode(src []byte, filename string) (*Manifest, error) {
 		return nil, diags
 	}
 
-	return toManifest(&raw)
+	m, err := toManifest(&raw)
+	if err != nil {
+		return nil, err
+	}
+	// Fingerprint the source bytes, not the decoded value: it is what a later build
+	// receipt records, and hashing the text means a change that decodes to the same
+	// manifest still reads as a different manifest.
+	m.Path = filename
+	m.Digest = enginehash.SumBytes(src)
+	return m, nil
 }
 
 // toManifest maps the decoded raw manifest to the public type, applying defaults.

@@ -39,6 +39,13 @@ type Manifest struct {
 	Build      Build
 	PluginsDir string
 	Plugins    []Plugin
+	// Path is the file the manifest was read from, empty when it was decoded from
+	// bytes with no file behind them. It is informational: a manifest that moved or
+	// was renamed is still the same manifest.
+	Path string
+	// Digest is "sha256:<hex>" over the manifest source bytes — the identity a build
+	// records, so a build can be told apart from one made with an edited manifest.
+	Digest string
 }
 
 // Source describes the Windows installation source to build from.
