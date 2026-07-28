@@ -167,19 +167,26 @@ not simply consume 14 bytes of it.
 `ecx`/`edx` exactly as the real `ExitWindowsEx` reads them — so callers jump straight in on
 both, and the replacement needs no signature change.
 
-### Why the amd64 build is freestanding
+### Why the build is freestanding
 
 `AppInit_DLLs` is loaded by user32 from its own `DLL_PROCESS_ATTACH`, **before the host
 process's C runtime is initialized**. MinGW's startup stubs pull in `msvcrt` even though
 nothing in `peshut.c` calls it, and touching an uninitialized CRT there aborts the process
-with `R6030`. The amd64 build therefore links with `-nostdlib -nodefaultlibs` and
-`DllMain` as its entry point, importing only `kernel32` and `advapi32`; the source is pure
-Win32 API, so it loses nothing. Relocations are unaffected — the code is RIP-relative and
-`RELOCS_STRIPPED` stays clear — so the DLL can still be rebased, which matters for one
+with `R6030`. Both architectures therefore link with `-nostdlib -nodefaultlibs` and
+`DllMain` as the entry point, importing only `kernel32` and `advapi32`; the source is pure
+Win32 API, so it loses nothing. Relocations are unaffected — `HAS_RELOC` is set and the
+`.reloc` section survives on both — so the DLL can still be rebased, which matters for one
 injected into every process.
 
-x86 is deliberately left on the stock link line: it is the build that was verified by
-booting, and its output is expected to stay byte-identical.
+x86 was once left on the stock link line, which worked only because XP's `msvcrt` tolerated
+it; on Server 2003 the same binary aborts every GUI process at shell start. The giveaway is
+an empty `Program:` field in the dialog — `_pgmptr` is filled in during the CRT init that
+never ran.
+
+The entry point has to be named once the startup stubs are gone, and only i386 decorates it
+(`_DllMain@12`). A name the linker cannot find is merely a **warning**: it leaves the start
+address at 0 and emits a DLL that links cleanly but cannot load, so check `objdump -f` after
+touching that line.
 
 **A correction worth recording**, because it was believed and acted on: the `R6030` was
 *not* caused by the truncated `rel32`. That was assumed from the fact that removing peshut

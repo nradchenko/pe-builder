@@ -7,9 +7,10 @@
 # Needs a MinGW-w64 toolchain (see docs/install.md for the per-platform setup).
 #
 # ARCH selects the target architecture (i386 or amd64), defaulting to i386; the plugin's
-# [Build.<arch>] Command passes it. These are user-mode binaries, so the architecture
-# changes nothing but the toolchain — no arch define, no entry-point decoration, no
-# subsystem version, unlike the driver plugins.
+# [Build.<arch>] Command passes it. These are user-mode binaries, so the architecture picks
+# the toolchain and nothing else — no arch define and no subsystem version, unlike the driver
+# plugins. The one exception is peshut.dll's entry-point symbol, which i386 decorates; see
+# the note on PESHUT_FLAGS below.
 #
 # Both must match the PE's architecture. peshut.dll especially: it is injected into other
 # processes through AppInit_DLLs, and a process only loads a DLL of its own bitness — a
@@ -28,15 +29,16 @@ CC      := $(TRIPLE)-gcc
 # -Wl,--no-insert-timestamp zeroes the PE TimeDateStamp for reproducible output.
 LDFLAGS := -Wl,--no-insert-timestamp
 
-# peshut.dll is injected before the host process's CRT is initialized, so on amd64 it must
-# not link one in: MinGW's startup stubs would pull in msvcrt and the process would abort
-# with R6030. Freestanding, it imports only kernel32/advapi32. x86 stays on the stock link
-# line — it is the build that was verified by booting. See README.md § Shutdown.
-PESHUT_FLAGS :=
-PESHUT_LIBS  := -ladvapi32
+# peshut.dll must link no CRT, on either architecture — see README.md § Why the build is
+# freestanding. That means naming the entry point, and only i386 decorates it (stdcall). A
+# name the linker cannot find is merely a *warning*: it leaves the start address at 0 and
+# emits a DLL that links cleanly but cannot load, so check `objdump -f` after touching this.
+PESHUT_FLAGS := -nostdlib -nodefaultlibs
+PESHUT_LIBS  := -ladvapi32 -lkernel32
 ifeq ($(ARCH),amd64)
-  PESHUT_FLAGS := -nostdlib -nodefaultlibs -Wl,--entry,DllMain
-  PESHUT_LIBS  := -ladvapi32 -lkernel32
+  PESHUT_FLAGS += -Wl,--entry,DllMain
+else
+  PESHUT_FLAGS += -Wl,--entry,_DllMain@12
 endif
 
 .PHONY: all clean
