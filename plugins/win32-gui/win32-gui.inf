@@ -24,14 +24,30 @@ comdlg32.dll
 ole32.dll
 oleaut32.dll
 
-; The Common-Controls 6.0 side-by-side assembly. The apps request version 6.0.0.0, which
-; binds directly to the source's own 6.0.0.0 assembly (I386\ASMS\6000) — the v6 comctl32
-; and its manifest — with no publisher policy. Sourced by exact path because comctl32.dll
-; and the manifest share basenames with other files a name lookup would reach first.
+; The Common-Controls 6.0 side-by-side assembly. Where the source keeps it follows the
+; product, not the architecture, so the x86 entries are scoped by build number and there is
+; no unsuffixed fallback. See README.md § Where the assembly comes from.
 ;
-[SourcePaths.i386]
+; XP (2600): loose under I386\ASMS\6000, versioned 6.0.0.0 — what the apps ask for, so it
+; binds with no publisher policy. Sourced by exact path because comctl32.dll and the manifest
+; share basenames with other files a name lookup would reach first.
+[SourcePaths.i386.2600]
 ASMS\6000\MSFT\WINDOWS\COMMON\CONTROLS\COMCTL32.DLL = i386\WinSxS\x86_Microsoft.Windows.Common-Controls_6595b64144ccf1df_6.0.0.0_x-ww_1382d70a\comctl32.dll
 ASMS\6000\MSFT\WINDOWS\COMMON\CONTROLS\CONTROLS.MAN = i386\WinSxS\Manifests\x86_Microsoft.Windows.Common-Controls_6595b64144ccf1df_6.0.0.0_x-ww_1382d70a.manifest
+
+; Server 2003 (3790): packed in ASMS01.CAB and versioned 6.0.3790.3959, as on amd64, so each
+; path names a cabinet member and the publisher policy below is required for the bind.
+[SourcePaths.i386.3790]
+x86_microsoft.windows.common-controls_6595b64144ccf1df_6.0.3790.3959_x-ww_d8713e55\comctl32.dll = i386\WinSxS\x86_Microsoft.Windows.Common-Controls_6595b64144ccf1df_6.0.3790.3959_x-ww_d8713e55\comctl32.dll
+manifests\x86_microsoft.windows.common-controls_6595b64144ccf1df_6.0.3790.3959_x-ww_d8713e55.manifest = i386\WinSxS\Manifests\x86_Microsoft.Windows.Common-Controls_6595b64144ccf1df_6.0.3790.3959_x-ww_d8713e55.manifest
+policies\x86_policy.6.0.microsoft.windows.common-controls_6595b64144ccf1df_x-ww_5ddad775\6.0.3790.3959.policy = i386\WinSxS\Policies\x86_policy.6.0.Microsoft.Windows.Common-Controls_6595b64144ccf1df_x-ww_5ddad775\6.0.3790.3959.policy
+; The same policy again, under setuppolicies — the copy that actually makes the bind work,
+; for the same reason it does on amd64. See README.md § Where the policy has to live.
+policies\x86_policy.6.0.microsoft.windows.common-controls_6595b64144ccf1df_x-ww_5ddad775\6.0.3790.3959.policy = i386\WinSxS\setuppolicies\x86_policy.6.0.Microsoft.Windows.Common-Controls_6595b64144ccf1df_x-ww_5ddad775\6.0.3790.3959.policy
+; The catalogs beside the manifest and the policy. Staged for parity with a real install,
+; not because the bind needs them. See README.md § Catalogs.
+manifests\x86_microsoft.windows.common-controls_6595b64144ccf1df_6.0.3790.3959_x-ww_d8713e55.cat = i386\WinSxS\Manifests\x86_Microsoft.Windows.Common-Controls_6595b64144ccf1df_6.0.3790.3959_x-ww_d8713e55.cat
+policies\x86_policy.6.0.microsoft.windows.common-controls_6595b64144ccf1df_x-ww_5ddad775\6.0.3790.3959.cat = i386\WinSxS\Policies\x86_policy.6.0.Microsoft.Windows.Common-Controls_6595b64144ccf1df_x-ww_5ddad775\6.0.3790.3959.cat
 
 ; The same assembly on an amd64 source: packed inside ASMS01.CAB rather than laid out loose,
 ; so each path names a member of that cabinet. Not optional here — without it no shell binary

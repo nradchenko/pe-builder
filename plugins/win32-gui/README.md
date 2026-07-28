@@ -35,26 +35,36 @@ more than x86 does — see below.
 The assembly itself is sourced by exact path rather than by name, because `comctl32.dll`
 and the manifest share basenames with other files a name lookup reaches first.
 
-## Architecture
+## Where the assembly comes from
 
-Both architectures stage the assembly, from different places and with different
-consequences, so the `[SourcePaths]` entries are scoped per architecture.
+Every source stages the assembly, but from different places and with different
+consequences, so the `[SourcePaths]` entries are scoped.
 
-On amd64 it is **not optional and not cosmetic**. Every shell binary the source ships
-embeds a manifest requiring this assembly, and when it cannot be resolved the loader fails
-the process outright — `explorer`, `notepad`, `taskmgr`, `calc` and the rest do not start
-at all. There is no v5 fallback.
+**The split follows the product, not the architecture.** Windows XP x86 is the odd one out;
+Server 2003 — on either architecture — ships the assembly the way an amd64 source does,
+because XP Professional x64 Edition and Server 2003 are one codebase. So the x86 entries are
+scoped by build number rather than by `i386` alone.
 
-Three things differ from x86:
+|  | XP x86 (2600) | Server 2003 and amd64 (3790) |
+|---|---|---|
+| Stored | loose under `ASMS\6000` | packed in `ASMS01.CAB` |
+| Version | 6.0.0.0 | 6.0.3790.3959 |
+| Publisher policy | not needed | **required** |
 
-- **It is packed, not loose.** An amd64 source keeps the side-by-side assemblies inside
-  `AMD64\ASMS01.CAB` rather than in a loose `ASMS` tree, so each entry names a member of
-  that cabinet by its full internal path.
-- **A publisher policy is required.** The amd64 assembly is version 6.0.3790.3959, while
-  the binaries ask for 6.0.0.0 — they reach it only through the policy's
-  `bindingRedirect`. x86 needs no policy at all: its media carry a real 6.0.0.0 assembly,
-  so the bind is direct. That difference is why this whole problem is amd64-only.
-- **The policy has to go where a PE looks for it** — see below.
+Where the assembly is packed, each entry names a cabinet member by its full internal path.
+Where it is versioned 6.0.3790.3959, binaries asking for 6.0.0.0 reach it only through the
+policy's `bindingRedirect`; XP x86 media carry a real 6.0.0.0 assembly, so that bind is
+direct and needs no policy. The policy also has to go where a PE looks for it — see below.
+
+On amd64 this is **not optional and not cosmetic**: every shell binary embeds a manifest
+requiring the assembly, and when it cannot be resolved the loader fails the process outright
+— `explorer`, `notepad`, `taskmgr`, `calc` and the rest do not start at all. There is no v5
+fallback.
+
+There is deliberately no unsuffixed x86 fallback. The two layouts share no path, so either
+one used as a default would be wrong for the other, and a build the probe cannot classify has
+nothing to choose with — such a source stages no assembly and its shell binaries do not
+start. Supporting another build means adding its section.
 
 ### Where the policy has to live
 
