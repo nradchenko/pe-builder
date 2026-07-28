@@ -4,10 +4,12 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"path/filepath"
 	"sort"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -150,6 +152,32 @@ func printAvailable(w io.Writer, avail []plugin.Available) {
 	tw.Flush()
 }
 
+// printPluginOptions lists the knobs a manifest may set on the plugin, and the default each
+// takes when it does not. A plugin declaring none prints nothing rather than an empty heading.
+func printPluginOptions(w io.Writer, opts []plugin.Option) {
+	if len(opts) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "\nOptions: %d\n", len(opts))
+	// Buffered so every row can carry all four cells: dropping the trailing one on options
+	// that constrain nothing ends tabwriter's column block there and misaligns the allowed
+	// sets below. The padding that leaves is trimmed per line instead.
+	var buf bytes.Buffer
+	tw := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "  NAME\tDEFAULT\tTYPE\tALLOWED")
+	for _, o := range opts {
+		t := o.Type
+		if t == "" {
+			t = plugin.OptionString // an omitted type is a string; show what it resolves to
+		}
+		fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\n", o.Name, o.Default, t, strings.Join(o.Allowed, ", "))
+	}
+	tw.Flush()
+	for _, line := range strings.Split(strings.TrimRight(buf.String(), "\n"), "\n") {
+		fmt.Fprintln(w, strings.TrimRight(line, " \t"))
+	}
+}
+
 func printPluginInfo(w io.Writer, p *plugin.Plugin, source string) {
 	fmt.Fprintf(w, "Name:    %s\n", p.Name)
 	fmt.Fprintf(w, "Source:  %s\n", source)
@@ -174,6 +202,8 @@ func printPluginInfo(w io.Writer, p *plugin.Plugin, source string) {
 		}
 		fmt.Fprintln(w)
 	}
+
+	printPluginOptions(w, p.Options)
 
 	fmt.Fprintf(w, "\nActions: %d\n", len(p.Actions))
 	counts := map[action.Kind]int{}
