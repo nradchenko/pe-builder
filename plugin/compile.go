@@ -76,11 +76,7 @@ func Compile(selected []Selected, pw *pewalk.Source, resolveTarget func(action.A
 		// Resolve the plugin's options (declared defaults overlaid with the manifest's
 		// validated overrides) and substitute them into the value data of its actions
 		// before excludes and origin-stamping apply.
-		declared, err := declaredOptions(d)
-		if err != nil {
-			return nil, nil, fmt.Errorf("plugin %q: %w", d.Name, err)
-		}
-		values, err := ResolveOptions(declared, s.Override.Options)
+		values, err := EffectiveOptions(s)
 		if err != nil {
 			return nil, nil, fmt.Errorf("plugin %q: %w", d.Name, err)
 		}

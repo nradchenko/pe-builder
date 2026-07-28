@@ -161,6 +161,19 @@ func declaredOptions(d *Discovered) ([]Option, error) {
 	return out, nil
 }
 
+// EffectiveOptions returns the option values a selected plugin is built with: its
+// declared defaults overlaid with the manifest's overrides. Compile substitutes exactly
+// these into the plugin's INF values, so a caller that needs to *report* what a build
+// used (the build receipt) reads them from here rather than recomputing the overlay and
+// risking a different answer.
+func EffectiveOptions(s Selected) (map[string]string, error) {
+	declared, err := declaredOptions(s.Plugin)
+	if err != nil {
+		return nil, err
+	}
+	return ResolveOptions(declared, s.Override.Options)
+}
+
 // ResolveOptions overlays a manifest's option overrides on a plugin's declared option
 // defaults, validating each override against its declaration, and returns the effective
 // value of every declared option keyed by its declared name. An override of an option the
