@@ -195,7 +195,8 @@ static void prune_ghost_cpl(void){
 /* The "Please wait..." status splash (see README.md § Splash). Runs on its own thread so it keeps
  * animating while the main thread works; the banner is loaded from the source's msgina.dll at
  * runtime (resource 101), the thin bar is drawn ourselves (no comctl6). */
-#define GINA_BANNER_BITMAP 101     /* msgina.dll: the ~413x88 "Windows" branding banner */
+#define GINA_BANNER_BITMAP 101     /* msgina.dll: the workstation branding banner */
+#define GINA_BANNER_SERVER 130     /* the Standard Edition one; see README.md § Which banner */
 static HWND g_splash=NULL;
 static char g_status[128]="Please wait...";
 static HANDLE g_splashReady=NULL;
@@ -205,11 +206,22 @@ static int g_marquee=0;
 #define WM_SPLASH_UPDATE (WM_APP+1)
 
 /* Load the banner bitmap from the source's msgina.dll (as a data file — resources only, no import
- * resolution). LR_CREATEDIBSECTION copies it into a standalone bitmap so the module can be freed. */
+ * resolution). LR_CREATEDIBSECTION copies it into a standalone bitmap so the module can be freed.
+ *
+ * Server media leaves 101 as the workstation artwork and brands its own banner at another
+ * resource, so which one to ask for follows the product — see README.md § Which banner. The
+ * product resolves to the ProductType the build reads from the source, so a wrong value there
+ * surfaces here as the wrong logo rather than as anything louder. */
 static HBITMAP load_gina_banner(void){
     HMODULE m=LoadLibraryExA("msgina.dll",NULL,LOAD_LIBRARY_AS_DATAFILE);
     if(!m) return NULL;
-    HBITMAP b=(HBITMAP)LoadImageA(m,MAKEINTRESOURCEA(GINA_BANNER_BITMAP),IMAGE_BITMAP,0,0,LR_CREATEDIBSECTION);
+    HBITMAP b=NULL;
+    OSVERSIONINFOEXA vi; ZeroMemory(&vi,sizeof vi); vi.dwOSVersionInfoSize=sizeof vi;
+    if(GetVersionExA((OSVERSIONINFOA*)&vi) && vi.wProductType!=VER_NT_WORKSTATION)
+        b=(HBITMAP)LoadImageA(m,MAKEINTRESOURCEA(GINA_BANNER_SERVER),IMAGE_BITMAP,0,0,LR_CREATEDIBSECTION);
+    /* Fall back to the workstation banner: it is the one every source has. */
+    if(!b)
+        b=(HBITMAP)LoadImageA(m,MAKEINTRESOURCEA(GINA_BANNER_BITMAP),IMAGE_BITMAP,0,0,LR_CREATEDIBSECTION);
     FreeLibrary(m);
     return b;
 }

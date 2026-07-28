@@ -136,7 +136,16 @@ desktop instead of flipping in over it a moment later.
 The "Please wait…" window mimics the Windows startup/shutdown status dialog: a title bar,
 the Windows branding banner (loaded from the source's `msgina.dll`) across the top, a thin
 running blue↔orange bar beneath it, and the current phase text. It runs on its own thread
-so it keeps animating during the bring-up.
+so it keeps animating during the bring-up. The window sizes itself from the bitmap it loads.
+
+### Which banner
+
+Server media keeps its workstation-branded banner at resource 101 and carries the
+edition-branded ones elsewhere, so reading 101 unconditionally splashes a Server 2003 build
+under a Windows XP logo. peshell asks for **130** (Standard Edition) when `GetVersionEx`
+reports a non-workstation product and 101 otherwise, falling back to 101, the only one every
+source has. Standard because the environment reports an empty `ProductSuite`; the other
+editions sit at 131–135 and 144–147 if that ever needs selecting.
 
 ## Shutdown
 
