@@ -301,6 +301,15 @@ vga64k.dll   =
 0x1,"Microsoft\Windows NT\CurrentVersion\Winlogon","Shell","cmd.exe"
 0x1,"Microsoft\Windows NT\CurrentVersion\Winlogon","ShutdownWithoutLogon","1"
 
+; Shutdown Event Tracker off — a server SKU otherwise demands a reason before it will shut
+; down. Both values are needed (one disables the feature, the other the prompt), in both
+; locations (Policies wins where set; CurrentVersion is what an unmanaged machine reads).
+; Inert on a workstation, so it is set unconditionally rather than per product.
+0x4,"Policies\Microsoft\Windows NT\Reliability","ShutdownReasonOn",0x0
+0x4,"Policies\Microsoft\Windows NT\Reliability","ShutdownReasonUI",0x0
+0x4,"Microsoft\Windows NT\CurrentVersion\Reliability","ShutdownReasonOn",0x0
+0x4,"Microsoft\Windows NT\CurrentVersion\Reliability","ShutdownReasonUI",0x0
+
 ; The svchost group table: tells "svchost -k rpcss" which service(s) to host.
 0x7,"Microsoft\Windows NT\CurrentVersion\Svchost","rpcss","RpcSs"
 

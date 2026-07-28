@@ -112,6 +112,10 @@ copy vga256.dll dir="" rename="" area=system flags=-
 copy vga64k.dll dir="" rename="" area=system flags=-
 addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Winlogon" value="Shell" data="cmd.exe"
 addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Winlogon" value="ShutdownWithoutLogon" data="1"
+addreg hive=software type=0x4 subkey="Policies\\Microsoft\\Windows NT\\Reliability" value="ShutdownReasonOn" data="0x0"
+addreg hive=software type=0x4 subkey="Policies\\Microsoft\\Windows NT\\Reliability" value="ShutdownReasonUI" data="0x0"
+addreg hive=software type=0x4 subkey="Microsoft\\Windows NT\\CurrentVersion\\Reliability" value="ShutdownReasonOn" data="0x0"
+addreg hive=software type=0x4 subkey="Microsoft\\Windows NT\\CurrentVersion\\Reliability" value="ShutdownReasonUI" data="0x0"
 addreg hive=software type=0x7 subkey="Microsoft\\Windows NT\\CurrentVersion\\Svchost" value="rpcss" data="RpcSs"
 addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Fonts" value="Tahoma (TrueType)" data="TAHOMA.TTF"
 addreg hive=software type=0x1 subkey="Microsoft\\Windows NT\\CurrentVersion\\Fonts" value="Microsoft Sans Serif (TrueType)" data="micross.ttf"
