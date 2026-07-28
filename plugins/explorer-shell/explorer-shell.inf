@@ -37,6 +37,9 @@ show_version       = 0, int, 0, 1
 ; Drop "My Recent Documents" from the Start menu (1 = hidden). A PE has no meaningful document
 ; history, so it is hidden by default.
 hide_recent_docs   = 1, int, 0, 1
+; Let the taskbar be dragged and resized (1 = unlocked). Locked by default, as XP is; Server
+; 2003 ships the opposite default, so stating it keeps a build the same on either source.
+unlock_taskbar     = 0, int, 0, 1
 
 ; Both binaries are the same source on either architecture; only the toolchain differs, so
 ; the shared [Build] holds the outputs and each [Build.<arch>] names that architecture's
@@ -271,6 +274,10 @@ msgina.dll = 2
 0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","EnableBalloonTips",0x0
 0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","Start_NotifyNewApps",0x0
 0x4,"Software\Microsoft\Windows\CurrentVersion\Applets\Tour","RunCount",0x0
+
+; Taskbar lock: TaskbarSizeMove is 0 when the taskbar cannot be moved or sized, 1 when it can,
+; which is why the option is named for unlocking and substitutes straight in.
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","TaskbarSizeMove",$(unlock_taskbar)
 
 ; Start menu style: 1 = classic, 0 or absent = the modern panel. The NoSimpleStartMenu policy,
 ; which would force classic and hide the choice, stays unset. See README.md § Modern Start menu.
