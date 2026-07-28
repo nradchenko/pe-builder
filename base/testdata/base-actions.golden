@@ -207,7 +207,6 @@ addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\App
 addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\WPA" value="" data=""
 addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\SFC" value="CommonFilesDir" data="\\"
 addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Session Manager\\SFC" value="ProgramFilesDir" data="\\"
-addreg hive=system type=0x1 subkey="ControlSet001\\Control\\ProductOptions" value="ProductType" data="WinNT"
 addreg hive=system type=0x7 subkey="ControlSet001\\Control\\ProductOptions" value="ProductSuite" data=""
 addreg hive=system type=0x1 subkey="ControlSet001\\Services\\VgaSave" value="Group" data="Video Save"
 addreg hive=system type=0x2 subkey="ControlSet001\\Services\\VgaSave" value="ImagePath" data="\\SystemRoot\\System32\\drivers\\vga.sys"
@@ -310,3 +309,4 @@ copy kbdru.dll dir="2" rename="" area=system flags=-
 addreg hive=default type=0x1 subkey="Keyboard Layout\\Preload" value="2" data="00000419"
 addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Keyboard Layouts\\00000419" value="Layout File" data="KBDRU.DLL"
 addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Keyboard Layouts\\00000419" value="Layout Text" data="Russian"
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\ProductOptions" value="ProductType" data="WinNT"

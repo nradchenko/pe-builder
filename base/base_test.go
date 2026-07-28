@@ -83,7 +83,7 @@ func TestDriverActions(t *testing.T) {
 // the whole action set against a golden rendering, so a change to base.inf is a
 // visible, reviewable diff.
 func TestActions(t *testing.T) {
-	acts, err := Actions(nil, fixtureLayout(), source.Identity{Build: 2600, Arch: "i386"})
+	acts, err := Actions(nil, fixtureLayout(), source.Identity{Flavor: "winxp", Build: 2600, Arch: "i386"})
 	if err != nil {
 		t.Fatal(err)
 	}

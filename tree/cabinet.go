@@ -21,10 +21,12 @@ import (
 // loosely in the source still wins over all of them (see readSource) — the loose copy
 // is the slipstreamed, current one.
 //
-// ASMS01.CAB holds the side-by-side assemblies. x86 media lay those out loosely under
-// ASMS\, but amd64 media pack them here, so it is the only place the amd64 v6
-// Common-Controls assembly can be read from. It is consulted last: it shares no member
-// with the driver cabinets, so its position only decides which wins if that ever changes.
+// ASMS01.CAB holds the side-by-side assemblies. Whether a source packs them here or lays
+// them out loosely under ASMS\ is a property of the product, not the architecture: XP x86
+// keeps them loose, while amd64 media and Server 2003 x86 both pack them, so for those it is
+// the only place the v6 Common-Controls assembly can be read from. It is consulted last: it
+// shares no member with the driver cabinets, so its position only decides which wins if that
+// ever changes.
 var cabNames = []string{"sp3.cab", "sp2.cab", "sp1.cab", "driver.cab", "asms01.cab"}
 
 // cabinets extracts the members named in a wanted set from the source's driver

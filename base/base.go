@@ -71,5 +71,6 @@ func Actions(pw *pewalk.Source, l *layout.Layout, id source.Identity) ([]action.
 	acts = append(acts, seed...)
 	acts = append(acts, driverActions(l)...)
 	acts = append(acts, localeActions(l)...)
+	acts = append(acts, productActions(l)...)
 	return acts, nil
 }

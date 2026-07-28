@@ -488,8 +488,9 @@ vga64k.dll   =
 ; and garbled its Cyrillic text, so matching the working reference (no override) is
 ; correct.
 
-; Product identification some components read during startup.
-0x1,"ControlSet001\Control\ProductOptions","ProductType","WinNT"
+; Product identification some components read during startup. ProductType is not here: it
+; differs between two sources that share a build number and an architecture, which no section
+; suffix can distinguish, so it is read from the source's own txtsetup.sif in product.go.
 0x7,"ControlSet001\Control\ProductOptions","ProductSuite",""
 
 ; The generic VGA display driver the Win32 subsystem falls back to. win32k resolves

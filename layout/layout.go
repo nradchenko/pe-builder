@@ -85,6 +85,10 @@ type Layout struct {
 	// NLS is the source's national-language configuration (code pages, OEM console
 	// font, language ID), read from txtsetup.sif's [nls] section.
 	NLS NLS
+	// ServerProduct reports whether the source is a server product, from txtsetup.sif's
+	// [SetupData] ProductType. It is the media's own answer, and the only thing that
+	// separates XP Professional x64 Edition from Server 2003 x64.
+	ServerProduct bool
 }
 
 // NLS is a source's national-language configuration from txtsetup.sif's [nls]
@@ -137,7 +141,22 @@ func Parse(src source.Backing, id source.Identity) (*Layout, error) {
 	l.readFiles(txt, id.Build, suffix)
 	l.readLoad(txt, id.Build)
 	l.readNLS(txt, id.Build)
+	l.readSetupData(txt, id.Build)
 	return l, nil
+}
+
+// readSetupData fills ServerProduct from txtsetup.sif's [SetupData] ProductType, which
+// the media states as 0 for a workstation and 1 for a server. Absent or unparsable, it
+// stays false — the workstation answer, which is what every build assumed before this
+// was read at all.
+func (l *Layout) readSetupData(f *inf.File, build int) {
+	for _, ln := range f.Section("SetupData", build) {
+		if strings.EqualFold(ln.Key, "ProductType") {
+			if v, ok := inf.ParseInt(strings.TrimSpace(ln.Field(0))); ok {
+				l.ServerProduct = v != 0
+			}
+		}
+	}
 }
 
 // readNLS fills NLS from txtsetup.sif's [nls] section: the ANSI/OEM code-page table

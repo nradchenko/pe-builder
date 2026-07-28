@@ -225,3 +225,62 @@ func sortedKeysNumeric(m map[string]string) []string {
 	})
 	return keys
 }
+
+// TestReadSetupDataProductType covers the value that decides whether a build reports itself
+// as a workstation or a server — the only thing on the media separating XP Professional x64
+// Edition from Server 2003 x64, which share both a build number and an architecture.
+func TestReadSetupDataProductType(t *testing.T) {
+	const sifHeader = "[Version]\nSignature = \"$Windows NT$\"\n\n"
+	tests := []struct {
+		name    string
+		section string
+		want    bool
+	}{
+		{"workstation media declares 0", "[SetupData]\nProductType = 0\n", false},
+		{"server media declares 1", "[SetupData]\nProductType = 1\n", true},
+		// A source that states nothing must not be guessed into a server: workstation is
+		// what every build produced before this value was read at all.
+		{"absent section falls back to workstation", "", false},
+		{"absent value falls back to workstation", "[SetupData]\nMinimumMemory = 32\n", false},
+		// Unparsable data must not read as non-zero and flip the product silently.
+		{"unparsable value falls back to workstation", "[SetupData]\nProductType = server\n", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := fstest.MapFS{
+				"i386/txtsetup.sif": {Data: []byte(sifHeader + syntheticTxtsetup + "\n" + tt.section)},
+				"i386/layout.inf":   {Data: []byte(syntheticLayout)},
+			}
+			l, err := Parse(src, source.Identity{Arch: "i386", Build: 2600})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if l.ServerProduct != tt.want {
+				t.Errorf("ServerProduct = %v, want %v", l.ServerProduct, tt.want)
+			}
+		})
+	}
+}
+
+// TestRealSourceIsWorkstation pins the real XP source through the whole parse path, so the
+// synthetic cases above cannot drift from what actual media says.
+func TestRealSourceIsWorkstation(t *testing.T) {
+	if _, err := os.Stat(testISO); err != nil {
+		t.Skip("real source ISO not present under testdata/iso; skipping")
+	}
+	src, err := source.Open(testISO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := src.Probe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := Parse(src.Backing(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.ServerProduct {
+		t.Errorf("XP media reported as a server product; want workstation")
+	}
+}
