@@ -18,10 +18,13 @@ import (
 	"github.com/nradchenko/pe-builder/base"
 	"github.com/nradchenko/pe-builder/boot"
 	"github.com/nradchenko/pe-builder/hive"
+	"github.com/nradchenko/pe-builder/internal/enginehash"
 	"github.com/nradchenko/pe-builder/internal/golden"
 	"github.com/nradchenko/pe-builder/layout"
 	"github.com/nradchenko/pe-builder/manifest"
 	"github.com/nradchenko/pe-builder/plugin"
+	"github.com/nradchenko/pe-builder/plugins"
+	"github.com/nradchenko/pe-builder/receipt"
 	"github.com/nradchenko/pe-builder/source"
 )
 
@@ -435,9 +438,39 @@ func TestBuildRealSource(t *testing.T) {
 		t.Fatalf("build reported per-file errors: %v", rep.Errors)
 	}
 
+	// The receipt lands at the tree root and describes this build: the source it read,
+	// the manifest that drove it, and — with nothing but the base layer in play — a
+	// clean taint verdict.
+	rc := readReceipt(t, out)
+	if rc.Source.Identity != rep.Identity.String() {
+		t.Errorf("receipt source identity = %q, want %q", rc.Source.Identity, rep.Identity)
+	}
+	if want, err := enginehash.Sum(base.EmbedFS(), plugins.FS); err != nil {
+		t.Fatal(err)
+	} else if rc.PEBuild.EngineHash != want {
+		t.Errorf("receipt engine hash = %q, want %q", rc.PEBuild.EngineHash, want)
+	}
+	if rc.Tainted {
+		t.Errorf("a build with no plugin is tainted: %v", rc.Taint)
+	}
+
 	summary := fmt.Sprintf("identity: %s\nwritten: %d\nskipped: %s\n\n%s",
 		rep.Identity, rep.Written, strings.Join(rep.Skipped, ","), walkTreeWithSizes(t, out))
 	golden.Assert(t, "real-tree", summary)
+}
+
+// readReceipt reads and parses the build receipt at the root of an assembled tree.
+func readReceipt(t *testing.T, treeDir string) *receipt.Receipt {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(treeDir, receipt.FileName))
+	if err != nil {
+		t.Fatalf("read build receipt: %v", err)
+	}
+	rc, err := receipt.Parse(data)
+	if err != nil {
+		t.Fatalf("parse build receipt: %v", err)
+	}
+	return rc
 }
 
 // TestBuildWin32GUIClosure exercises a plugin's [Closure] section end-to-end: enabling
@@ -546,6 +579,21 @@ func TestBuildISO(t *testing.T) {
 	}
 	if !strings.Contains(string(txt), "/minint") {
 		t.Error("txtsetup.sif in ISO does not carry the /minint switch")
+	}
+
+	// The receipt travels inside the image, at its root, so a copied or renamed ISO
+	// still says what it was built from. The media stage uppercases the whole tree, so
+	// on the disc it is PEBUILD.TXT — and the booted PE can `type X:\PEBUILD.TXT`.
+	data, err := fs.ReadFile(b, "PEBUILD.TXT")
+	if err != nil {
+		t.Fatalf("PEBUILD.TXT not at the ISO root: %v", err)
+	}
+	rc, err := receipt.Parse(data)
+	if err != nil {
+		t.Fatalf("receipt in ISO does not parse: %v", err)
+	}
+	if rc.Output.Target != manifest.TargetISO || rc.Output.VolumeLabel != "PEBUILDER" {
+		t.Errorf("receipt output = %+v, want the iso target with volume PEBUILDER", rc.Output)
 	}
 }
 
@@ -674,6 +722,13 @@ func walkTreeWithSizes(t *testing.T, root string) string {
 			return err
 		}
 		rel, _ := filepath.Rel(root, p)
+		// The build receipt records the build's own timestamp and the paths it read,
+		// so its size varies per run; list it without one. What it contains is asserted
+		// directly instead (TestBuildRealSource).
+		if rel == receipt.FileName {
+			lines = append(lines, rel+" (varies)")
+			return nil
+		}
 		lines = append(lines, fmt.Sprintf("%s %d", filepath.ToSlash(rel), info.Size()))
 		return nil
 	})

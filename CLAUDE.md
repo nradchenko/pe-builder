@@ -87,6 +87,19 @@ PE dependencies.
     from `hivesft.inf`/`hivedef.inf`, and the shell build grafts the machine classes from
     `hivecls.inf` into SOFTWARE\Classes.
   - `target/` — output targets (e.g. a bootable ISO).
+  - `receipt/` — the record a build leaves inside the image it produced (`pebuild.txt` at
+    the tree root, `PEBUILD.TXT` once the ISO stage uppercases the tree, so a booted PE can
+    `type` it). It describes the build's *inputs* — the engine content hash, the manifest
+    digest, the source fingerprint, and the fully resolved plugin set with the option values
+    it settled on — not the image it sits in, which it cannot hash from within. It also
+    carries the build's **taint** verdict: a build that used anything outside the vetted
+    in-tree set (pebuild's embedded built-ins and its base layer) records graded reasons —
+    an out-of-tree plugin, one whose `[Build]` ran, one that staged files it carried, or a
+    manifest `inject{}` — and the build logs one `build tainted:` line. Taint records what
+    happened; it never refuses a build (`build.allow_plugin_builds` remains the guardrail
+    that decides what may run). The engine hash covers what is `go:embed`ed rather than the
+    executable, whose bytes change on every link; a plugin pebuild does not embed carries its
+    own content hash instead.
   - `build/` — the orchestrator that wires the pipeline together.
 - `pewalk/` — the "ldd for PE" library: computes the transitive PE import closure
   (static + delay imports, or static-only for a boot-necessary set) of a binary against a
@@ -150,7 +163,9 @@ PE dependencies.
   Start-menu contract; Hearts and Pinball are left out, needing a network stack and
   DirectX/sound respectively.
 - `internal/` — support packages: `golden` (golden-file test helper), `buildinfo`
-  (version metadata).
+  (version metadata), `enginehash` (a deterministic content hash over the file trees
+  pebuild embeds — the base layer and the built-in plugins — which is what a build
+  receipt records in place of a hash of the executable).
 - `scripts/` — repository tooling. `gen-licenses.sh` (+ its template) regenerates the
   committed `THIRD-PARTY-LICENSES` notice from the binaries' transitive dependency closure
   via `go-licenses`; run it through `make licenses`.

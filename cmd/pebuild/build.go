@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -79,6 +80,9 @@ func printReport(w io.Writer, rep *build.Report) error {
 	fmt.Fprintf(w, "Source:  %s\n", rep.Identity)
 	fmt.Fprintf(w, "Files:   %d written, %d skipped\n", rep.Written, len(rep.Skipped))
 	fmt.Fprintf(w, "Hives:   %d written\n", len(rep.Hives))
+	if rep.Tainted {
+		fmt.Fprintf(w, "Tainted: %s\n", strings.Join(rep.Taint, " "))
+	}
 	if rep.ISOPath != "" {
 		fmt.Fprintf(w, "ISO:     %s (%.1f MiB, volume %q)\n",
 			rep.ISOPath, float64(rep.ISOSize)/(1024*1024), rep.VolumeLabel)

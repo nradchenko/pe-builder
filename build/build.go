@@ -52,6 +52,11 @@ type Report struct {
 	VolumeLabel string
 	// Errors holds non-fatal per-file failures; the build continues past them.
 	Errors []error
+	// Tainted reports that the build used inputs outside pebuild's in-tree set, and
+	// Taint gives the graded reasons. Both are recorded on the build receipt; they
+	// label the build, they never gate it.
+	Tainted bool
+	Taint   []string
 }
 
 // Option configures a build run.
@@ -122,6 +127,24 @@ func Build(ctx context.Context, m *manifest.Manifest, opts ...Option) (*Report, 
 		return nil, err
 	}
 	slog.Info("assembled file tree", "out", outDir, "written", rep.Written, "skipped", len(rep.Skipped))
+
+	// Record what the build was made from, into the tree — before the media stage,
+	// which consumes and uppercases the tree, so the receipt travels inside the image
+	// as PEBUILD.TXT. It is written for the "none" target too, so a tree can be
+	// verified without mastering an ISO.
+	rc, err := makeReceipt(m, id, selected, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	if err := rc.Write(outDir); err != nil {
+		return nil, err
+	}
+	rep.Tainted, rep.Taint = rc.Tainted, rc.Taint
+	if rc.Tainted {
+		// Stated once, like the kernel's taint line: this build used inputs outside
+		// pebuild's own. Nothing is refused for it.
+		slog.Warn("build tainted", "reasons", rc.TaintLine())
+	}
 
 	// Master the ISO only when the tree assembled cleanly: per-file errors would
 	// produce a broken image, and mastering consumes the tree, so leave it for
