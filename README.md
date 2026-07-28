@@ -131,7 +131,13 @@ This is early, fast-moving work — details change commit to commit.
 `pebuild source` inspects a Windows installation source without unpacking it by hand —
 extract a file, list where the media keeps each one and where a build would place it,
 read the directory-ID table or an INF section. `pebuild hive dump` prints a registry key
-or value out of a source, a PE you just built, or a bare hive file. See
+or value out of a source, a PE you just built, or a bare hive file.
+
+`pebuild verify` answers what an image on disk was built from. Every build leaves a
+receipt inside the image — `PEBUILD.TXT` at its root, readable from the booted
+environment itself — recording the manifest, the Windows source, and the plugins and
+option values the build settled on; `verify` reads it back and reports what has changed
+since, so a stale ISO is not indistinguishable from a fresh one. See
 [`docs/inspecting.md`](docs/inspecting.md).
 
 ## Inspecting dependencies with `pewalk`

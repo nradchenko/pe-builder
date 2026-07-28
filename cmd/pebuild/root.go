@@ -40,6 +40,7 @@ func newRootCmd() *cobra.Command {
 		newVersionCmd(),
 		newValidateCmd(),
 		newBuildCmd(),
+		newVerifyCmd(),
 		newRunCmd(),
 		newSourceCmd(),
 		newHiveCmd(),
@@ -84,4 +85,15 @@ func setupLogging(verbose bool) {
 	}
 	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})
 	slog.SetDefault(slog.New(handler))
+}
+
+// quietLogging drops the log level to warnings for the duration of an operation whose
+// progress narration is not this command's output, and returns a function restoring the
+// previous logger. Warnings and errors still come through; only the running commentary
+// is suppressed.
+func quietLogging() func() {
+	prev := slog.Default()
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})
+	slog.SetDefault(slog.New(handler))
+	return func() { slog.SetDefault(prev) }
 }

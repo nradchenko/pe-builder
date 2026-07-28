@@ -25,7 +25,14 @@ PE dependencies.
   source, a built PE, or a bare hive file. `run` boots an image `build` already produced —
   named directly, or through the manifest that wrote it — in QEMU, reading the image's own
   architecture to pick the emulator and machine; it deliberately does not build, and is a
-  plain launcher unrelated to the QMP/OCR test harness.
+  plain launcher unrelated to the QMP/OCR test harness. `verify` answers the question an
+  image on disk otherwise cannot — was this built by the pebuild I have now, from this
+  manifest? — by reading the receipt the image carries and recomputing every field from
+  the current binary, manifest and plugin directories, naming which of engine, manifest,
+  source, plugin set or options differs. With no manifest to be found it just prints the
+  receipt, so it stays useful away from the tree that built the image. It exits non-zero
+  on a mismatch, and keeps three outcomes apart that are easy to conflate: a mismatch, an
+  input that could not be checked, and an image carrying no receipt at all.
 - `cmd/pewalk/` — the `pewalk` command: an "ldd for PE" that computes and renders the
   import closure of a Windows binary against a source (cobra).
 - Engine packages, roughly in pipeline order:
@@ -198,13 +205,15 @@ exactly as a build does, so what they report is what the engine sees.
 | What directory does this ID mean? | `pebuild source dirs <src>` |
 | What does this INF section say? | `pebuild source inf <src> <file> [section]` |
 | What is in this registry hive? | `pebuild hive dump <target> [path]` |
+| What was this image built from? | `pebuild verify <image> [manifest]` |
 | What does this binary import? | `pewalk --iso <src> <binary>` |
 
 `source extract` resolves a bare name against all three forms the media stores files in
 (loose, compressed `*.??_`, packed in `DRIVER.CAB`/`SP*.CAB`), takes an exact path when
 a basename is ambiguous, and pipes to stdout with `-o -`. `hive dump` reads a source, a
-built PE (directory or mastered `.iso`), or a bare hive file. Full detail in
-[`docs/inspecting.md`](docs/inspecting.md).
+built PE (directory or mastered `.iso`), or a bare hive file. `verify` reads the same two
+image forms and answers from the receipt inside them rather than from the media itself.
+Full detail in [`docs/inspecting.md`](docs/inspecting.md).
 
 So: do **not** mount the ISO, shell out to `7z`/`xorriso`/`cabextract`, hand-parse
 `txtsetup.sif`, or write a throwaway Go program to read a hive. If an inspection need

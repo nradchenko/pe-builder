@@ -144,3 +144,84 @@ The SYSTEM hive is not where its name suggests. A build writes it to
 installation source carries its own skeletal `setupreg.hiv` at the root of the
 system root. Both are found by the name `SYSTEM` (and by `SETUPREG`, which is the
 name the file actually has on the media).
+
+## What an image was built from
+
+```sh
+# does this ISO match the manifest and the pebuild I have now?
+pebuild verify out/pe.iso examples/luna.hcl
+
+# no manifest handy — just show what the image records
+pebuild verify out/pe.iso
+```
+
+Every build writes a receipt into the tree it assembles, which the media stage
+carries into the image as `PEBUILD.TXT` at the root — so it travels with the ISO
+through copying and renaming, and the booted environment can `type
+X:\PEBUILD.TXT` to show its own provenance. It records the manifest, the Windows
+source, the fully resolved plugin set with the option values the build settled
+on, and a content hash of pebuild's own embedded base layer and built-in
+plugins.
+
+`verify` reads it back — from a mastered `.iso` or a built tree, the same two
+forms `hive dump` accepts — recomputes each field from the current binary,
+manifest and plugin directories, and reports per field:
+
+```
+pebuild version  v0.5.0
+engine content   sha256:fc1c3d43…  OK
+manifest         sha256:72b2f2a2…  OK
+source           winxp build 2600 (i386)  OK
+plugins          9 resolved  OK
+options          1 differ  CHANGED
+  options: explorer-shell.bpp: built with "32", now "16"
+```
+
+A field that matches shows its current value (`options  explorer-shell.bpp=32 (+7 more)`);
+one that differs shows how many differ, and each difference is named underneath.
+
+It exits non-zero on a mismatch, so a script can gate on it. Three outcomes are
+kept apart deliberately: a **mismatch**, an input that **could not be checked**
+(the source has moved away, say — reported `UNKNOWN`, never as a difference), and
+an image carrying **no receipt at all**, which means it was built before receipts
+existed or not by pebuild — not that it fails to match.
+
+The hash is of what pebuild *embeds*, not of the executable: the binary carries a
+link-time timestamp, so its bytes change on every rebuild even with no source
+change, and hashing it would report a false mismatch after every no-op rebuild.
+A plugin from a drop-in directory is not embedded, so it carries its own content
+hash instead.
+
+The version line is reported without a verdict. A version string flags a dirty
+tree but does not characterize it — two different sets of uncommitted edits give
+the same string — so a differing version alone does not fail the check.
+
+### What the check does not cover
+
+The engine hash covers pebuild's embedded *content* — the base layer and the
+built-in plugins — not the Go code of the engine itself. Those embedded files are
+what a build's output most directly follows from, and they are what changes when
+a plugin or the base layer is edited. But a change to engine code alone (`hive/`,
+`tree/`, `layout/`) does not move the hash.
+
+For a release build that is covered from the other side: the version and commit
+the binary is stamped with change with the code. In a development tree it is a
+real gap — edit engine code, rebuild an unstamped `pebuild` (whose version stays
+`dev`), and `verify` will report `MATCH` for an image the current code would no
+longer produce byte for byte. Rebuild the image if you have changed engine code
+and need certainty; `verify` answers "same inputs", not "same compiler output".
+
+### Build taint
+
+A build that used anything outside the vetted, in-tree set — pebuild's embedded
+built-ins and its base layer — is recorded as **tainted**, with graded reasons:
+an out-of-tree plugin (`out-of-tree:<name>`), one whose `[Build]` section ran
+(`ran-build-code:<name>`), one that staged files it carried
+(`shipped-binaries:<name>`), or a manifest that placed host files into the image
+with `inject{}` (`manifest-inject`). The build logs one `build tainted:` line and
+the receipt carries the reasons, so `verify` reports them too.
+
+It labels; it does not forbid. No build is refused for being tainted —
+`build.allow_plugin_builds` remains the gate that decides what may actually run.
+A built-in build-capable plugin such as `poweroff` runs its own build and still
+counts as clean: taint is about provenance, not about whether code ran.

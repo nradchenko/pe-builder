@@ -6,13 +6,19 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 )
 
 func main() {
 	if err := Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "pebuild:", err)
+		// A command that has already reported its outcome in full asks only for the
+		// exit code (see errSilent); printing "pebuild: ..." after it would repeat a
+		// verdict the user just read.
+		if !errors.Is(err, errSilent) {
+			fmt.Fprintln(os.Stderr, "pebuild:", err)
+		}
 		os.Exit(1)
 	}
 }
