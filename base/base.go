@@ -13,8 +13,9 @@
 package base
 
 import (
-	_ "embed"
+	"embed"
 	"fmt"
+	"io/fs"
 	"log/slog"
 
 	"github.com/nradchenko/pe-builder/action"
@@ -30,6 +31,23 @@ var baseINF []byte
 
 //go:embed startnet.cmd
 var startnetCmd []byte
+
+// embedFS holds the base layer's data files as one tree, so a build can hash what the
+// base layer contributes to the engine.
+//
+// Declared by glob rather than by name: a data file added to the base layer later is
+// then covered here without a second edit. That matters because the omission would be
+// silent — the engine hash would simply stop covering part of the base layer, and two
+// pebuilds with materially different base content would verify as identical. Any new
+// base data file must match one of these patterns or be added to them.
+//
+//go:embed *.inf *.cmd
+var embedFS embed.FS
+
+// EmbedFS returns the base layer's embedded files. It exists for the build receipt's
+// engine content hash, which covers everything semantically baked into pebuild — this
+// tree and the built-in plugins (plugins.FS).
+func EmbedFS() fs.FS { return embedFS }
 
 // StartnetCmd returns the built-in PE startup script placed at system32\startnet.cmd.
 // winlogon runs it via SYSTEM\Setup\CmdLine once the environment reaches a shell;
