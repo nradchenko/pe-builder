@@ -225,3 +225,54 @@ It labels; it does not forbid. No build is refused for being tainted —
 `build.allow_plugin_builds` remains the gate that decides what may actually run.
 A built-in build-capable plugin such as `poweroff` runs its own build and still
 counts as clean: taint is about provenance, not about whether code ran.
+
+## Files in a built image
+
+The `source` commands read a Windows installation *source*, addressed through its
+own declarations — `source ls` resolves a name against `txtsetup.sif`/`layout.inf`
+and reports the storage form and target directory, and `source extract`
+decompresses whichever form the media stores a file in. A **built** image has none
+of that: the build already resolved, decompressed and placed everything. So those
+commands fail on one before they can read a byte, and the `image` commands read it
+as a plain filesystem instead:
+
+```sh
+# what is in this image?
+pebuild image ls out/pe.iso
+pebuild image ls out/pe.iso '*.cmd'
+pebuild image ls out/pe.iso 'i386/system32/drivers/*' --long
+
+# read a file out of it
+pebuild image extract out/pe.iso i386/system32/startnet.cmd -o -
+pebuild image extract out/pe.iso ntdetect.com -o /tmp
+```
+
+The image is a mastered `.iso`, an output directory, or a work directory — ours or
+another tool's, which is what makes these the way to inspect a reference image.
+
+A pattern matches against both the base name and the full path, so `startnet.cmd`,
+`*.cmd` and `i386/system32/*.cmd` all work. Matching is **case-insensitive** by
+design: the tree writes mixed case and the ISO stage uppercases, so requiring the
+caller to know which they have would make the same command work on a work directory
+and fail on the `.iso` built from it.
+
+`extract` takes an exact path, or a bare name when it is unique in the image; an
+ambiguous name is an error listing the candidates rather than a silent pick.
+An invalid pattern is likewise an error — `foo[` reports a syntax error rather
+than "0 file(s) matched", which would read as an answer about the image.
+
+Files are written under their **lowercased base name**, so the same file extracted
+from a work directory and from the `.iso` mastered from it lands under one name.
+Two files that would write to the same name are refused, and every name is resolved
+before anything is written — a run either extracts all of them or leaves the output
+directory untouched:
+
+```sh
+$ pebuild image extract out/pe.iso I386/SYSTEM32/VGAOEM.FON I386/FONTS/VGAOEM.FON -o d
+pebuild: "I386/SYSTEM32/VGAOEM.FON" and "I386/FONTS/VGAOEM.FON" both write
+         "vgaoem.fon"; extract them separately
+```
+
+Nothing is decompressed — a built image holds files as the build placed them. (An
+image built by another tool may still hold a compressed file, `SETUPREG.HI_` for
+instance; that comes out as the stored bytes.)

@@ -266,6 +266,8 @@ exactly as a build does, so what they report is what the engine sees.
 | What does this INF section say? | `pebuild source inf <src> <file> [section]` |
 | What is in this registry hive? | `pebuild hive dump <target> [path]` |
 | What was this image built from? | `pebuild verify <image> [manifest]` |
+| What files are in this built image? | `pebuild image ls <image> [pattern]` |
+| Get me this file out of a built image | `pebuild image extract <image> <file>... [-o dir\|-]` |
 | What does this binary import? | `pewalk --iso <src> <binary>` |
 
 `source extract` resolves a bare name against all three forms the media stores files in
@@ -273,7 +275,13 @@ exactly as a build does, so what they report is what the engine sees.
 a basename is ambiguous, and pipes to stdout with `-o -`. `hive dump` reads a source, a
 built PE (directory or mastered `.iso`), or a bare hive file. `verify` reads the same two
 image forms and answers from the receipt inside them rather than from the media itself.
-Full detail in [`docs/inspecting.md`](docs/inspecting.md).
+
+The `image` commands read a **built** PE — one this tool produced, or a reference image
+built by another tool — as a plain filesystem, with no identity probe and no layout
+resolution (a build has already resolved, decompressed and placed everything, so the
+`source` commands cannot read one). Matching is case-insensitive, which matters because
+the tree writes mixed case and the ISO stage uppercases. Full detail in
+[`docs/inspecting.md`](docs/inspecting.md).
 
 So: do **not** mount the ISO, shell out to `7z`/`xorriso`/`cabextract`, hand-parse
 `txtsetup.sif`, or write a throwaway Go program to read a hive. If an inspection need
