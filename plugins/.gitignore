@@ -1,0 +1,8 @@
+# Built plugin payloads. A build-capable plugin compiles into its own directory; a
+# built-in ships source, not a binary.
+*.exe
+*.dll
+*.sys
+*.o
+*.a
+*.lib
