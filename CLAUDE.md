@@ -50,7 +50,11 @@ PE dependencies.
     so one may mix codecs: LZX covers essentially everything on x86 media, while amd64
     media packs the side-by-side assemblies with MSZIP (deflate per block, each block
     decoded against its predecessor's output as a preset dictionary).
-  - `inf/` — a Windows setupapi-compatible `.inf` parser.
+  - `inf/` — a Windows setupapi-compatible `.inf` parser, and the PE adaptation of a network
+    component's INF: a stock one applies security descriptors a PE has no API to apply and
+    starts co-services a minimal PE does not run, so a staged copy has both removed. It
+    rewrites the *user's* file at build time rather than shipping an adapted copy of
+    Microsoft's, which is what keeps it clean-room.
   - `layout/` — resolve the source's `txtsetup.sif` / `layout.inf` (file → target
     directory, on-disk name, boot-driver lists, and the source's locale from the
     `[nls]` section).
@@ -184,10 +188,35 @@ PE dependencies.
   from `peshell` (which paints each task's label on its splash), a console build from
   `startnet.cmd`; both guard on the runner being staged, so neither requires the plugin. It
   owns the contract only: consumers declare `depends = startup` and contribute their entries.
+  `hardware` is its first consumer: it ships `pehw`, which runs the PnP driver-install pass at
+  boot that a PE otherwise never gets. Baking the registry state an install *would* have
+  produced is what fails — a NIC configured that way loads its miniport and unloads it again —
+  so the pass runs for real, letting setupapi choose each driver rather than naming an INF, and
+  installing read-only so nothing is copied onto boot media. It stages the INF search path that
+  choice draws on, scoped to the devices a VM actually presents (the whole `inf` directory is
+  739 files and 43 MB, most of it modems), which is why adding hardware support means adding an
+  INF *and* the driver binaries it names. A second pass installs the network components through
+  `INetCfg`, which is the other half of a NIC's setup — binding a driver writes no per-adapter
+  configuration, so the device never starts without it — and which writes the protocol services
+  itself, so those are not baked either. Since the class it needs is a COM server that only
+  Windows setup ever registers, the pass registers it at run time rather than depending on the
+  shell's registration contract, leaving a console build able to reach the network too. The order
+  of the two passes is load-bearing rather than cosmetic: NDIS binds a protocol to a miniport when
+  one of them registers with it, and only the adapter-registering-last path works, so the network
+  task runs *before* the device pass and starts what it installs.
+  `network-tools` is its companion: the command-line utilities (`ipconfig`, `ping`, `route`,
+  `arp`, `tracert`, `nslookup`, `hostname`), each computed from a `[Closure]` seed.
+  It is a separate plugin because configuring devices and giving a user tools are different
+  concerns, and a build that wants one need not carry the other; enabling it pulls `hardware` in
+  by itself. Tools that cannot work in this image are deliberately left out — a staged tool that
+  always fails looks like a broken network rather than a missing feature.
 - `internal/` — support packages: `golden` (golden-file test helper), `buildinfo`
-  (version metadata), `enginehash` (a deterministic content hash over the file trees
-  pebuild embeds — the base layer and the built-in plugins — which is what a build
-  receipt records in place of a hash of the executable).
+  (version metadata, plus the product/author/copyright a plugin's binaries stamp into their
+  Windows version resource — passed to a plugin's build in the environment so the several
+  binaries cannot disagree about who wrote them or under what licence), `enginehash` (a
+  deterministic content hash over the file trees pebuild embeds — the base layer and the
+  built-in plugins — which is what a build receipt records in place of a hash of the
+  executable).
 - `scripts/` — repository tooling. `gen-licenses.sh` (+ its template) regenerates the
   committed `THIRD-PARTY-LICENSES` notice from the binaries' transitive dependency closure
   via `go-licenses`; run it through `make licenses`.

@@ -1,0 +1,173 @@
+; Copyright 2026 Nikita Radchenko
+; SPDX-License-Identifier: Apache-2.0
+;
+; hardware — configure the machine's devices and network at run time, which is the only time a
+; PE can. A /minint boot runs none of the setup passes Windows would have, and baking the
+; registry state an install would have produced is what makes a NIC miniport load and then
+; unload again. This ships pehw.exe, which runs the real passes at boot from the startup run
+; list. See README.md.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "Hardware install"
+Enable = 0
+
+[Update]
+depends = startup
+
+[Build]
+Produces = pehw.exe
+
+[Build.i386]
+Requires = i686-w64-mingw32-gcc make
+Command  = make ARCH=i386
+
+[Build.amd64]
+Requires = x86_64-w64-mingw32-gcc make
+Command  = make ARCH=amd64
+
+; Everything the ms_tcpip install touches, enumerated from the component INF rather than guessed
+; — every ServiceBinary, ServiceDll and Winsock provider it names. An install that reaches for a
+; file the image does not have fails with ERROR_MOD_NOT_FOUND and never says which one.
+;
+; netcfgx.dll is both the Net class installer and the INetCfg implementation, so the device pass
+; and the component install both need it. polstore.dll and ipsecsnp.dll are named by the INF's
+; RegisterDlls and are reachable from nobody's imports. ipsec.sys is not optional despite nothing
+; here using IPsec: the INF gives Tcpip `Dependencies = IPSec`.
+[Closure]
+netcfgx.dll
+tcpip.sys
+netbt.sys
+polstore.dll
+ipsecsnp.dll
+ipsec.sys
+atmarpc.sys
+wshtcpip.dll
+mswsock.dll
+winrnr.dll
+dhcpcsvc.dll
+lmhsvc.dll
+
+[SourceDisksFiles]
+pehw.exe = 2
+
+; Attribute 32 stages the component INF adapted for a PE. The stock file fails the install with
+; 0x8007007F: it applies security descriptors this image has no API to apply, and starts
+; co-services a minimal PE does not run. See inf.AdaptNetworkComponent.
+nettcpip.inf = 20,, 32
+
+; setupapi picks each device's driver from whatever is reachable on the INF search path, so what
+; is listed here decides what the pass can install — and what it spends time on. The INF and the
+; miniport it names are staged as a pair: the install runs with DI_NOFILECOPY because the CD
+; cannot be written to, so a driver not staged here is never copied in either — the device
+; installs and then fails to start.
+;
+; Networking only, deliberately. Earlier revisions also staged the chipset, IDE, USB and PS/2
+; input INFs; that cost most of the pass's runtime, on the boot path, and bought nothing, because
+; the base image already drives all of it from the boot driver set.
+;
+; Scoped by architecture because the two media disagree about both halves — the amd64 INFs carry
+; different names and cover a different set of adapters. Left unscoped, an amd64 build fails at
+; assembly on files that only exist on i386 media. Directory ID 4, not 12: these are the source's
+; txtsetup.sif numbers, not setupapi's DIRID_*, and the two disagree exactly here — 12 in this
+; table is system32\spool\prtprocs.
+[SourceDisksFiles.i386]
+netrtsnt.inf = 20
+netamd2.inf = 20
+netrtpnt.inf = 20
+rtl8139.sys = 4
+pcntpci5.sys = 4
+rtl8029.sys = 4
+
+; RTL8139 is the whole set here: XP x64 ships no AMD PCnet, NE2000-PCI or e1000 INF at all —
+; checked by extracting every net*.inf on the media and searching for their PCI IDs — so an
+; amd64 image can bind the one adapter, and that is also the one this is verified against.
+[SourceDisksFiles.amd64]
+netrtsnx.inf = 20
+rtl39a64.sys = 4
+
+; Restore the NDIS wrapper. hivesys.inf defines it and base's [SetupReg.DelReg] strips it out
+; with the rest of the network stack, because base is boot-to-cmd — so a plugin that wants a NIC
+; has to put it back. Without it a miniport installs, binds its driver, and sits at PnP problem
+; 31 with no wrapper to register with.
+;
+; Start=1 (system), not the 0 Microsoft's WinPE uses: a boot-start driver is loaded by setupldr
+; from txtsetup.sif's list, and the retail one has no NDIS in it, so 0 alone would never load.
+; Adding it to [BusExtenders.Load] with Start=0 was tried and measured to change nothing — NDIS
+; is already running before the protocol registers either way, and the service reads back
+; Start=3 at run time whatever the hive ships.
+;
+; ImagePath is explicit because the kernel's derivation from the service name does not happen
+; here: without it the service fails to start with ERROR_FILE_NOT_FOUND.
+[SetupReg.AddReg]
+0x1,"ControlSet001\Services\NDIS","DisplayName","NDIS System Driver"
+0x4,"ControlSet001\Services\NDIS","ErrorControl","0x1"
+0x1,"ControlSet001\Services\NDIS","Group","NDIS Wrapper"
+0x4,"ControlSet001\Services\NDIS","Start","0x1"
+0x4,"ControlSet001\Services\NDIS","Type","0x1"
+0x2,"ControlSet001\Services\NDIS","ImagePath","system32\DRIVERS\ndis.sys"
+0x1,"ControlSet001\Services\NDIS\MediaTypes"
+0x4,"ControlSet001\Services\NDIS\Parameters","ProcessorAffinityMask","0xFFFFFFFF"
+
+; The four network setup classes and their class installer. Installer32 is what setupapi looks
+; up to find one, and setupapi loads it *by name from here*, not through COM — so registering
+; netcfgx.dll as a COM server does not substitute. Without it a Net-class device gets the generic
+; install: driver bound, no NetCfgInstanceId, nothing under Control\Network, and NDIS then fails
+; the miniport's AddDevice — a healthy driver stuck at PnP problem 31.
+;
+; Transcribed from Microsoft's WinPE SYSTEM hive, which defines all four; the source's
+; hivesys.inf does not, because a full install writes them from the class INFs instead.
+;   E972 Net (adapters)   E973 NetClient   E974 NetService   E975 NetTrans (protocols)
+0x1,"ControlSet001\Control\Class\{4D36E972-E325-11CE-BFC1-08002BE10318}","Class","Net"
+0x1,"ControlSet001\Control\Class\{4D36E972-E325-11CE-BFC1-08002BE10318}","Installer32","NetCfgx.Dll,NetClassInstaller"
+0x1,"ControlSet001\Control\Class\{4D36E972-E325-11CE-BFC1-08002BE10318}","EnumPropPages32","NetCfgx.Dll,NetPropPageProvider"
+0x1,"ControlSet001\Control\Network\{4D36E972-E325-11CE-BFC1-08002BE10318}","Class","Net"
+
+0x1,"ControlSet001\Control\Class\{4D36E973-E325-11CE-BFC1-08002BE10318}","Class","NetClient"
+0x1,"ControlSet001\Control\Class\{4D36E973-E325-11CE-BFC1-08002BE10318}","Installer32","NetCfgx.Dll,NetClassInstaller"
+0x1,"ControlSet001\Control\Class\{4D36E973-E325-11CE-BFC1-08002BE10318}","NoInstallClass","1"
+0x1,"ControlSet001\Control\Class\{4D36E973-E325-11CE-BFC1-08002BE10318}","NoDisplayClass","1"
+0x1,"ControlSet001\Control\Network\{4D36E973-E325-11CE-BFC1-08002BE10318}","Class","NetClient"
+
+0x1,"ControlSet001\Control\Class\{4D36E974-E325-11CE-BFC1-08002BE10318}","Class","NetService"
+0x1,"ControlSet001\Control\Class\{4D36E974-E325-11CE-BFC1-08002BE10318}","Installer32","NetCfgx.Dll,NetClassInstaller"
+0x1,"ControlSet001\Control\Class\{4D36E974-E325-11CE-BFC1-08002BE10318}","NoInstallClass","1"
+0x1,"ControlSet001\Control\Class\{4D36E974-E325-11CE-BFC1-08002BE10318}","NoDisplayClass","1"
+0x1,"ControlSet001\Control\Network\{4D36E974-E325-11CE-BFC1-08002BE10318}","Class","NetService"
+
+0x1,"ControlSet001\Control\Class\{4D36E975-E325-11CE-BFC1-08002BE10318}","Class","NetTrans"
+0x1,"ControlSet001\Control\Class\{4D36E975-E325-11CE-BFC1-08002BE10318}","Installer32","NetCfgx.Dll,NetClassInstaller"
+0x1,"ControlSet001\Control\Class\{4D36E975-E325-11CE-BFC1-08002BE10318}","NoInstallClass","1"
+0x1,"ControlSet001\Control\Class\{4D36E975-E325-11CE-BFC1-08002BE10318}","NoDisplayClass","1"
+0x1,"ControlSet001\Control\Network\{4D36E975-E325-11CE-BFC1-08002BE10318}","Class","NetTrans"
+
+; No protocol services here, deliberately. Earlier revisions defined Tcpip, NetBT and Tdi by
+; hand, inventing what could not be transcribed — the baked-registry antipattern this plugin
+; exists to remove. The component install writes those definitions along with the load order and
+; per-adapter bindings that have to agree with them. (Tdi was never a service at all: tdi.sys is
+; a kernel import library, loaded as a dependency of whatever imports it.)
+
+[Software.AddReg]
+; Without a search path every device reports "no driver node", which reads like a broken pass.
+0x2,"Microsoft\Windows\CurrentVersion","DevicePath","%SystemRoot%\inf"
+
+; The network pass runs BEFORE the device pass. These two Order values are load-bearing, not a
+; preference — swapping them produces an image where every step reports success and no adapter
+; is ever bound. See README.md § The order of the two passes.
+;
+; Two tasks rather than one so each gets its own verdict in the run list and can be re-run by
+; hand against the other's result. The timeout is generous: the device pass walks every device
+; the PnP manager reports.
+0x1,"pe-builder\Startup\network","Stage","pre-shell"
+0x4,"pe-builder\Startup\network","Order","0x10"
+0x1,"pe-builder\Startup\network","Label","Configuring network..."
+0x2,"pe-builder\Startup\network","Command","%SystemRoot%\system32\pehw.exe net"
+0x4,"pe-builder\Startup\network","Timeout","0x12c"
+
+0x1,"pe-builder\Startup\devices","Stage","pre-shell"
+0x4,"pe-builder\Startup\devices","Order","0x20"
+0x1,"pe-builder\Startup\devices","Label","Configuring devices..."
+0x2,"pe-builder\Startup\devices","Command","%SystemRoot%\system32\pehw.exe devices"
+0x4,"pe-builder\Startup\devices","Timeout","0x12c"

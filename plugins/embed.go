@@ -22,5 +22,6 @@ import "embed"
 //go:embed pesuite/pesuite.c pesuite/Makefile
 //go:embed startup/perun.c startup/perun.h startup/perundll.c startup/perunmain.c startup/Makefile
 //go:embed startup/version.rc
+//go:embed hardware/pehw.c hardware/Makefile hardware/version.rc
 //go:embed win32-gui/rundll32.exe.manifest win32-gui/explorer.exe.manifest win32-gui/rundll32.amd64.manifest
 var FS embed.FS

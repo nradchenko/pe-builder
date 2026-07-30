@@ -54,6 +54,10 @@ it in your manifest like any other. A build takes a few seconds and produces an 
 roughly 44 MB for the bare `cmd.exe` image up to ~63 MB for the themed desktop. See
 [`docs/plugins/`](docs/plugins/) to use or write plugins.
 
+**Networking** is experimental and works on 32-bit XP sources only: enable the `hardware` and
+`network-tools` plugins and a PE configures itself at boot and picks up a DHCP address. Tested
+with an emulated RTL8139 under QEMU — see [`docs/supported.md`](docs/supported.md).
+
 **64-bit sources.** Both 32-bit and x64 sources are supported, and either reaches the same
 set of images — from a `cmd.exe` prompt up to the themed Explorer desktop. The x64 path is
 newer and more experimental, so expect more rough edges;

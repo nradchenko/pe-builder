@@ -8,8 +8,9 @@ What differs by platform is the **toolchain a plugin's payload needs**. A bare `
 with no plugins is pure Go and needs nothing beyond `pebuild` itself. Plugins that ship source
 rather than a binary compile small C programs and kernel drivers with the **MinGW-w64
 cross-compiler**, so that has to be present and on `PATH`. That is the desktop set
-(`explorer-shell`, `luna`, `ramdrive`, `pesuite`) and also `poweroff` and `startup` — the last
-of which a console-only image may well enable on its own, so the toolchain is not a
+(`explorer-shell`, `luna`, `ramdrive`, `pesuite`) and also `poweroff`, `startup` and
+`hardware` — the last two of which a console-only image may well enable on its own
+(`network-tools` pulls `hardware` in), so the toolchain is not a
 desktop-only requirement.
 
 Per-platform status at a glance:
