@@ -70,7 +70,7 @@ func setupapiType(flags int64) uint32 {
 // survive to runtime) but leaves a true [Strings] macro such as %UNKNOWN% (a device-class
 // display name) literal. Cosmetic; a proper [Strings] pass in the inf parser is a follow-up.
 func ApplyHiveINF(root *Key, data []byte, wantRoot, stripPrefix string) error {
-	f, err := inf.Parse(decodeINF(data))
+	f, err := inf.Parse(data)
 	if err != nil {
 		return fmt.Errorf("hive: parse INF: %w", err)
 	}
@@ -95,7 +95,7 @@ func ApplyHiveINF(root *Key, data []byte, wantRoot, stripPrefix string) error {
 // Start-less — while every non-driver service keeps its Start so the SCM auto-starts the standard
 // service set (win32 own/shared 0x10/0x20 and their interactive 0x110/0x120 variants included).
 func ApplySystemINF(root *Key, data []byte, remap func(string) string) error {
-	f, err := inf.Parse(decodeINF(data))
+	f, err := inf.Parse(data)
 	if err != nil {
 		return fmt.Errorf("hive: parse INF: %w", err)
 	}
@@ -240,28 +240,4 @@ func fieldOr(fields []string, i int) string {
 		return fields[i]
 	}
 	return ""
-}
-
-// decodeINF returns INF text as bytes the parser can read, decoding a UTF-16
-// byte-order-marked file (the source's hive*.inf are UTF-16LE) to UTF-8 and
-// passing ASCII/UTF-8 through unchanged.
-func decodeINF(data []byte) []byte {
-	switch {
-	case len(data) >= 2 && data[0] == 0xFF && data[1] == 0xFE:
-		return []byte(decodeUTF16(data[2:]))
-	case len(data) >= 2 && data[0] == 0xFE && data[1] == 0xFF:
-		return []byte(decodeUTF16BE(data[2:]))
-	default:
-		return data
-	}
-}
-
-// decodeUTF16BE decodes big-endian UTF-16 bytes to a Go string.
-func decodeUTF16BE(b []byte) string {
-	swapped := make([]byte, len(b))
-	for i := 0; i+1 < len(b); i += 2 {
-		swapped[i] = b[i+1]
-		swapped[i+1] = b[i]
-	}
-	return decodeUTF16(swapped)
 }

@@ -142,17 +142,27 @@ func TestSetupapiType(t *testing.T) {
 	}
 }
 
-func TestDecodeINFUTF16(t *testing.T) {
-	// "[X]\nk=v" as UTF-16LE with a BOM decodes to the ASCII text.
-	src := "[X]\nk=v"
+// The source's hive-population INFs are UTF-16LE, so ApplyHiveINF has to take the
+// file's raw bytes. Decoding itself lives in the inf parser (see inf.Decode); this
+// checks the hive path reaches it, by applying the same sample in UTF-16LE.
+func TestApplyHiveINFUTF16(t *testing.T) {
 	u16 := []byte{0xFF, 0xFE}
-	for _, r := range src {
+	for _, r := range sampleAddRegINF {
 		u16 = append(u16, byte(r), byte(r>>8))
 	}
-	if got := string(decodeINF(u16)); got != src {
-		t.Errorf("decodeINF(UTF-16LE) = %q, want %q", got, src)
+	root := &Key{Name: "ROOT"}
+	if err := ApplyHiveINF(root, u16, "HKLM", "SOFTWARE"); err != nil {
+		t.Fatal(err)
 	}
-	if got := string(decodeINF([]byte(src))); got != src {
-		t.Errorf("decodeINF(ASCII) = %q, want %q", got, src)
+	test := root.Child("Test")
+	if test == nil {
+		t.Fatal("Test key missing")
+	}
+	v, ok := test.Value("StringVal")
+	if !ok {
+		t.Fatal("StringVal missing")
+	}
+	if got := v.AsString(); got != "hello" {
+		t.Errorf("StringVal = %q, want %q", got, "hello")
 	}
 }

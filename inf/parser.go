@@ -36,8 +36,10 @@ type Line struct {
 
 const stringsSection = "strings"
 
-// Parse reads INF text into a File. The input is treated as ASCII/CP-agnostic
-// bytes; only line structure and the ASCII metacharacters are interpreted.
+// Parse reads INF text into a File. The input is Decode'd first, so a UTF-16 file
+// off a Windows source parses like any other; the decoded text is then treated as
+// ASCII/CP-agnostic bytes, with only line structure and the ASCII metacharacters
+// interpreted.
 func Parse(data []byte) (*File, error) {
 	f := &File{
 		sections: map[string][]*Line{},
@@ -45,7 +47,7 @@ func Parse(data []byte) (*File, error) {
 	}
 
 	current := "" // lowercased current section name; "" before the first header
-	for _, raw := range logicalLines(string(data)) {
+	for _, raw := range logicalLines(string(Decode(data))) {
 		// Comments are already stripped by logicalLines.
 		line := strings.TrimSpace(raw)
 		if line == "" {
