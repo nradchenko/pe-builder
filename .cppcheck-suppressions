@@ -1,0 +1,35 @@
+# Shared cppcheck suppressions for the plugins' C sources.
+# Run as:
+#   cppcheck --enable=warning,performance,portability,style --library=windows \
+#     --inline-suppr --suppressions-list=.cppcheck-suppressions --error-exitcode=1 \
+#     -I plugins/<name> plugins/<name>/*.c
+
+# Editing note: separate paragraphs with an EMPTY line, never a line holding only "#".
+# cppcheck 2.13 parses a bare "#" as a suppression with an empty id and dies with
+# "Failed to add suppression. No id." A "#" followed by text is fine.
+
+# Only class-level noise belongs here — an advisory that is never a real finding in this
+# codebase. A one-off false positive is suppressed inline instead, at the line, with a
+# one-line reason, so the annotation documents the pattern it excuses.
+
+# The lstr* family. cppcheck's windows library emits a StringCch* advisory for every
+# lstrcpyn/lstrlen call, quoting MSDN-era guidance rather than analysing the call. It is not
+# a finding about our code: every call site passes a destination size that is the same
+# compile-time constant as the buffer it writes to, which is the misuse the advisory warns
+# about. lstrcpynW also always null-terminates within that size, so the truncation the text
+# describes is the behaviour we are relying on where we use it.
+
+# Switching would mean strsafe.h, a poor trade here: these are small Windows binaries
+# cross-compiled with MinGW-w64, the lstr* entry points live in kernel32 and are always
+# present, and the family is already used across the plugins (explorer-shell's peshell.c as
+# well as startup's perun). Suppressed as a class rather than per line, since annotating
+# every call would add noise without adding information.
+lstrcpynWCalled
+lstrlenWCalled
+lstrcpynACalled
+lstrlenACalled
+
+# COM vtables. A hand-declared interface vtable must lay out every method in order, whether or
+# not this code calls it — an omitted entry does not shrink the struct, it misaligns every slot
+# after it. cppcheck sees only the unread members.
+unusedStructMember
