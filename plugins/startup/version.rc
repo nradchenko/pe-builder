@@ -1,0 +1,42 @@
+/* Copyright 2026 Nikita Radchenko
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <winver.h>
+
+#ifndef VER_FILETYPE
+#define VER_FILETYPE VFT_APP
+#endif
+#ifndef VER_FILESUBTYPE
+#define VER_FILESUBTYPE VFT2_UNKNOWN
+#endif
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     VER_NUM
+PRODUCTVERSION  VER_NUM
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VER_FILETYPE
+FILESUBTYPE     VER_FILESUBTYPE
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        /* 040904B0 — US English, Unicode. */
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      VER_COMPANY
+            VALUE "ProductName",      VER_PRODUCT
+            VALUE "ProductVersion",   VER_STR
+            VALUE "FileVersion",      VER_STR
+            VALUE "FileDescription",  VER_DESC
+            VALUE "InternalName",     VER_INTERNAL
+            VALUE "OriginalFilename", VER_ORIGINAL
+            VALUE "LegalCopyright",   VER_COPYRIGHT
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

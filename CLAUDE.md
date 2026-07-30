@@ -169,6 +169,21 @@ PE dependencies.
   from a `[Closure]` seed each, grouping them under a `Games` submenu via the path-encoded
   Start-menu contract; Hearts and Pinball are left out, needing a network stack and
   DirectX/sound respectively.
+  `startup` is infrastructure rather than a feature: it declares a registry contract for
+  one-shot startup tasks (`HKLM\SOFTWARE\pe-builder\Startup` — each entry a stage, an order,
+  a label, a command line, and an optional timeout) and ships `perun` to walk it. A PE runs
+  none of the setup passes Windows would have, so work that must happen once at boot has
+  nowhere else to live; hosting it in the shell would make it require a desktop and would
+  let it run only once per boot. Tasks are therefore separate processes, which keeps the
+  risky code out of the shell's address space and makes each one re-runnable by hand.
+  One implementation serves two front ends — `perun.dll`, the in-process interface for a shell
+  to walk the list and paint progress on the splash it already draws, and `perun.exe`, which
+  runs a stage, re-runs a single task, or lists the resolved order. The runner (not the task)
+  writes each verdict back to the task's own key, so one that crashed or timed out still leaves
+  a record, and a failed task never costs the user their boot. A desktop build walks the list
+  from `peshell` (which paints each task's label on its splash), a console build from
+  `startnet.cmd`; both guard on the runner being staged, so neither requires the plugin. It
+  owns the contract only: consumers declare `depends = startup` and contribute their entries.
 - `internal/` — support packages: `golden` (golden-file test helper), `buildinfo`
   (version metadata), `enginehash` (a deterministic content hash over the file trees
   pebuild embeds — the base layer and the built-in plugins — which is what a build

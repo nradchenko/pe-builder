@@ -34,18 +34,32 @@ reimplemented independently here.
 3. **Wait for services** — block until the SCM/COM baseline is reachable. It does *not*
    wait for every service to reach RUNNING; they finish in the background while the desktop
    comes up.
-4. **Self-registration** — run the shell/COM `DllInstall` pass (see
+4. **Startup tasks (`pre-shell`)** — walk the run list, if the `startup` plugin staged its
+   runner (see [Startup tasks](#startup-tasks)). After the service wait, because a device or
+   network install pass needs the service stack up.
+5. **Self-registration** — run the shell/COM `DllInstall` pass (see
    [Self-registration](#self-registration)); without it Explorer exits immediately.
-5. **Start menu** — create the shortcuts declared in the registry (see
+6. **Start menu** — create the shortcuts declared in the registry (see
    [Start-menu items](#start-menu-items)).
-6. **Prune ghost Control Panel items** — drop `ControlPanel\NameSpace` entries whose
+7. **Prune ghost Control Panel items** — drop `ControlPanel\NameSpace` entries whose
    backing handler DLL isn't present/loadable, so they don't render as empty folders.
-7. **Visual style** — apply the style the registry selects, if any (see
+8. **Visual style** — apply the style the registry selects, if any (see
    [Visual style](#visual-style)). Before Explorer, so the desktop paints themed from its
    first frame; a no-op when no visual-style plugin is enabled.
-8. **Launch Explorer** — start `explorer.exe` as the shell, close the splash once the
-   taskbar paints, relaunch Explorer if it dies, and finally fall back to `cmd.exe` so the
-   machine is never headless.
+9. **Launch Explorer** — start `explorer.exe` as the shell; once the taskbar paints, run the
+   `post-shell` startup tasks, then close the splash. Relaunch Explorer if it dies, and
+   finally fall back to `cmd.exe` so the machine is never headless.
+
+## Startup tasks
+
+When the `startup` plugin is enabled, `peshell` walks its task list: the `pre-shell` stage
+before the shell comes up, `post-shell` once the desktop is there. Each task's label shows on
+the splash while it runs, and a task that fails is named there rather than failing silently —
+the boot continues either way.
+
+Nothing here requires it. `explorer-shell` does not depend on `startup`, so a build that
+declares no tasks carries no runner at all. The contract, and what a task may declare, belong to
+that plugin — see its README.
 
 ## Self-registration
 

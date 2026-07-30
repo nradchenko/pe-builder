@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/nradchenko/pe-builder/internal/buildinfo"
 	"github.com/nradchenko/pe-builder/source"
 )
 
@@ -81,6 +82,16 @@ func RunBuild(ctx context.Context, d *Discovered, workRoot, arch string) (*Built
 	}
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	cmd.Dir = buildDir
+	// Attribution for the VERSIONINFO resource a plugin's binaries carry. A plugin builds in
+	// isolation from a copy of its own directory, so without this every plugin would restate
+	// the version, the author and the copyright year for itself — and they would drift apart,
+	// which is exactly what the metadata exists to prevent.
+	cmd.Env = append(os.Environ(),
+		"PEBUILD_VERSION="+buildinfo.Version,
+		"PEBUILD_PRODUCT="+buildinfo.Product,
+		"PEBUILD_COMPANY="+buildinfo.Company,
+		"PEBUILD_COPYRIGHT="+buildinfo.Copyright,
+	)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("plugin %q: build command %q failed: %w\n%s", d.Name, command, err, out)
 	}

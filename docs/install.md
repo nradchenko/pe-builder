@@ -4,10 +4,13 @@ pe-builder is a Go program plus a set of plugins, some of which compile from sou
 time. The **released binaries** (see the project's releases) are the easy way to get `pebuild`
 and `pewalk`; you can also build them yourself.
 
-What differs by platform is the **toolchain a desktop image needs**. A bare `cmd.exe` image is
-pure Go and needs nothing beyond `pebuild` itself. A desktop image (the `explorer-shell`,
-`luna`, `ramdrive`, `pesuite`, `poweroff` plugins) compiles small C programs and kernel
-drivers with the **MinGW-w64 cross-compiler**, so that has to be present and on `PATH`.
+What differs by platform is the **toolchain a plugin's payload needs**. A bare `cmd.exe` image
+with no plugins is pure Go and needs nothing beyond `pebuild` itself. Plugins that ship source
+rather than a binary compile small C programs and kernel drivers with the **MinGW-w64
+cross-compiler**, so that has to be present and on `PATH`. That is the desktop set
+(`explorer-shell`, `luna`, `ramdrive`, `pesuite`) and also `poweroff` and `startup` — the last
+of which a console-only image may well enable on its own, so the toolchain is not a
+desktop-only requirement.
 
 Per-platform status at a glance:
 

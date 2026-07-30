@@ -234,7 +234,7 @@ i386/system32/shutdown.exe 19968
 i386/system32/smss.exe 50688
 i386/system32/sortkey.nls 262148
 i386/system32/sorttbls.nls 23044
-i386/system32/startnet.cmd 160
+i386/system32/startnet.cmd 569
 i386/system32/svchost.exe 14336
 i386/system32/sxs.dll 714240
 i386/system32/ulib.dll 285696

@@ -3,8 +3,9 @@
 
 /* peshell.c — the PE Explorer-shell launcher (the SYSTEM\Setup\CmdLine program). A /minint boot
  * has no Winlogon to bring up the desktop, so peshell does it by hand: profile setup, splash,
- * service wait, shell/COM self-registration, Start-menu shortcuts, ghost-CPL prune, then launch
- * Explorer (relaunch on death, fall back to cmd). See README.md for the full sequence and why. */
+ * service wait, pre-shell startup tasks, shell/COM self-registration, Start-menu shortcuts,
+ * ghost-CPL prune, then launch Explorer (post-shell tasks once its taskbar paints, relaunch on
+ * death, fall back to cmd). See README.md for the full sequence and why. */
 #define _WIN32_WINNT 0x0501
 #define WINVER 0x0501
 #include <windows.h>
@@ -339,6 +340,67 @@ static void splash_status(const char *msg){
 }
 static void splash_close(void){ if(g_splash){ PostMessageA(g_splash,WM_CLOSE,0,0); g_splash=NULL; } }
 
+/* --- Startup run list --------------------------------------------------------------------
+ * Walk the one-shot task list declared under HKLM\SOFTWARE\pe-builder\Startup — device and
+ * network configuration a PE has to perform at runtime, since it runs none of the setup passes
+ * Windows would have. The contract and the runner belong to the startup plugin; see its README.
+ *
+ * Loaded at runtime rather than linked. explorer-shell deliberately does not depend on startup,
+ * so a desktop build that declares no tasks carries neither perun.dll nor a dangling import; the
+ * plugin that needs tasks depends on startup, and then this finds it. That is the same shape as
+ * the console path, where base's startnet.cmd guards the call on the file existing.
+ *
+ * No task runs in this process: perun reads the registry and CreateProcesses, so setupapi and
+ * INetCfg never enter the shell's address space. */
+#define PERUN_BEGIN (-1)
+#define PERUN_OK      0
+
+/* cdecl, matching perun.h — these must NOT be WINAPI. A stdcall/cdecl mismatch on i386 leaves
+ * the stack unbalanced on every call and is silent until it is not. */
+typedef void (*PERUN_PROGRESS)(void *ctx,const WCHAR *task,const WCHAR *label,
+                               int index,int count,int state,DWORD err);
+typedef DWORD (*PERUN_RUNSTAGE)(const WCHAR *stage,PERUN_PROGRESS cb,void *ctx,int *failedRequired);
+
+/* Put each task's label on the splash as it starts, so the wait is accounted for rather than
+ * silent — the reason the walk is in-process at all. */
+static void perun_progress(void *ctx,const WCHAR *task,const WCHAR *label,
+                           int index,int count,int state,DWORD err){
+    /* Sized against the contract, not against what a task is likely to be called: a task key
+     * may be 255 characters. msg must stay comfortably larger than name — wsprintfA below is
+     * unbounded, so a name that outgrew it would overrun the stack rather than truncate. */
+    char msg[320];
+    (void)ctx;(void)index;(void)count;(void)err;
+
+    if(state==PERUN_BEGIN){
+        if(WideCharToMultiByte(CP_ACP,0,label,-1,msg,sizeof msg,NULL,NULL)) splash_status(msg);
+        return;
+    }
+    if(state!=PERUN_OK){
+        char name[256];
+        /* A failed task never costs the boot; it is reported here and in its status key. Fall
+         * back rather than return: the splash is the only surface this failure has, so losing
+         * the name must not cost the whole notice. */
+        if(!WideCharToMultiByte(CP_ACP,0,task,-1,name,sizeof name,NULL,NULL))
+            lstrcpynA(name,"(unnamed)",sizeof name);
+        wsprintfA(msg,"Startup task '%s' did not complete",name);
+        splash_status(msg);
+        if(g_splash) Sleep(1500);   /* long enough to read before the next label lands */
+    }
+}
+
+static BOOL g_postShellDone=FALSE;   /* post-shell is one-shot across Explorer relaunches */
+
+static void run_startup_stage(const WCHAR *stage){
+    HMODULE m=LoadLibraryA("perun.dll");
+    if(!m) return;                      /* the startup plugin is not in this build */
+    PERUN_RUNSTAGE run=(PERUN_RUNSTAGE)(void(*)(void))GetProcAddress(m,"PerunRunStage");
+    /* The required-failure count is deliberately ignored: the callback has already put every
+     * failure on the splash and the runner has written each verdict to its status key, and a
+     * failed task must not change what the boot does next. */
+    if(run){ int failed=0; run(stage,perun_progress,NULL,&failed); }
+    FreeLibrary(m);
+}
+
 /* --- Visual style -----------------------------------------------------------------------
  * Apply the visual style the registry selects, the way Windows does at logon: there, winlogon
  * loads msgina.dll, which delay-loads SHSVCS.dll — the Themes service's *client* side — and drives
@@ -432,11 +494,13 @@ static void apply_visual_style(void){
 
     if(!wait_session_stack(10)) return;
 
+    /* Both modules are released again on every path that gives up, and deliberately *not*
+     * released on the one that succeeds — see the connection comment below. */
     HMODULE sh=LoadLibraryA("shsvcs.dll"); if(!sh) return;
-    HMODULE ux=LoadLibraryA("uxtheme.dll"); if(!ux) return;
+    HMODULE ux=LoadLibraryA("uxtheme.dll"); if(!ux){ FreeLibrary(sh); return; }
     THEMECONNECT theme_connect=(THEMECONNECT)GetProcAddress(sh,(LPCSTR)2);
     SETSYSVS set_visual_style=(SETSYSVS)GetProcAddress(ux,(LPCSTR)65);
-    if(!theme_connect||!set_visual_style) return;
+    if(!theme_connect||!set_visual_style){ FreeLibrary(ux); FreeLibrary(sh); return; }
 
     /* Connect as a theme client — this is what installs the hooks — and hold the connection for
      * the life of the process. Then select the style: SetSystemVisualStyle only checks that the
@@ -444,8 +508,10 @@ static void apply_visual_style(void){
      * The timeout is Ordinal_2's own wait for the Themes service, and it is on the boot path too:
      * short for the same reason as wait_session_stack above — measured 0ms, and a timeout only
      * costs the theme. */
-    if(theme_connect(15000)!=0) return;
+    if(theme_connect(15000)!=0){ FreeLibrary(ux); FreeLibrary(sh); return; }
     set_visual_style(style,color,size,0);
+    /* sh and ux are intentionally left loaded: the theme connection installed above lives as
+     * long as this process does, and unloading either would tear it down. */
 }
 
 /* Push the wallpaper the registry names onto the desktop — nothing else in a PE reads those
@@ -492,6 +558,12 @@ static BOOL launch_desktop(BOOL first){
     if(!CreateProcessA(NULL,cl,NULL,NULL,FALSE,0,NULL,NULL,&si,&pi)) return FALSE;
     for(int k=0;k<600;k++){ if(FindWindowA("Shell_TrayWnd",NULL)) break; Sleep(300); }
     apply_wallpaper();
+    /* post-shell tasks want a live desktop, so they run here rather than after the call — this
+     * function blocks until Explorer exits. Gated on having run rather than on `first`: a first
+     * launch that fails returns above, and every retry passes first=FALSE, which would skip
+     * these one-shot tasks for the whole boot on a desktop that came up on the second try.
+     * Before splash_close, so their progress still has somewhere to show. */
+    if(!g_postShellDone){ g_postShellDone=TRUE; run_startup_stage(L"post-shell"); }
     if(first) splash_close();
     WaitForSingleObject(pi.hProcess,INFINITE);
     CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
@@ -616,7 +688,7 @@ typedef struct { IStartMenuPinVtbl *lpVtbl; } IStartMenuPin;
  * Best-effort: anything that won't resolve just leaves the desktop without that pin. The hive is
  * rebuilt from the baked copy every boot and this runs once per boot, so the list always starts
  * empty — hence no de-duplication. */
-static void pin_top_level(struct sm_ctx *x){
+static void pin_top_level(const struct sm_ctx *x){
     if(!x->npins) return;
     IStartMenuPin *pin=NULL;
     if(CoCreateInstance(&kCLSID_StartMenuPin,NULL,CLSCTX_INPROC_SERVER,
@@ -693,6 +765,10 @@ int WINAPI WinMain(HINSTANCE i,HINSTANCE p,LPSTR c,int s){
 
     splash_status("Starting services...");
     wait_services();
+
+    /* One-shot startup tasks, before the shell. After wait_services deliberately: a device or
+     * network install pass needs the service stack up to do anything. */
+    run_startup_stage(L"pre-shell");
 
     splash_status("Registering shell components...");
     self_register_shell();

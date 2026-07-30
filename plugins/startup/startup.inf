@@ -1,0 +1,52 @@
+; Copyright 2026 Nikita Radchenko
+; SPDX-License-Identifier: Apache-2.0
+;
+; startup — a registry contract for one-shot startup tasks, and the runner that walks it.
+; A /minint PE never runs the setup passes Windows would have, so work that has to happen
+; once at boot (a PnP device-install pass, a network component install) has nowhere to
+; live. This declares that list in the registry and ships perun to walk it: perun.dll for
+; peshell to load in-process and report progress from, perun.exe to re-run a task by hand.
+; Tasks are separate processes, so nothing risky runs inside the shell. It owns the
+; contract only — consumers declare `depends = startup` and add their own entries.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "Startup run list"
+Enable = 0
+
+; Self-test task — see README.md § Proving the walk. The value is the *stage* it joins,
+; so "off" parks it in a stage nothing ever runs: it still appears in `perun --list`
+; (proving the contract reached the hive) without costing a boot anything.
+[Options]
+; name = default, type[, allowed...]
+demo_task = off, string, off, pre-shell, post-shell
+
+; One source file builds both front ends, so the list semantics cannot drift between them;
+; see the Makefile. Both are plain user-mode binaries, so the architecture picks the
+; toolchain and nothing else.
+[Build]
+Produces = perun.dll perun.exe
+
+[Build.i386]
+Requires = i686-w64-mingw32-gcc make
+Command  = make ARCH=i386
+
+[Build.amd64]
+Requires = x86_64-w64-mingw32-gcc make
+Command  = make ARCH=amd64
+
+[SourceDisksFiles]
+perun.dll = 2
+perun.exe = 2
+
+[Software.AddReg]
+; The contract root, created empty so `perun --list` and a `hive dump` always have
+; something to read even when no plugin has declared a task.
+0x1,"pe-builder\Startup"
+; The self-test task. Parked in the "off" stage unless the manifest sets demo_task.
+0x1,"pe-builder\Startup\demo","Stage","$(demo_task)"
+0x4,"pe-builder\Startup\demo","Order","0x10"
+0x1,"pe-builder\Startup\demo","Label","Startup run-list self-test"
+0x1,"pe-builder\Startup\demo","Command","cmd.exe /c echo perun self-test ok"

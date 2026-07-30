@@ -17,6 +17,20 @@ var (
 	Date = "unknown"
 )
 
+// Attribution for the Windows VERSIONINFO resource a plugin's binaries carry. Constants rather
+// than link-time variables: they identify the project, not the build. They live here so the
+// several plugin binaries cannot disagree about who wrote them or under what licence — and so
+// the year is edited once rather than in every plugin's resource script.
+const (
+	// Product is the ProductName every binary the build emits reports.
+	Product = "pe-builder"
+	// Company is the author, as CompanyName.
+	Company = "Nikita Radchenko"
+	// Copyright is LegalCopyright, licence included: a binary staged into system32 should be
+	// able to say what it is licensed under without reference to the repository it came from.
+	Copyright = "Copyright 2026 Nikita Radchenko. Apache-2.0"
+)
+
 // String renders a single human-readable build-info line for the named program.
 func String(prog string) string {
 	return fmt.Sprintf("%s %s (commit %s, built %s)", prog, Version, Commit, Date)
