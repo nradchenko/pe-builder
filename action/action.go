@@ -91,6 +91,12 @@ type Action struct {
 	Optional       bool   // copy only if present (attribute 4)
 	Uppercase      bool   // rename the target to uppercase (attribute 8)
 	ShipWithPlugin bool   // file ships with the plugin; presence is required (attribute 1)
+	// AdaptNetworkINF rewrites a staged network-component INF so its install can run in a
+	// PE: the security descriptors a PE has no API to apply are removed, and the
+	// co-services the install would otherwise start are excluded from starting (attribute
+	// 32, a pebuild extension — see inf.AdaptNetworkComponent for what, why, and on which
+	// files it is meaningful).
+	AdaptNetworkINF bool
 	// Origin names where a copy's bytes come from: empty means the Windows source
 	// (loose file / archive / driver cabinet); a non-empty key selects a plugin's own
 	// directory (a shipped file) or, later, a plugin's build output — the tree

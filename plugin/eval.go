@@ -26,6 +26,13 @@ const (
 	// tool never sets it and so is read unchanged, while one that does set it is not
 	// portable back — the original tool builds no amd64 source for it to matter on.
 	attrBootArea = 16
+	// attrAdaptNetworkINF rewrites a staged network-component INF for a PE (see
+	// inf.AdaptNetworkComponent, which documents which files it is meaningful on — it is
+	// not a general "adapt any INF" flag). A second pebuild extension above the original
+	// format's 1–8, for the same reason as attrBootArea: a plugin written for the original
+	// tool never sets it and is read unchanged, while one that does is not portable back —
+	// the original tool has no component install to adapt an INF for.
+	attrAdaptNetworkINF = 32
 )
 
 // Target is what an INF is compiled for: the source's build number, which selects
@@ -200,15 +207,24 @@ func copyActions(f *inf.File, t Target, dirs map[string]dirTarget) ([]action.Act
 	for _, l := range t.sections(f, "SourceDisksFiles") {
 		attr, _ := l.IntField(2)
 		a := action.Action{
-			Kind:           action.CopyFile,
-			Src:            l.Key,
-			DirID:          l.Field(0),
-			Rename:         l.Field(1),
-			ShipWithPlugin: attr&attrShipWithPlugin != 0,
-			NoDecompress:   attr&attrNoDecompress != 0,
-			Optional:       attr&attrOptional != 0,
-			Uppercase:      attr&attrUppercase != 0,
-			Area:           bootAreaAttr(attr, attrBootArea),
+			Kind:            action.CopyFile,
+			Src:             l.Key,
+			DirID:           l.Field(0),
+			Rename:          l.Field(1),
+			ShipWithPlugin:  attr&attrShipWithPlugin != 0,
+			NoDecompress:    attr&attrNoDecompress != 0,
+			Optional:        attr&attrOptional != 0,
+			Uppercase:       attr&attrUppercase != 0,
+			AdaptNetworkINF: attr&attrAdaptNetworkINF != 0,
+			Area:            bootAreaAttr(attr, attrBootArea),
+		}
+		// Attribute 2 keeps the compressed archive; attribute 32 rewrites the file's text.
+		// Together they would run a text transform over MSCF bytes and stage the result as a
+		// cabinet, which is not a thing anyone can want — rejected here, where the line and
+		// its plugin can be named, rather than silently producing a corrupt archive.
+		if a.NoDecompress && a.AdaptNetworkINF {
+			return nil, fmt.Errorf("[SourceDisksFiles]: %q cannot be both kept compressed "+
+				"(attribute 2) and adapted for a PE (attribute 32)", a.Src)
 		}
 		if d, ok := dirs[a.DirID]; ok {
 			a.Path = d.path

@@ -14,6 +14,7 @@ import (
 
 	"github.com/nradchenko/pe-builder/action"
 	"github.com/nradchenko/pe-builder/compress"
+	"github.com/nradchenko/pe-builder/inf"
 	"github.com/nradchenko/pe-builder/layout"
 	"github.com/nradchenko/pe-builder/source"
 )
@@ -83,6 +84,13 @@ func placeFile(a action.Action, l *layout.Layout, src source.Backing, roots sour
 		// A plugin-shipped file is always final, so attribute 2 on it is simply a
 		// no-op (write as-is), not a lost packed form worth warning about.
 		slog.Warn("cannot keep file compressed; source has no packed archive form", "file", name)
+	}
+
+	// A network component's INF is rewritten on the way out (attribute 32) so its install can
+	// run in a PE — see inf.AdaptNetworkComponent. Applied after decompression, since it
+	// rewrites text; the staged copy is what setupapi reads, and the source is never touched.
+	if a.AdaptNetworkINF {
+		data = inf.AdaptNetworkComponent(data)
 	}
 
 	// A manifest include/inject override names its target path directly; otherwise the
