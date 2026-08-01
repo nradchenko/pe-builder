@@ -22,6 +22,12 @@
 #define PERUN_TIMEOUT   2
 #define PERUN_SKIPPED   3
 
+/* The Result a task that has never run reports: no value written, so nothing to read
+ * back. It is not one of the four above — a task is either declared-and-unrun or it has
+ * a verdict — so a status reader has to name it. (It shares a numeric value with
+ * PERUN_BEGIN, which belongs to the other callback and never reaches this one.) */
+#define PERUN_NEVER_RUN ((DWORD)-1)
+
 /* Progress, reported once with PERUN_BEGIN and once with the outcome, per task.
  * index is 0-based; err is the task's exit code (or a Win32 error when the process
  * could not be started at all). */
@@ -60,5 +66,16 @@ PERUN_API DWORD PerunRunTask(const wchar_t *task, PERUN_PROGRESS cb, void *ctx,
 /* Report the resolved declarations of one stage (NULL = every stage) without running
  * anything. The cheap way to check a plugin's declaration landed. */
 PERUN_API DWORD PerunEnumTasks(const wchar_t *stage, PERUN_ENUM cb, void *ctx);
+
+/* The verdict the runner recorded for each task, read back. A task's output is captured into
+ * the pipe the runner drains, so at boot none of it reaches a console — its last line survives
+ * only as Message. Without a way to read that back, a task can report a detailed diagnosis into
+ * a registry value nobody can open, which is the same as not reporting it.
+ *
+ * result is one of the four Result codes, or PERUN_NEVER_RUN for a task that is declared
+ * but has no verdict yet; any other value means a record written by something else. */
+typedef void (*PERUN_STATUS)(void *ctx, const wchar_t *task, DWORD result, DWORD err,
+                             const wchar_t *lastRun, const wchar_t *message);
+PERUN_API DWORD PerunEnumStatus(const wchar_t *stage, PERUN_STATUS cb, void *ctx);
 
 #endif /* PERUN_H */

@@ -581,6 +581,41 @@ PERUN_API DWORD PerunRunTask(const wchar_t *task, PERUN_PROGRESS cb, void *ctx,
     return rc;
 }
 
+PERUN_API DWORD PerunEnumStatus(const wchar_t *stage, PERUN_STATUS cb, void *ctx)
+{
+    TASK *tasks;
+    DWORD err;
+    int n, i;
+
+    n = loadTasks(stage, NULL, &tasks, &err);
+    if (n < 0)
+        return err == (DWORD)ERROR_FILE_NOT_FOUND ? ERROR_SUCCESS : err;
+
+    for (i = 0; i < n; i++) {
+        wchar_t path[NAME_CCH + 64], lastRun[64], message[MSG_CB];
+        DWORD result = 0, taskErr = 0;
+        HKEY k;
+
+        lastRun[0] = 0;
+        message[0] = 0;
+        wsprintfW(path, L"%s\\%s", CONTRACT_KEY, tasks[i].name);
+        if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, path, 0, KEY_READ, &k) == ERROR_SUCCESS) {
+            result = regDword(k, L"Result", PERUN_NEVER_RUN);
+            taskErr = regDword(k, L"Error", 0);
+            regStr(k, L"LastRun", lastRun, 64);
+            regStr(k, L"Message", message, MSG_CB);
+            RegCloseKey(k);
+        } else {
+            result = PERUN_NEVER_RUN;   /* declared, but no key means no run */
+        }
+        if (cb)
+            cb(ctx, tasks[i].name, result, taskErr, lastRun, message);
+    }
+
+    freeTasks(tasks, n);
+    return ERROR_SUCCESS;
+}
+
 PERUN_API DWORD PerunEnumTasks(const wchar_t *stage, PERUN_ENUM cb, void *ctx)
 {
     TASK *tasks;

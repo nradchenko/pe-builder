@@ -103,7 +103,12 @@ static void onEnum(void *ctx, const wchar_t *task, const wchar_t *stage, DWORD o
                    const wchar_t *label, const wchar_t *command, DWORD required,
                    DWORD timeout, int index, int count)
 {
-    (void)ctx; (void)label; (void)index; (void)count; (void)timeout;
+    int *shown = (int *)ctx;
+
+    (void)label; (void)index; (void)count; (void)timeout;
+
+    if (shown)
+        (*shown)++;
 
     /* The command is streamed separately — it is the one unbounded field here. */
     outw(L"0x%04x  %-12s  %-10s  %s", order, stage, task, required ? L"[required] " : L"");
@@ -111,12 +116,47 @@ static void onEnum(void *ctx, const wchar_t *task, const wchar_t *stage, DWORD o
     outs(L"\r\n");
 }
 
+static void onStatus(void *ctx, const wchar_t *task, DWORD result, DWORD err,
+                     const wchar_t *lastRun, const wchar_t *message)
+{
+    const wchar_t *word;
+    wchar_t errText[32];
+    int *shown = (int *)ctx;
+
+    if (shown)
+        (*shown)++;
+    switch (result) {
+    case PERUN_OK:        word = L"ok";         break;
+    case PERUN_FAILED:    word = L"FAILED";     break;
+    case PERUN_TIMEOUT:   word = L"TIMED OUT";  break;
+    case PERUN_SKIPPED:   word = L"skipped";    break;
+    case PERUN_NEVER_RUN: word = L"never run";  break;
+    /* A Result the contract does not define. Something wrote this key, so show the rest
+     * of what it recorded rather than calling the task unrun and hiding it. */
+    default:              word = L"?";          break;
+    }
+    /* No error column for a task that succeeded or never ran: `ok  error 0` reads as a
+     * failure at a glance, and onProgress suppresses it for the same reason. */
+    errText[0] = 0;
+    if (result != PERUN_OK && result != PERUN_NEVER_RUN)
+        wsprintfW(errText, L"error %u", err);
+    outw(L"%-16s %-10s %-12s %s\r\n", task, word, errText, lastRun);
+    if (message[0]) {
+        /* The task's own last line. On a boot this is the only thing that survives of its
+         * output, so it is the point of the whole command — streamed, since it can be long. */
+        outw(L"    ");
+        outs(message);
+        outs(L"\r\n");
+    }
+}
+
 static void usage(void)
 {
     outw(L"perun - run the pe-builder startup task list\r\n\r\n"
          L"  perun --stage <pre-shell|post-shell>   run one stage's tasks, in order\r\n"
          L"  perun --task <name>                    re-run a single task by name\r\n"
-         L"  perun --list [stage]                   show the resolved list, run nothing\r\n\r\n"
+         L"  perun --list [stage]                   show the resolved list, run nothing\r\n"
+         L"  perun --status [stage]                 what each task recorded when it last ran\r\n\r\n"
          L"Tasks are declared under HKLM\\SOFTWARE\\pe-builder\\Startup and each task's\r\n"
          L"verdict is written back to its own key.\r\n");
 }
@@ -137,12 +177,26 @@ int main(void)
         return 2;
     }
 
-    if (lstrcmpiW(argv[1], L"--list") == 0) {
-        /* A bare --list spans every stage; naming one narrows it. */
-        rc = PerunEnumTasks(argc > 2 ? argv[2] : NULL, onEnum, NULL);
+    if (lstrcmpiW(argv[1], L"--status") == 0 || lstrcmpiW(argv[1], L"--list") == 0) {
+        /* Bare, either one spans every stage; naming one narrows it. */
+        const wchar_t *stage = argc > 2 ? argv[2] : NULL;
+        int shown = 0;
+
+        if (lstrcmpiW(argv[1], L"--status") == 0)
+            rc = PerunEnumStatus(stage, onStatus, &shown);
+        else
+            rc = PerunEnumTasks(stage, onEnum, &shown);
         if (rc != ERROR_SUCCESS) {
             outw(L"perun: cannot read the task list (error %u)\r\n", rc);
             return 2;
+        }
+        /* Say when nothing matched, as --stage does: an empty list is legitimate, but
+         * silence makes a mistyped stage indistinguishable from an empty one. */
+        if (shown == 0) {
+            if (stage)
+                outw(L"perun: no tasks are declared for stage \"%s\"\r\n", stage);
+            else
+                outw(L"perun: no tasks are declared\r\n");
         }
         return 0;
     }

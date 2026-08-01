@@ -97,6 +97,11 @@ The runner touches only these four names, so a task may keep its own counters (`
 `Message` is captured from the task's own stdout, so a task can say something more specific
 than an exit code without inventing an IPC channel.
 
+`perun --status` reads all four back for every declared task, which is what makes `Message`
+worth writing — at boot a task's output goes into the pipe the runner drains and reaches no
+console, so its last line survives only here. A task with no `Result` yet reads as `never
+run`, which distinguishes "declared and skipped" from "declared and never reached".
+
 ## The runner
 
 `perun.dll` exports the walk, for a shell to load and drive with a progress callback so a task's
@@ -117,12 +122,14 @@ declares no tasks carries neither the runner nor a broken reference to one. Enab
     DWORD PerunRunStage(const wchar_t *stage, PERUN_PROGRESS cb, void *ctx, int *pFailedRequired);
     DWORD PerunRunTask (const wchar_t *task,  PERUN_PROGRESS cb, void *ctx, int *pFailedRequired);
     DWORD PerunEnumTasks(const wchar_t *stage, PERUN_ENUM cb, void *ctx);
+    DWORD PerunEnumStatus(const wchar_t *stage, PERUN_STATUS cb, void *ctx);
 
 `perun.exe` is the command line over the same code:
 
     perun --stage pre-shell     run one stage's tasks, in order
     perun --task net            re-run a single task by name
     perun --list [stage]        show the resolved list, run nothing
+    perun --status [stage]      what each task recorded when it last ran
 
 ### Why perun.exe exists
 
