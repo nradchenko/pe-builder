@@ -1,0 +1,28 @@
+; Copyright 2026 Nikita Radchenko
+; SPDX-License-Identifier: Apache-2.0
+;
+; network-tools — the command-line network utilities, for a PE that has a network.
+; Enabling this pulls in `hardware`, which is what configures the network at boot.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "Network tools"
+Enable = 0
+
+[Update]
+depends = hardware
+
+[Closure]
+ipconfig.exe
+ping.exe
+route.exe
+arp.exe
+tracert.exe
+nslookup.exe
+hostname.exe
+
+; arp.exe runtime dependencies
+mgmtapi.dll
+inetmib1.dll
