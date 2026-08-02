@@ -255,12 +255,16 @@ static VOID RamFormatFat16(PUCHAR img, ULONG bytes, ULONG spcHint)
     put32(bs + 39, 0x50454252);                          /* volume id */
     RtlCopyMemory(bs + 43, "PE RAMDISK ", 11);
     RtlCopyMemory(bs + 54, "FAT16   ", 8);
+    /* bs, fat and root all alias img — the caller's disk buffer — so their final writes are not
+       dead; cppcheck cannot see the aliasing. See README.md § FAT16 super-floppy format. */
+    /* cppcheck-suppress unreadVariable */
     bs[510] = 0x55; bs[511] = 0xAA;
 
     /* FAT[0] = media | 0xFF00, FAT[1] = EOC — in both FAT copies. */
     fatStart = 1 * SECTOR_SIZE;
     for (i = 0; i < 2; i++) {
         PUCHAR fat = img + fatStart + i * fatSize * SECTOR_SIZE;
+        /* cppcheck-suppress unreadVariable */
         fat[0] = 0xF8; fat[1] = 0xFF; fat[2] = 0xFF; fat[3] = 0xFF;
     }
 
@@ -269,6 +273,7 @@ static VOID RamFormatFat16(PUCHAR img, ULONG bytes, ULONG spcHint)
     {
         PUCHAR root = img + (1 + 2 * fatSize) * SECTOR_SIZE;
         RtlCopyMemory(root, "PE RAMDISK ", 11);
+        /* cppcheck-suppress unreadVariable */
         root[11] = 0x08;
     }
 }
@@ -649,6 +654,9 @@ static NTSTATUS RamForwardWait(PRAM_EXT ext, PIRP irp)
     status = IoCallDriver(ext->Lower, irp);
     if (status == STATUS_PENDING) {
         KeWaitForSingleObject(&ev, Executive, KernelMode, FALSE, NULL);
+        /* IRP pinned by the completion routine's STATUS_MORE_PROCESSING_REQUIRED — IoCallDriver
+           did not free it, so reading IoStatus after the wait is the WDM synchronous-forward pattern. */
+        /* cppcheck-suppress deallocuse */
         status = irp->IoStatus.Status;
     }
     return status;
