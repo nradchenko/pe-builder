@@ -456,8 +456,9 @@ func emitISO(ctx context.Context, m *manifest.Manifest, treeDir string, rep *Rep
 		OutputPath:  m.Output.Path,
 		VolumeLabel: m.Output.VolumeLabel,
 	}); err != nil {
-		// Do not leave a half-written image at the output path.
-		_ = os.Remove(m.Output.Path)
+		// The target publishes only a complete image, so a failure leaves whatever was
+		// at the output path before — deleting it here would destroy a good earlier ISO
+		// on a build that never wrote to that path at all.
 		return err
 	}
 

@@ -57,6 +57,9 @@ func (iso) Name() string { return "iso" }
 // lifecycle (it is scratch for an ISO build) and must copy it first if it needs to
 // survive. The tree must already contain bootsect.bin at its root; Emit uppercases the
 // tree in place (uppercaseTree) so the on-disc names are boot-readable.
+//
+// The image is mastered into a scratch file beside opts.OutputPath and renamed onto it
+// only when complete, so the output path is never a partially written ISO.
 func (iso) Emit(ctx context.Context, treeDir string, opts Options) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -76,12 +79,36 @@ func (iso) Emit(ctx context.Context, treeDir string, opts Options) error {
 	if err := os.MkdirAll(filepath.Dir(opts.OutputPath), 0o755); err != nil {
 		return fmt.Errorf("iso: create output dir: %w", err)
 	}
-	// go-diskfs Create refuses to overwrite (O_EXCL); clear a stale artifact first.
-	_ = os.Remove(opts.OutputPath)
-	disk, err := diskfs.Create(opts.OutputPath, initialSize, diskfs.SectorSizeDefault)
+
+	// Master into a scratch file beside the destination and rename it into place only
+	// once the image is complete, so the output path holds either the previous image or
+	// the new one and never a half-written master. Writing straight to it would leave a
+	// truncated file — indistinguishable from a good ISO — behind any failure, and behind
+	// a kill at any point during the minutes mastering takes. The cost is space: the
+	// destination is replaced only at the rename, so a rebuild onto an existing image
+	// needs room for both at once.
+	tmp, err := reserveTemp(opts.OutputPath)
+	if err != nil {
+		return fmt.Errorf("iso: reserve scratch image: %w", err)
+	}
+	published := false
+	defer func() {
+		if !published {
+			_ = os.Remove(tmp)
+		}
+	}()
+
+	disk, err := diskfs.Create(tmp, initialSize, diskfs.SectorSizeDefault)
 	if err != nil {
 		return fmt.Errorf("iso: create image: %w", err)
 	}
+	closed := false
+	defer func() {
+		// Close zeroes the disk, so it must not run twice.
+		if !closed {
+			_ = disk.Close()
+		}
+	}()
 	disk.LogicalBlocksize = isoBlockSize
 
 	fsys, err := disk.CreateFilesystem(godisk.FilesystemSpec{
@@ -121,7 +148,43 @@ func (iso) Emit(ctx context.Context, treeDir string, opts Options) error {
 		return fmt.Errorf("iso: finalize: %w", err)
 	}
 
+	// Release the backing file before the rename: the image is only complete once its
+	// last write is flushed out of the handle, and a platform whose rename cannot
+	// replace an open file would fail here rather than publish a partial image.
+	closed = true
+	if err := disk.Close(); err != nil {
+		return fmt.Errorf("iso: close image: %w", err)
+	}
+	if err := os.Rename(tmp, opts.OutputPath); err != nil {
+		return fmt.Errorf("iso: publish image: %w", err)
+	}
+	published = true
 	return nil
+}
+
+// reserveTemp returns an unused path for the in-progress master, in the same directory
+// as dest so that publishing it is a same-filesystem os.Rename — atomic, where a copy
+// across filesystems would reintroduce the partial file it exists to prevent.
+//
+// The name is reserved by creating the file and then removing it, because go-diskfs's
+// Create opens O_EXCL and so insists on making the file itself; the window between the
+// two is guarded by the random name rather than by the file existing.
+func reserveTemp(dest string) (string, error) {
+	f, err := os.CreateTemp(filepath.Dir(dest), filepath.Base(dest)+".tmp-*")
+	if err != nil {
+		return "", err
+	}
+	// Past this point the file exists under a name only this function knows, so every
+	// failure has to unlink it itself — Emit's deferred cleanup has no name to remove.
+	name := f.Name()
+	if err := f.Close(); err != nil {
+		_ = os.Remove(name)
+		return "", err
+	}
+	if err := os.Remove(name); err != nil {
+		return "", err
+	}
+	return name, nil
 }
 
 // uppercaseTree renames every file and directory under dir to the uppercase of its

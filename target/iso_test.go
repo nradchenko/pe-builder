@@ -154,6 +154,80 @@ func TestUppercaseTreeCollision(t *testing.T) {
 	}
 }
 
+// TestISOEmitReplacesExisting: a successful master overwrites whatever is at the output
+// path and leaves no scratch file behind in the output directory.
+func TestISOEmitReplacesExisting(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.iso")
+	if err := os.WriteFile(out, []byte("stale image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := (iso{}).Emit(context.Background(), makeTree(t), Options{OutputPath: out, VolumeLabel: "PEBUILDER"}); err != nil {
+		t.Fatal(err)
+	}
+
+	f, err := os.Open(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := boot.ExtractBootImage(f); err != nil {
+		t.Errorf("output is not a bootable image after replacing a stale one: %v", err)
+	}
+	assertOnly(t, dir, "out.iso")
+}
+
+// TestISOEmitFailureKeepsPrevious is the point of mastering through a scratch file: a
+// master that fails partway must leave the previous image at the output path untouched
+// rather than a truncated one that nothing can tell from a good ISO. The failure is a
+// real mid-master one — go-diskfs rejects the non-ASCII name while writing the
+// directory records, well after the image file has been created and partly written.
+func TestISOEmitFailureKeepsPrevious(t *testing.T) {
+	tree := makeTree(t)
+	if err := os.WriteFile(filepath.Join(tree, "i386", "ünicode.dll"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.iso")
+	previous := []byte("the previously mastered image")
+	if err := os.WriteFile(out, previous, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := (iso{}).Emit(context.Background(), tree, Options{OutputPath: out, VolumeLabel: "PEBUILDER"}); err == nil {
+		t.Fatal("Emit of an unmasterable tree returned no error")
+	}
+
+	got, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("previous image gone after a failed master: %v", err)
+	}
+	if !bytes.Equal(got, previous) {
+		t.Errorf("previous image was overwritten by the failed master (%d bytes)", len(got))
+	}
+	assertOnly(t, dir, "out.iso")
+}
+
+// assertOnly checks the directory holds exactly the named entries — no scratch file
+// left over from mastering.
+func assertOnly(t *testing.T, dir string, want ...string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, e := range entries {
+		got = append(got, e.Name())
+	}
+	sort.Strings(got)
+	sort.Strings(want)
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("output directory holds %v, want %v", got, want)
+	}
+}
+
 // TestISOMissingBootImage: mastering a tree without bootsect.bin is a clear error.
 func TestISOMissingBootImage(t *testing.T) {
 	tree := filepath.Join(t.TempDir(), "tree")

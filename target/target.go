@@ -28,6 +28,10 @@ type Target interface {
 	// treeDir (the ISO master hands it to go-diskfs, which removes it once mastered),
 	// so the caller must not rely on the tree surviving the call and must copy it
 	// first if it needs to keep it.
+	//
+	// A target publishes its artifact only once it is complete: on failure it must
+	// leave whatever was at OutputPath before untouched rather than a partial
+	// artifact, which a later run or burn cannot tell from a good one.
 	Emit(ctx context.Context, treeDir string, opts Options) error
 }
 
