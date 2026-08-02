@@ -70,6 +70,8 @@ To propose a plugin for bundling:
   Windows files, and reproducible from source.
 - For a reauthored plugin, describe the behavior you reproduced and the source you authored
   from, not the original you studied.
+- Follow the [plugin conventions](conventions.md) — README, C linting, version resources, and
+  architecture scoping.
 
 Plugins that don't qualify for bundling are still fully supported as **user-supplied**
 plugins — inclusion is only about what ships *inside* pe-builder, not about what it can

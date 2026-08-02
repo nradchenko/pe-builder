@@ -5,9 +5,15 @@ a driver, a shell, a config change. pe-builder uses the classic Bart's PE Builde
 plugin format (an `.inf` describing the changes), so existing community plugins work,
 and writing your own is a small text file.
 
-This guide gets you started. The full `.inf` format is in
-[`docs/reference/03-plugin-format.md`](../reference/03-plugin-format.md); what may be
-bundled with pe-builder itself is in [`inclusion-policy.md`](inclusion-policy.md).
+This guide gets you started, and the full `.inf` format is in
+[`docs/reference/03-plugin-format.md`](../reference/03-plugin-format.md).
+
+**Before you write a plugin, read the [inclusion policy](inclusion-policy.md) and the
+[conventions](conventions.md), and make sure yours meets every requirement and rule in them** —
+what may ship built-in, then documentation, C linting, version resources, and architecture
+scoping. A plugin our policy keeps out of the bundle is still fully supported as a user-supplied,
+out-of-tree plugin — bundling is only about what ships *inside* pe-builder, not what you can build
+with.
 
 ## Using plugins
 
