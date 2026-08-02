@@ -1,0 +1,21 @@
+; SPDX-License-Identifier: Apache-2.0
+; Copyright 2026 Nikita Radchenko.
+;
+; serialdebug — boot the PE with the Windows kernel debugger enabled on COM1.
+; See README.md for how to attach a client and what the flags do.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name   = "Kernel debugger on COM1"
+Enable = 0
+
+; The loader options are SET, not appended, so each architecture restates the base layer's
+; whole string plus the debug flags — the HAL differs per architecture. TestSerialDebugMatchesBase
+; keeps these in step with base.inf; see README.md § "Why the option string is duplicated".
+[SetValue.i386]
+"txtsetup.sif","SetupData","osloadoptions","""/fastdetect /minint /kernel=ntoskrnl.exe /hal=halaacpi.dll /debug /debugport=com1 /baudrate=115200"""
+
+[SetValue.amd64]
+"txtsetup.sif","SetupData","osloadoptions","""/fastdetect /minint /kernel=ntoskrnl.exe /hal=hal.dll /debug /debugport=com1 /baudrate=115200"""

@@ -57,6 +57,17 @@ func TestMachineArgs(t *testing.T) {
 			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 128},
 			want: []string{"-M", "pc", "-m", "128", "-boot", "d", "-cdrom", "pe.iso"},
 		},
+		{
+			name: "serial attaches com1 for a serialdebug image",
+			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512, Serial: "unix:/tmp/kd.sock,server,nowait"},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso",
+				"-serial", "unix:/tmp/kd.sock,server,nowait"},
+		},
+		{
+			name: "no serial port unless asked for",
+			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

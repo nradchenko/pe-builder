@@ -54,11 +54,19 @@ type machine struct {
 	// cross into the guest without a grab. It needs a guest driver to be useful,
 	// so it is opt-in rather than a default that silently does nothing.
 	USBTablet bool
+	// Serial is a QEMU -serial specification, e.g. "unix:/tmp/kd.sock,server,nowait".
+	// It exists so an image built with the serialdebug plugin can be booted with this
+	// command rather than a hand-written QEMU line: that plugin turns the kernel
+	// debugger on, and with no debugger attached the kernel suppresses DbgPrint and a
+	// bugcheck waits silently, so a debug image booted without a serial port looks
+	// frozen rather than debuggable. Empty means QEMU's default (no serial port).
+	Serial string
 }
 
 func newRunCmd() *cobra.Command {
 	var ram int
 	var usbTablet bool
+	var serial string
 
 	cmd := &cobra.Command{
 		Use:   "run [manifest.hcl | image.iso]",
@@ -108,6 +116,7 @@ func newRunCmd() *cobra.Command {
 				RAM:       ram,
 				KVM:       kvm,
 				USBTablet: usbTablet,
+				Serial:    serial,
 			})
 		},
 	}
@@ -115,6 +124,9 @@ func newRunCmd() *cobra.Command {
 		"guest memory size in MiB (128 or more for a desktop image)")
 	cmd.Flags().BoolVar(&usbTablet, "usb-tablet", false,
 		"add a USB tablet for seamless mouse (needs the guest usb-input plugin)")
+	cmd.Flags().StringVar(&serial, "serial", "",
+		"attach COM1 to a QEMU chardev, e.g. unix:/tmp/kd.sock,server,nowait "+
+			"(for an image built with the serialdebug plugin)")
 	return cmd
 }
 
@@ -276,6 +288,9 @@ func (m machine) args() []string {
 	}
 	if m.USBTablet {
 		args = append(args, "-device", "usb-tablet")
+	}
+	if m.Serial != "" {
+		args = append(args, "-serial", m.Serial)
 	}
 	return args
 }

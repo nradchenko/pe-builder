@@ -25,7 +25,10 @@ PE dependencies.
   source, a built PE, or a bare hive file. `run` boots an image `build` already produced —
   named directly, or through the manifest that wrote it — in QEMU, reading the image's own
   architecture to pick the emulator and machine; it deliberately does not build, and is a
-  plain launcher unrelated to the QMP/OCR test harness. `verify` answers the question an
+  plain launcher. Its `--serial` attaches COM1 to a QEMU chardev, which is what an image built
+  with the `serialdebug` plugin needs to be debuggable — that plugin turns the kernel debugger
+  on, and a debug image booted with no debugger attached suppresses its own output rather than
+  producing any. `verify` answers the question an
   image on disk otherwise cannot — was this built by the pebuild I have now, from this
   manifest? — by reading the receipt the image carries and recomputing every field from
   the current binary, manifest and plugin directories, naming which of engine, manifest,
@@ -213,6 +216,14 @@ PE dependencies.
   concerns, and a build that wants one need not carry the other; enabling it pulls `hardware` in
   by itself. Tools that cannot work in this image are deliberately left out — a staged tool that
   always fails looks like a broken network rather than a missing feature.
+  `serialdebug` stands apart from all of these as a diagnostic: it turns the Windows kernel
+  debugger on over COM1, so a build that will not boot can be observed rather than guessed at — a
+  PE offers no event log and often not even a bugcheck screen, while the debugger streams every
+  `DbgPrint` and the bugcheck data. Disabled by default. Because the INF grammar can only *set* a
+  value, not append to one, it restates the base layer's whole `osloadoptions` per architecture
+  (the HAL differs) and adds the debug flags; `base.TestSerialDebugMatchesBase` pins the two
+  together, so a change to the base options fails the test rather than silently shipping an image
+  whose debugger never comes up.
 - `internal/` — support packages: `golden` (golden-file test helper), `buildinfo`
   (version metadata, plus the product/author/copyright a plugin's binaries stamp into their
   Windows version resource — passed to a plugin's build in the environment so the several
