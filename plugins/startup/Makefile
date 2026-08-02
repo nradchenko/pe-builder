@@ -30,18 +30,20 @@ WINDRES := $(TRIPLE)-windres
 LDFLAGS := -Wl,--no-insert-timestamp
 CFLAGS  := -O2 -s -Wall -Wextra
 
-PEBUILD_VERSION   ?= dev
-PEBUILD_PRODUCT   ?= pe-builder
-PEBUILD_COMPANY   ?= Nikita Radchenko
-PEBUILD_COPYRIGHT ?= Copyright 2026 Nikita Radchenko. Apache-2.0
-VER_STR           := $(PEBUILD_VERSION)
-# FILEVERSION takes four comma-separated numbers, so a non-numeric version ("dev", "0.5.0-rc1")
-# has to become one. Only the leading numeric components are kept, padded out with zeroes.
-# The trailing newline matters: without it a version with no leading digits ("dev", the default
-# for an unstamped build) leaves awk with no record at all, and windres is handed an empty
-# FILEVERSION and refuses the file.
-VER_NUM := $(shell printf '%s\n' "$(VER_STR)" | sed 's/[^0-9.].*//' | awk -F. \
-             '{printf "%d,%d,%d,0", $$1+0, $$2+0, $$3+0}')
+# Attribution for the VERSIONINFO resource. pebuild passes all of these to the plugin's
+# [Build]; the defaults are what a by-hand `make` in this directory gets. VERSION_NUM is
+# the version reduced to the four numbers FILEVERSION takes — derived once, in Go
+# (buildinfo.VersionQuad), because as shell here it drifted and got it wrong.
+PEBUILD_VERSION     ?= dev
+PEBUILD_VERSION_NUM ?= 0,0,0,0
+PEBUILD_PRODUCT     ?= pe-builder
+PEBUILD_COMPANY     ?= Nikita Radchenko
+PEBUILD_COPYRIGHT   ?= Copyright 2026 Nikita Radchenko. Apache-2.0
+VER_STR             := $(PEBUILD_VERSION)
+VER_NUM             := $(PEBUILD_VERSION_NUM)
+# The resource template is shared, so the build materializes it here rather than the
+# plugin shipping a copy; the fallback is the in-tree path, for a by-hand build.
+VER_RC              := $(firstword $(wildcard pebuild/version.rc ../.shared/version.rc))
 
 # The two outputs need separate resource objects: they differ in FILETYPE (an EXE is VFT_APP, a
 # DLL is VFT_DLL) and in the name each reports as its own.
@@ -55,12 +57,12 @@ VERFLAGS = -DVER_NUM='$(VER_NUM)' -DVER_STR='\"$(VER_STR)\"' \
 
 all: perun.dll perun.exe
 
-version-dll.o: version.rc
+version-dll.o: $(VER_RC)
 	$(WINDRES) $(VERFLAGS) -DVER_FILETYPE=VFT_DLL \
 	           -DVER_DESC='\"Startup run-list walker (in-process)\"' \
 	           -DVER_ORIGINAL='\"perun.dll\"' $< -o $@
 
-version-exe.o: version.rc
+version-exe.o: $(VER_RC)
 	$(WINDRES) $(VERFLAGS) -DVER_FILETYPE=VFT_APP \
 	           -DVER_DESC='\"Startup run-list walker\"' \
 	           -DVER_ORIGINAL='\"perun.exe\"' $< -o $@

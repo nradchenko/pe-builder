@@ -35,6 +35,22 @@ endif
 
 CC      := $(TRIPLE)-gcc
 OBJDUMP := $(TRIPLE)-objdump
+WINDRES := $(TRIPLE)-windres
+
+# Attribution for the VERSIONINFO resource. pebuild passes all of these to the plugin's
+# [Build]; the defaults are what a by-hand `make` in this directory gets. VERSION_NUM is
+# the version reduced to the four numbers FILEVERSION takes — derived once, in Go
+# (buildinfo.VersionQuad), because as shell here it drifted and got it wrong.
+PEBUILD_VERSION     ?= dev
+PEBUILD_VERSION_NUM ?= 0,0,0,0
+PEBUILD_PRODUCT     ?= pe-builder
+PEBUILD_COMPANY     ?= Nikita Radchenko
+PEBUILD_COPYRIGHT   ?= Copyright 2026 Nikita Radchenko. Apache-2.0
+VER_STR             := $(PEBUILD_VERSION)
+VER_NUM             := $(PEBUILD_VERSION_NUM)
+# The resource template is shared, so the build materializes it here rather than the
+# plugin shipping a copy; the fallback is the in-tree path, for a by-hand build.
+VER_RC              := $(firstword $(wildcard pebuild/version.rc ../.shared/version.rc))
 
 # The driver is a freestanding PE with the NT-native subsystem, entry point DriverEntry,
 # and imports bound against ntoskrnl.exe (mingw ships the import libs and the ddk/
@@ -59,11 +75,23 @@ DRV_LDLIBS  := -lntoskrnl
 
 all: pesuite.sys
 
-pesuite.sys: pesuite.c
-	$(CC) $(DRV_CFLAGS) $(DRV_LDFLAGS) -o $@ $< $(DRV_LDLIBS)
+# A driver is VFT_DRV rather than VFT_APP, and names the kind of driver it is in
+# FILESUBTYPE — VFT2_DRV_SYSTEM, the catch-all for one that is not a printer, keyboard
+# or other device class Windows enumerates by name.
+version.o: $(VER_RC)
+	$(WINDRES) -DVER_NUM='$(VER_NUM)' -DVER_STR='\"$(VER_STR)\"' \
+	           -DVER_PRODUCT='\"$(PEBUILD_PRODUCT)\"' \
+	           -DVER_COMPANY='\"$(PEBUILD_COMPANY)\"' \
+	           -DVER_COPYRIGHT='\"$(PEBUILD_COPYRIGHT)\"' \
+	           -DVER_DESC='\"Product suite mask driver\"' \
+	           -DVER_INTERNAL='\"pesuite\"' -DVER_ORIGINAL='\"pesuite.sys\"' \
+	           -DVER_FILETYPE=VFT_DRV -DVER_FILESUBTYPE=VFT2_DRV_SYSTEM $< -o $@
+
+pesuite.sys: pesuite.c version.o
+	$(CC) $(DRV_CFLAGS) $(DRV_LDFLAGS) -o $@ pesuite.c version.o $(DRV_LDLIBS)
 	@$(OBJDUMP) -p $@ | awk '/CheckSum/ && $$2 ~ /^0+$$/ \
 		{ print "ERROR: $@ has a zero PE checksum — the driver will not load; " \
 		        "update binutils (link-time checksum) or add a checksum step"; exit 1 }'
 
 clean:
-	rm -f pesuite.sys
+	rm -f pesuite.sys version.o

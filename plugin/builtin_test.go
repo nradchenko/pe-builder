@@ -29,6 +29,12 @@ func TestBuiltinBuildCapablePluginsShipSource(t *testing.T) {
 			continue
 		}
 		name := dir.Name()
+		// Skip a directory that is not a plugin, by the same rule discovery uses — it
+		// holds no .inf. plugins/.shared is one: it carries build-support files the engine
+		// materializes into a plugin's build directory, not a plugin of its own.
+		if !isPluginDir(plugins.FS, name) {
+			continue
+		}
 		sub, err := fs.Sub(plugins.FS, name)
 		if err != nil {
 			t.Fatalf("sub %q: %v", name, err)

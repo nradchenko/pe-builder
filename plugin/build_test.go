@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/nradchenko/pe-builder/inf"
+	"github.com/nradchenko/pe-builder/internal/buildinfo"
 	"github.com/nradchenko/pe-builder/source"
 )
 
@@ -514,5 +515,59 @@ func TestRunBuildMissingProduces(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "never-made.exe") {
 		t.Errorf("error %q should name the missing produced file", err)
+	}
+}
+
+// TestRunBuildProvidesBuildSupport checks the contract a plugin's Makefile relies on: the
+// engine materializes the shared VERSIONINFO template into the build directory, and passes
+// the attribution values — including the numeric FILEVERSION, which is derived in Go
+// precisely so no plugin has to get it right in shell.
+//
+// A plugin builds from a copy of only its own directory, so if this stopped happening the
+// symptom would be every build-capable plugin failing at once on a missing prerequisite —
+// or, worse, quietly producing binaries with no version resource.
+func TestRunBuildProvidesBuildSupport(t *testing.T) {
+	// A build that records what it was handed: the materialized template, then the
+	// environment it ran with. No ';' — an INF reads that as a comment, which would
+	// silently truncate the command rather than fail.
+	const src = "[Version]\nSignature=\"$Windows NT$\"\n[PEBuilder]\nName=\"X\"\n" +
+		"[Build]\nProduces = out.txt\n" +
+		"Command = cp pebuild/version.rc out.txt && env >> out.txt\n"
+	f, err := inf.Parse([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := Parse("demo", f, Target{Arch: "i386"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d := &Discovered{Name: "demo", FS: os.DirFS(t.TempDir()), Units: []*Plugin{p}}
+	built, err := RunBuild(context.Background(), d, t.TempDir(), "i386")
+	if err != nil {
+		t.Fatalf("RunBuild: %v", err)
+	}
+	out, err := fs.ReadFile(built.Dir, "out.txt")
+	if err != nil {
+		t.Fatalf("read build output: %v", err)
+	}
+	got := string(out)
+
+	// The template is there and is the real one, not an empty file.
+	if !strings.Contains(got, "VS_VERSION_INFO VERSIONINFO") {
+		t.Errorf("pebuild/version.rc was not materialized into the build dir; got:\n%s", got)
+	}
+	// Each value reaches the build, and the quad matches what buildinfo derived rather
+	// than a literal — so a change to the derivation cannot pass this by accident.
+	for _, want := range []string{
+		"PEBUILD_VERSION_NUM=" + buildinfo.VersionQuad(),
+		"PEBUILD_VERSION=" + buildinfo.Version,
+		"PEBUILD_COMPANY=" + buildinfo.Company,
+		"PEBUILD_PRODUCT=" + buildinfo.Product,
+		"PEBUILD_COPYRIGHT=" + buildinfo.Copyright,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("build did not receive %q; got:\n%s", want, got)
+		}
 	}
 }

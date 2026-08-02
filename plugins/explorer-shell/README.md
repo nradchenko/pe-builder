@@ -211,6 +211,10 @@ The entry point has to be named once the startup stubs are gone, and only i386 d
 address at 0 and emits a DLL that links cleanly but cannot load, so check `objdump -f` after
 touching that line.
 
+The `VERSIONINFO` object on the link line does not compromise any of this. A `windres` output
+is a lone `.rsrc` section — data, no code and no CRT reference — so it adds a section and
+changes nothing else; the entry-point RVA is identical with and without it.
+
 **A correction worth recording**, because it was believed and acted on: the `R6030` was
 *not* caused by the truncated `rel32`. That was assumed from the fact that removing peshut
 made the crash go away, and never measured — a correctly encoded 14-byte jump reproduced it

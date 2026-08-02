@@ -26,8 +26,31 @@ else
 endif
 
 CC      := $(TRIPLE)-gcc
+WINDRES := $(TRIPLE)-windres
 # -Wl,--no-insert-timestamp zeroes the PE TimeDateStamp for reproducible output.
 LDFLAGS := -Wl,--no-insert-timestamp
+
+# Attribution for the VERSIONINFO resource. pebuild passes all of these to the plugin's
+# [Build]; the defaults are what a by-hand `make` in this directory gets. VERSION_NUM is
+# the version reduced to the four numbers FILEVERSION takes — derived once, in Go
+# (buildinfo.VersionQuad), because as shell here it drifted and got it wrong.
+PEBUILD_VERSION     ?= dev
+PEBUILD_VERSION_NUM ?= 0,0,0,0
+PEBUILD_PRODUCT     ?= pe-builder
+PEBUILD_COMPANY     ?= Nikita Radchenko
+PEBUILD_COPYRIGHT   ?= Copyright 2026 Nikita Radchenko. Apache-2.0
+VER_STR             := $(PEBUILD_VERSION)
+VER_NUM             := $(PEBUILD_VERSION_NUM)
+# The resource template is shared, so the build materializes it here rather than the
+# plugin shipping a copy; the fallback is the in-tree path, for a by-hand build.
+VER_RC              := $(firstword $(wildcard pebuild/version.rc ../.shared/version.rc))
+
+# The two outputs need separate resource objects: they differ in FILETYPE (an EXE is VFT_APP, a
+# DLL is VFT_DLL) and in the name each reports as its own.
+VERFLAGS = -DVER_NUM='$(VER_NUM)' -DVER_STR='\"$(VER_STR)\"' \
+           -DVER_PRODUCT='\"$(PEBUILD_PRODUCT)\"' \
+           -DVER_COMPANY='\"$(PEBUILD_COMPANY)\"' \
+           -DVER_COPYRIGHT='\"$(PEBUILD_COPYRIGHT)\"'
 
 # peshut.dll must link no CRT, on either architecture — see README.md § Why the build is
 # freestanding. That means naming the entry point, and only i386 decorates it (stdcall). A
@@ -45,11 +68,23 @@ endif
 
 all: peshell.exe peshut.dll
 
-peshell.exe: peshell.c startmenu.c startmenu.h
-	$(CC) -O2 -s -mwindows -Wall -Wextra $(LDFLAGS) -o $@ peshell.c startmenu.c -lole32 -luuid -lshell32 -ladvapi32 -lversion
+version-shell.o: $(VER_RC)
+	$(WINDRES) $(VERFLAGS) -DVER_FILETYPE=VFT_APP \
+	           -DVER_DESC='\"Explorer shell launcher\"' \
+	           -DVER_INTERNAL='\"peshell\"' -DVER_ORIGINAL='\"peshell.exe\"' $< -o $@
 
-peshut.dll: peshut.c
-	$(CC) -shared -O2 -s -Wall -Wextra $(LDFLAGS) $(PESHUT_FLAGS) -o $@ $< $(PESHUT_LIBS)
+version-shut.o: $(VER_RC)
+	$(WINDRES) $(VERFLAGS) -DVER_FILETYPE=VFT_DLL \
+	           -DVER_DESC='\"Shell power-off hook\"' \
+	           -DVER_INTERNAL='\"peshut\"' -DVER_ORIGINAL='\"peshut.dll\"' $< -o $@
+
+peshell.exe: peshell.c startmenu.c startmenu.h version-shell.o
+	$(CC) -O2 -s -mwindows -Wall -Wextra $(LDFLAGS) -o $@ peshell.c startmenu.c version-shell.o -lole32 -luuid -lshell32 -ladvapi32 -lversion
+
+# The resource object is data only — no code, no CRT reference — so it links into the
+# freestanding DLL without disturbing what PESHUT_FLAGS establishes.
+peshut.dll: peshut.c version-shut.o
+	$(CC) -shared -O2 -s -Wall -Wextra $(LDFLAGS) $(PESHUT_FLAGS) -o $@ peshut.c version-shut.o $(PESHUT_LIBS)
 
 clean:
-	rm -f peshell.exe peshut.dll
+	rm -f peshell.exe peshut.dll version-shell.o version-shut.o

@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/nradchenko/pe-builder/internal/buildinfo"
+	"github.com/nradchenko/pe-builder/plugins"
 	"github.com/nradchenko/pe-builder/source"
 )
 
@@ -75,6 +76,9 @@ func RunBuild(ctx context.Context, d *Discovered, workRoot, arch string) (*Built
 	if err := os.CopyFS(buildDir, d.FS); err != nil {
 		return nil, fmt.Errorf("plugin %q: materialize source: %w", d.Name, err)
 	}
+	if err := writeBuildSupport(buildDir); err != nil {
+		return nil, fmt.Errorf("plugin %q: %w", d.Name, err)
+	}
 
 	command := spec.Command
 	if command == "" {
@@ -88,6 +92,11 @@ func RunBuild(ctx context.Context, d *Discovered, workRoot, arch string) (*Built
 	// which is exactly what the metadata exists to prevent.
 	cmd.Env = append(os.Environ(),
 		"PEBUILD_VERSION="+buildinfo.Version,
+		// The same version reduced to the four numbers FILEVERSION takes. Derived here
+		// rather than in each plugin's Makefile: as shell it was duplicated per plugin
+		// and silently produced 0.0.0.0 for every stamped build, since `git describe`
+		// prefixes the tag with "v". See buildinfo.VersionQuad.
+		"PEBUILD_VERSION_NUM="+buildinfo.VersionQuad(),
 		"PEBUILD_PRODUCT="+buildinfo.Product,
 		"PEBUILD_COMPANY="+buildinfo.Company,
 		"PEBUILD_COPYRIGHT="+buildinfo.Copyright,
@@ -112,6 +121,40 @@ func RunBuild(ctx context.Context, d *Discovered, workRoot, arch string) (*Built
 		produces[strings.ToLower(name)] = true
 	}
 	return &Built{Dir: os.DirFS(buildDir), Produces: produces}, nil
+}
+
+// buildSupportDir is the subdirectory of a plugin's build directory into which the
+// engine materializes the files every plugin build may rely on. It is namespaced rather
+// than written at the root so an in-tree or third-party plugin can carry a file of any
+// name without the engine overwriting it — the build directory is otherwise the
+// plugin's own, and a name reserved silently would be a trap.
+const buildSupportDir = "pebuild"
+
+// writeBuildSupport materializes the shared build-support files into dir.
+//
+// At present that is the VERSIONINFO resource script every plugin binary compiles. It is
+// shared rather than copied into each plugin because it is identical in all of them and
+// carries no values of its own; a plugin's Makefile supplies those as windres defines.
+// A plugin builds from a copy of only its own directory, so a shared file has to be put
+// there by the engine — there is nothing for a Makefile to reference otherwise.
+//
+// The template lives under plugins/ rather than beside this file so that it stays inside
+// plugins.FS, which is half of what enginehash.Sum covers and therefore what a build
+// receipt records. Moved out, a change to it would alter every plugin binary while the
+// recorded engine hash claimed nothing had changed.
+func writeBuildSupport(dir string) error {
+	sub := filepath.Join(dir, buildSupportDir)
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		return fmt.Errorf("build support: %w", err)
+	}
+	data, err := fs.ReadFile(plugins.FS, ".shared/version.rc")
+	if err != nil {
+		return fmt.Errorf("build support: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "version.rc"), data, 0o644); err != nil {
+		return fmt.Errorf("build support: %w", err)
+	}
+	return nil
 }
 
 // peMachine is the architecture a PE image is built for, or 0 when the file is not a PE.

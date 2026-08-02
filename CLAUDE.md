@@ -66,7 +66,10 @@ PE dependencies.
     to files in the assembled tree.
   - `plugin/` — plugin discovery, parsing, dependency resolution (auto-enable the
     transitive `depends` closure and order it deps-first), evaluation into actions, the
-    `[Build]` pre-pass that compiles a build-capable plugin's payload from source, the
+    `[Build]` pre-pass that compiles a build-capable plugin's payload from source (in a copy
+    of the plugin's own directory, into which the engine also materializes the build support
+    every plugin may use — currently the shared Windows `VERSIONINFO` template, under
+    `pebuild/`, so one copy serves them all rather than each plugin shipping its own), the
     `[Closure]` section that computes a plugin's file set from the static import closure
     of its seed modules (the shared engine the base layer also uses), the `[SourcePaths]`
     section that copies a source file by its exact path (for a basename a name lookup
@@ -213,7 +216,9 @@ PE dependencies.
 - `internal/` — support packages: `golden` (golden-file test helper), `buildinfo`
   (version metadata, plus the product/author/copyright a plugin's binaries stamp into their
   Windows version resource — passed to a plugin's build in the environment so the several
-  binaries cannot disagree about who wrote them or under what licence), `enginehash` (a
+  binaries cannot disagree about who wrote them or under what licence, along with the version
+  reduced to the four numbers a `FILEVERSION` takes, so no plugin restates that in shell),
+  `enginehash` (a
   deterministic content hash over the file trees pebuild embeds — the base layer and the
   built-in plugins — which is what a build receipt records in place of a hash of the
   executable).
