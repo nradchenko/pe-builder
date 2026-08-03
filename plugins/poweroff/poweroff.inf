@@ -1,13 +1,11 @@
 ; Copyright 2026 Nikita Radchenko
 ; SPDX-License-Identifier: Apache-2.0
 ;
-; poweroff — power the machine off from the command shell.
+; poweroff — power the machine off from the command shell, which a /minint PE has no
+; service that can do.
 ;
-; A /minint PE has no service that can power the hardware off on exit, so this
-; plugin adds a small poweroff.exe to system32 (on the PATH) that calls the NT
-; shutdown API. It is the environment's own tool: pebuild compiles it from the
-; bundled poweroff.c at build time (the [Build] section below), rather than
-; shipping a prebuilt binary or taking a file from the Windows source.
+; Adds a small poweroff.exe to system32 (on the PATH), compiled from the bundled
+; poweroff.c at build time rather than shipped prebuilt.
 
 [Version]
 Signature = "$Windows NT$"

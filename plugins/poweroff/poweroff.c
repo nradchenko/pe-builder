@@ -1,26 +1,10 @@
 // Copyright 2026 Nikita Radchenko
 // SPDX-License-Identifier: Apache-2.0
 
-/* poweroff.c — direct ACPI poweroff for a /minint PE.
- *
- * Enables SeShutdownPrivilege via its fixed well-known LUID (so it works even
- * when the LSA policy DB is uninitialized — LookupPrivilegeValue would fail
- * there) and calls NtShutdownSystem(ShutdownPowerOff), bypassing the winlogon
- * shutdown coordinator (the RPC path that returns "device not ready" without
- * RPCSS) and the power policy (the inert ACPI button). It drives the kernel
- * shutdown directly into the HAL's ACPI S5.
- *
- * On success the machine powers off and this never returns. If it returns,
- * the exit code carries the reason:
- *   1  OpenProcessToken failed
- *   3  SeShutdownPrivilege not held by the token (adjust failed)
- *   4  NtShutdownSystem export not found
- *   <negative>  the NTSTATUS from NtShutdownSystem (the kernel refused to
- *               power off — a HAL/ACPI dig, not a wiring problem)
- *
- * Build (32-bit, XP target):
- *   i686-w64-mingw32-gcc -O2 -s -o poweroff.exe poweroff.c -ladvapi32
- */
+/* poweroff.c — direct ACPI poweroff for a /minint PE: enable SeShutdownPrivilege,
+ * then call NtShutdownSystem(ShutdownPowerOff), which drives the kernel shutdown
+ * into the HAL's ACPI S5 without the winlogon coordinator a PE does not run.
+ * See README.md for why that path, and § Exit codes for what a return means. */
 #include <windows.h>
 
 typedef LONG NTSTATUS;
@@ -39,12 +23,12 @@ int main(void)
         return 1;
     tp.PrivilegeCount = 1;
     tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-    /* SeShutdownPrivilege has a fixed well-known LUID {19, 0}; use it directly
-     * rather than LookupPrivilegeValue, which needs the LSA policy DB — that may
-     * be uninitialized in a minimal PE. AdjustTokenPrivileges acts on the token
-     * (a kernel object), so it works regardless of LSA health. */
+    /* SeShutdownPrivilege's fixed well-known LUID {19, 0}, written directly rather than
+     * looked up: LookupPrivilegeValue needs the LSA policy DB, which a minimal PE may
+     * never have initialized. See README.md § Enabling the privilege without LSA. */
     tp.Privileges[0].Luid.LowPart = 19;   /* SE_SHUTDOWN_PRIVILEGE */
     tp.Privileges[0].Luid.HighPart = 0;
+    /* Succeeds even when it adjusted nothing, so the verdict comes from GetLastError. */
     AdjustTokenPrivileges(tok, FALSE, &tp, 0, NULL, NULL);
     if (GetLastError() != ERROR_SUCCESS)
         return 3;
