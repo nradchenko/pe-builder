@@ -3,6 +3,9 @@
 ;
 ; accessories — small GUI accessory apps for the PE.
 ; Off by default; auto-enabled by dependents or enabled directly.
+;
+; Each app is a [Closure] seed, so whatever it imports is staged with it, and contributes one
+; Start-menu entry through the shell's registry contract. Nothing here is arch-specific.
 
 [Version]
 Signature = "$Windows NT$"
