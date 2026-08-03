@@ -1,3 +1,7 @@
+<!--
+Copyright 2026 Nikita Radchenko
+SPDX-License-Identifier: Apache-2.0
+-->
 # wallpaper
 
 A desktop wallpaper for the Explorer desktop, which otherwise renders on a flat background

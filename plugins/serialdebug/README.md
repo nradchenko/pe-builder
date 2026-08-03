@@ -1,3 +1,7 @@
+<!--
+Copyright 2026 Nikita Radchenko
+SPDX-License-Identifier: Apache-2.0
+-->
 # serialdebug
 
 Boots the PE with the Windows kernel debugger enabled on COM1, so a build that fails to start

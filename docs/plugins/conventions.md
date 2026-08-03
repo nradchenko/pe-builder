@@ -25,9 +25,37 @@ own file header is the whole story.
 - **Detail stays with the code when the code is the context** — a focused comment is right where the
   surrounding lines give more context than the README could: why an argument has that value, an
   ordering constraint, a magic number, a trap the next reader would hit anyway.
+- **The README carries the same copyright and licence header** as the plugin's other files (see
+  [Copyright headers](#copyright-headers)), written as an HTML comment so it does not render.
 
 The README is repository documentation, not a bundled file — `plugins/embed.go` embeds only what a
 build needs, so a README is never added to the embed list.
+
+## Copyright headers
+
+Every file in a plugin opens with a copyright line and an SPDX identifier — the `.inf`, the
+`Makefile`, each source file, and the `README.md`:
+
+```
+; Copyright 2026 Jane Doe
+; SPDX-License-Identifier: Apache-2.0
+```
+
+using that file type's comment syntax (`;` in an `.inf`, `#` in a `Makefile`, `//` or `/* */` in C,
+and an HTML comment in Markdown so it does not render).
+
+**Put your own name and the year you wrote the file.** pe-builder is Apache-2.0 and asks for no
+copyright assignment: contributing does not transfer your copyright, so your files stay yours. The
+form is the one in the licence's own appendix, `Copyright [yyyy] [name of copyright owner]`.
+
+- **Editing a file someone else wrote?** Leave its header alone. Apache-2.0 does not require adding
+  yourself for a change, and per-file contributor lists grow into noise nobody maintains.
+- **Do not bump the year** on later edits, and do not write year ranges. It creates diff churn and
+  buys nothing.
+- **Do not add yourself to `NOTICE`.** That file carries the attributions Apache-2.0 §4(d) obliges
+  *everyone redistributing pe-builder* to reproduce; it is not a contributor list.
+- **The SPDX line is always `Apache-2.0`**, whoever holds the copyright — it states the licence the
+  contribution is made under, which `CONTRIBUTING.md` fixes for every contribution.
 
 ## C source lints clean (cppcheck)
 

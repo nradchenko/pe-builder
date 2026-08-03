@@ -1,3 +1,7 @@
+<!--
+Copyright 2026 Nikita Radchenko
+SPDX-License-Identifier: Apache-2.0
+-->
 # startup — the startup run-list contract
 
 A registry contract for one-shot startup tasks, and the runner that walks it. This plugin

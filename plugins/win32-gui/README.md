@@ -1,3 +1,7 @@
+<!--
+Copyright 2026 Nikita Radchenko
+SPDX-License-Identifier: Apache-2.0
+-->
 # win32-gui
 
 The shared Win32 GUI runtime: the libraries a graphical program needs beyond the base

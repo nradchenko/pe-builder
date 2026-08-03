@@ -1,3 +1,7 @@
+<!--
+Copyright 2026 Nikita Radchenko
+SPDX-License-Identifier: Apache-2.0
+-->
 # hardware — device and network configuration at run time
 
 Runs the two configuration passes a PE never gets, at boot, against the real device tree: the

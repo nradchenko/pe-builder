@@ -1,3 +1,7 @@
+<!--
+Copyright 2026 Nikita Radchenko
+SPDX-License-Identifier: Apache-2.0
+-->
 # games
 
 The Windows XP games that run in a minimal PE, grouped under a **Games** folder in
