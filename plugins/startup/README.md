@@ -204,6 +204,17 @@ reached the hive, while costing a boot nothing:
       options { demo_task = "pre-shell" }   # or "post-shell", or omit for "off"
     }
 
+## Build
+
+`perun.dll` and `perun.exe` are cross-compiled with **MinGW-w64** — no MSVC, no SDK. Both are plain
+user-mode binaries, so the architecture selects the toolchain and nothing else: `make ARCH=i386` (the
+default) and `make ARCH=amd64`, which the plugin's `[Build.<arch>]` sections pass.
+
+**`perun.c` is compiled into both outputs**, rather than the EXE linking the DLL. The list semantics
+then physically cannot drift between the two front ends, which is the point of having one
+implementation — and `perun.exe` stays runnable on its own, without `perun.dll` beside it. That
+matters because it is the tool you reach for when something is already wrong.
+
 ## Testing it on the host
 
 There is no automated test for the runner yet. To exercise the list semantics — ordering and

@@ -15,6 +15,9 @@
 # Both must match the PE's architecture. peshut.dll especially: it is injected into other
 # processes through AppInit_DLLs, and a process only loads a DLL of its own bitness — a
 # 32-bit hook cannot enter a native amd64 explorer, and there is no WOW64 path for it.
+#
+# Why peshut links freestanding, and why its entry point is named per architecture:
+# see README.md § Why the build is freestanding.
 ARCH ?= i386
 
 ifeq ($(ARCH),amd64)

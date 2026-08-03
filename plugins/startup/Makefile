@@ -10,10 +10,8 @@
 # [Build.<arch>] Command passes it. These are user-mode binaries, so the architecture picks
 # the toolchain and nothing else.
 #
-# perun.c is compiled into *both* outputs rather than the EXE linking the DLL. The list
-# semantics then physically cannot drift between the two front ends, which is the point of
-# having one implementation — and perun.exe stays runnable on its own, without perun.dll
-# beside it, which matters because it is the tool you reach for when something is wrong.
+# perun.c is compiled into *both* outputs rather than the EXE linking the DLL, so the list
+# semantics cannot drift between the two front ends — see README.md § Build.
 ARCH ?= i386
 
 ifeq ($(ARCH),amd64)
