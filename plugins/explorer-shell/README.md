@@ -261,13 +261,17 @@ things are needed, all in `explorer-shell.inf`:
   would force classic and hide the choice) is deliberately not set. Note there is no
   `Start_ShowClassicMenu` value — that name appears in no shell binary and does nothing.
 
-**Right-column / panel cleanup.** The panel is trimmed to what makes sense in a PE via per-user
+### Right-column / panel cleanup
+
+The panel is trimmed to what makes sense in a PE via per-user
 `Explorer\Advanced` flags: My Music / My Pictures / Printers hidden (`Start_ShowMyMusic` /
 `Start_ShowMyPics` / `Start_ShowPrinters` = 0). Because the modern menu hides My Computer and My
 Documents from the *desktop* by default (it relocates them into the menu), they're kept on the
 desktop explicitly under `HideDesktopIcons\NewStartPanel` (CLSID = 0 = shown).
 
-**Internet / E-mail.** The panel ships two default *pinned* items — Internet (the default browser)
+### Internet / E-mail
+
+The panel ships two default *pinned* items — Internet (the default browser)
 and E-mail (the default mail client) — shown unconditionally, with no policy to remove them (there
 is no client-registration or restriction lever; confirmed by reverse-engineering shell32). The
 pinned list is a serialized pidl stream shell32 streams in and out of
@@ -280,7 +284,9 @@ the panel has been initialized (value `2`, what the shell writes after its own f
 it the shell treats the profile as fresh and re-seeds both default pins straight over the marker.
 The two values are only correct together — removing either brings Internet and E-mail back.
 
-**First-run auto-open.** Left alone, the panel opens itself the first time the desktop comes up.
+### First-run auto-open
+
+Left alone, the panel opens itself the first time the desktop comes up.
 The gate is `Explorer\Advanced\StartButtonBalloonTip`: explorer opens the panel while the value is
 below `2`, then stamps `2` itself, so pre-seeding `2` suppresses it. The name is misleading — it
 reads as if it controlled a balloon tip, and one function forks on `IsStartPanelOn()` to decide
@@ -290,7 +296,9 @@ This is the **second** thing depending on `StartMenuInit=2`: below that value, e
 initialization deletes both this value and the `StartPage` key above, so the pinned-list marker and
 the auto-open gate stand or fall together.
 
-**Top-level items are pinned.** The panel does not render Start Menu root shortcuts, so a contract
+### Top-level items are pinned
+
+The panel does not render Start Menu root shortcuts, so a contract
 entry with a leading backslash (see [Start-menu items](#start-menu-items)) is *also* pinned: peshell
 drives shell32's "Pin to Start menu" object — `IStartMenuPin::Modify(NULL, pidl)` on the same CLSID
 registered above — once per item, in contract order, right after the menu is built and before

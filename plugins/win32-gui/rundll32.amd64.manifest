@@ -11,7 +11,7 @@
      On amd64 that is not a cosmetic difference. rundll32 has no embedded manifest at all
      here, so this file is its ONLY context: name x86 and every applet fails to start with
      "the application configuration is incorrect" (14001), rather than merely drawing v5
-     controls. See README.md § Architecture. -->
+     controls. See README.md § The external manifests, per architecture. -->
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <!-- Our own identity, deliberately not a Microsoft one — see rundll32.exe.manifest. -->
   <assemblyIdentity

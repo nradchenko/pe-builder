@@ -1354,7 +1354,7 @@ static int cmd_net(int argc, char **argv)
     /* Start what was just installed, before any adapter is introduced. The order matters and is
      * the whole reason this runs here: NDIS binds a protocol to a miniport when one of them
      * registers, and only the adapter-registration path works in a PE — so the protocol has to
-     * be running before the NIC appears. See README.md § Why the network task runs first. */
+     * be running before the NIC appears. See README.md § The order of the two passes. */
     if (SUCCEEDED(hr)) {
         for (i = 0; i < count; i++) {
             const GUID *cls;
