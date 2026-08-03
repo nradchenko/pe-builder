@@ -23,6 +23,7 @@ tracert.exe
 nslookup.exe
 hostname.exe
 
-; arp.exe runtime dependencies
+; arp reads the ARP table through SNMP's MIB-II provider and loads it by name at run time,
+; so no import closure can see these. See README.md § The two hand-seeded DLLs.
 mgmtapi.dll
 inetmib1.dll
