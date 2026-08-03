@@ -58,15 +58,10 @@ pehw.exe = 2
 ; co-services a minimal PE does not run. See inf.AdaptNetworkComponent.
 nettcpip.inf = 20,, 32
 
-; setupapi picks each device's driver from whatever is reachable on the INF search path, so what
-; is listed here decides what the pass can install — and what it spends time on. The INF and the
-; miniport it names are staged as a pair: the install runs with DI_NOFILECOPY because the CD
-; cannot be written to, so a driver not staged here is never copied in either — the device
-; installs and then fails to start.
-;
-; Networking only, deliberately. Earlier revisions also staged the chipset, IDE, USB and PS/2
-; input INFs; that cost most of the pass's runtime, on the boot path, and bought nothing, because
-; the base image already drives all of it from the boot driver set.
+; What is listed here decides what the pass can install, and what it spends time on — networking
+; only, deliberately. See README.md § Which INFs are staged. The INF and the miniport it names are
+; staged as a pair: the install runs with DI_NOFILECOPY because the CD cannot be written to, so a
+; driver not staged here is never copied in either — the device installs and then fails to start.
 ;
 ; Scoped by architecture because the two media disagree about both halves — the amd64 INFs carry
 ; different names and cover a different set of adapters. Left unscoped, an amd64 build fails at

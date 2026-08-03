@@ -7,7 +7,7 @@
 #
 # ARCH selects the target architecture (i386 or amd64), defaulting to i386; the plugin's
 # [Build.<arch>] Command passes it. A plain user-mode binary, so the architecture picks the
-# toolchain and nothing else.
+# toolchain and nothing else. See README.md § Build.
 ARCH ?= i386
 
 ifeq ($(ARCH),amd64)

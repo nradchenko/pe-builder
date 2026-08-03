@@ -121,6 +121,11 @@ NE2000-PCI or e1000 at all. Left unscoped, an amd64 build fails at assembly on i
 which is the good outcome; the bad one is an arch-scoped INF section that stages nothing while
 unscoped registry sections still register it.
 
+**Networking only, deliberately.** Earlier revisions also staged the chipset, IDE, USB and PS/2
+input INFs. That cost most of the pass's runtime — on the boot path, where the user is watching —
+and bought nothing: the base image already drives all of it from the boot driver set, so the pass
+was re-installing drivers that were already loaded and working.
+
 Absences that look like omissions and are not:
 
 - **No `display.inf`.** QEMU presents `1234:1111` (stdvga), which no bundled XP INF claims; the
@@ -128,6 +133,12 @@ Absences that look like omissions and are not:
 - **No sound.** Nothing in a PE plays audio yet.
 - **QEMU's `e1000` is covered by no bundled XP INF**, and there is nothing for `virtio`. RTL8139
   is not merely conventional here — it is the only emulated NIC the media can drive.
+
+## Build
+
+`pehw.exe` is cross-compiled with **MinGW-w64** — no MSVC, no SDK. It is a plain user-mode binary, so
+the architecture selects the toolchain and nothing else: `make ARCH=i386` (the default) and
+`make ARCH=amd64`, which the plugin's `[Build.<arch>]` sections pass.
 
 ## Running it by hand
 
