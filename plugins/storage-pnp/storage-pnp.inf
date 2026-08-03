@@ -2,11 +2,9 @@
 ; SPDX-License-Identifier: Apache-2.0
 ;
 ; storage-pnp — make data disks and volumes enumerate and receive drive letters in the
-; /minint PE. The text-setup SYSTEM hive has an empty Enum\Root, so the partition/volume
-; stack (partmgr -> ftdisk -> volume -> mountmgr letter) never comes up for non-boot disks.
-; This reconstructs the minimal PnP root device tree: partmgr and volsnap as root-enumerated
-; legacy-driver nodes, boot-started (disk.sys/fastfat.sys already load via txtsetup), and
-; gives ftdisk and mountmgr their load-order tags within the System Bus Extender group.
+; /minint PE, whose text-setup SYSTEM hive has an empty Enum\Root.
+;
+; Registry configuration only: it ships no code and needs no toolchain.
 
 [Version]
 Signature = "$Windows NT$"
@@ -19,7 +17,11 @@ Enable = 0
 [SetupReg.AddReg]
 ; PartMgr — the partition manager: turns disk partitions into volume devices. Boot-start,
 ; System Bus Extender group, and a Root\LEGACY_PARTMGR PnP node so it loads without a real
-; PnP install pass.
+; PnP install pass — see README.md § Why the nodes are LEGACY_* root devices.
+;
+; Tag 5 is unexplained: the source assigns PartMgr tag 0xa, and 5 is in no GroupOrderList.
+; See README.md § Values that came from the source, and one that did not — it is on the boot
+; path, so do not "correct" it without a boot test.
 0x4,"ControlSet001\Services\PartMgr","Start",0x0
 0x4,"ControlSet001\Services\PartMgr","Type",0x1
 0x4,"ControlSet001\Services\PartMgr","ErrorControl",0x1
@@ -58,7 +60,8 @@ Enable = 0
 0x1,"ControlSet001\Enum\Root\LEGACY_VOLSNAP\0000\Control","ActiveService","VolSnap"
 0x4,"ControlSet001\Enum\Root\LEGACY_VOLSNAP","NextInstance",0x1
 ; ftdisk (volume manager) and mountmgr (mount-point/drive-letter manager) load as boot
-; drivers via txtsetup; ensure their load-order tags within the group match the reference.
+; drivers via txtsetup; only their load-order tags within the group are set here, and these
+; two do match the source's own hivesys.inf (9 and 8).
 0x1,"ControlSet001\Services\ftdisk","Group","System Bus Extender"
 0x4,"ControlSet001\Services\ftdisk","Tag",0x9
 0x1,"ControlSet001\Services\mountmgr","Group","System Bus Extender"
