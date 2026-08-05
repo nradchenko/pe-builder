@@ -133,97 +133,30 @@ PE dependencies.
   source is reused instead of re-running a full LZX folder decode. Enabled by default
   (`~/.cache/pe-builder`); `--no-cache`, `PEBUILD_NO_CACHE`, and `PEBUILD_CACHE_DIR` control
   it. A nil cache is a valid disabled cache, so a stage holds one unconditionally.
-- `plugins/` — the built-in plugins bundled with pebuild (embedded via `go:embed`),
-  each a directory with an `.inf`; a build-capable one (e.g. `poweroff`) ships source
-  and a `[Build]` declaration, not a prebuilt binary; a closure-computed one (e.g.
-  `win32-gui`, the shared GUI runtime) declares a `[Closure]` seed instead of a hand
-  file list. The desktop composes from six: `storage-pnp` rebuilds the PnP root device
-  tree so disks/volumes enumerate and get a drive letter; `ramdrive` is a build-capable
-  plugin shipping a from-scratch WDM PnP kernel driver (`ramdrive.sys`, cross-compiled with
-  MinGW-w64, no WDK) that allocates a RAM-backed disk, self-formats it as a FAT16
-  super-floppy, and registers the Mount Manager interface so the volume gets a drive letter —
-  a writable scratch home for the profile with no attached disk; `win32-gui` provides the
-  shared Win32 GUI runtime; `system-tools` and `accessories` add optional GUI utilities
-  (system-administration tools and small accessories), each computing its file set from a
-  `[Closure]` seed and contributing Start-menu entries through the shell's registry contract;
-  and `explorer-shell` boots to a Windows Explorer desktop instead
-  of a bare prompt — it ships `peshell` (a build-capable launcher that self-registers the
-  shell/COM components at runtime — plus, through a registry contract of its own, any COM
-  server another plugin stages and declares, since one left unregistered is staged but inert —
-  sets up the profile, applies the visual style the registry
-  selects, builds the Start menu from the registry contract other plugins contribute to —
-  creating each shortcut, its submenu folders, and pinning the root-anchored ones into the
-  modern panel — and runs explorer) and `peshut` (a hook so the shell's Turn Off powers the
-  machine off), and depends on the others. The Start-menu layout logic is a pure planner
-  (`startmenu.c`) with a host golden test in `smtest/`, so the contract is verifiable without
-  booting. Three more plugins give that desktop the XP look, each a
-  layer of one chain: `pesuite` is a build-capable plugin whose tiny system-start driver
-  (`pesuite.sys`) sets the product SuiteMask bit the Win32 subsystem gates the whole
-  WinStation/session subsystem on — the kernel never writes it in a PE, because a PE needs
-  `Setup\SetupType=1` to get its shell run and that makes the kernel skip its product init;
-  `terminal-services` (depends on `pesuite`) defines and starts the terminal-services stack,
-  whose port the session subsystem waits for, so the PE has a console session at all; and
-  `luna` (depends on `explorer-shell` + `terminal-services`) stages the XP "Luna" visual style
-  and the Themes service, then selects it in the registry. A visual-style plugin ships no code:
-  it only selects a style, and peshell applies it — the theme hook belongs to the client that
-  asks for it and dies with that client, so the applier has to be the long-lived shell process.
-  `wallpaper` (depends on `explorer-shell`) puts the XP default wallpaper on that desktop,
-  which otherwise comes up on a flat colour. It ships no code: it stages the image and the
-  Active Desktop surface that paints it (the classic path draws bitmaps only, and the image
-  is a JPEG), then declares the wallpaper values, the COM server to register, and the
-  Active-Desktop policy to lift — peshell does the applying, as it does for the visual style,
-  because a PE has no winlogon to apply per-user desktop settings at logon. The engine it
-  stages is why it is a separate plugin: a build that does not enable it pays nothing.
-  Standing apart from that desktop chain, `games` is an optional plugin that stages the XP
-  games a minimal PE can actually run (Solitaire, Minesweeper, FreeCell, Spider Solitaire)
-  from a `[Closure]` seed each, grouping them under a `Games` submenu via the path-encoded
-  Start-menu contract; Hearts and Pinball are left out, needing a network stack and
-  DirectX/sound respectively.
-  `startup` is infrastructure rather than a feature: it declares a registry contract for
-  one-shot startup tasks (`HKLM\SOFTWARE\pe-builder\Startup` — each entry a stage, an order,
-  a label, a command line, and an optional timeout) and ships `perun` to walk it. A PE runs
-  none of the setup passes Windows would have, so work that must happen once at boot has
-  nowhere else to live; hosting it in the shell would make it require a desktop and would
-  let it run only once per boot. Tasks are therefore separate processes, which keeps the
-  risky code out of the shell's address space and makes each one re-runnable by hand.
-  One implementation serves two front ends — `perun.dll`, the in-process interface for a shell
-  to walk the list and paint progress on the splash it already draws, and `perun.exe`, which
-  runs a stage, re-runs a single task, or lists the resolved order. The runner (not the task)
-  writes each verdict back to the task's own key, so one that crashed or timed out still leaves
-  a record, and a failed task never costs the user their boot. A desktop build walks the list
-  from `peshell` (which paints each task's label on its splash), a console build from
-  `startnet.cmd`; both guard on the runner being staged, so neither requires the plugin. It
-  owns the contract only: consumers declare `depends = startup` and contribute their entries.
-  `hardware` is its first consumer: it ships `pehw`, which runs the PnP driver-install pass at
-  boot that a PE otherwise never gets. Baking the registry state an install *would* have
-  produced is what fails — a NIC configured that way loads its miniport and unloads it again —
-  so the pass runs for real, letting setupapi choose each driver rather than naming an INF, and
-  installing read-only so nothing is copied onto boot media. It stages the INF search path that
-  choice draws on, scoped to the devices a VM actually presents (the whole `inf` directory is
-  739 files and 43 MB, most of it modems), which is why adding hardware support means adding an
-  INF *and* the driver binaries it names. A second pass installs the network components through
-  `INetCfg`, which is the other half of a NIC's setup — binding a driver writes no per-adapter
-  configuration, so the device never starts without it — and which writes the protocol services
-  itself, so those are not baked either. Since the class it needs is a COM server that only
-  Windows setup ever registers, the pass registers it at run time rather than depending on the
-  shell's registration contract, leaving a console build able to reach the network too. The order
-  of the two passes is load-bearing rather than cosmetic: NDIS binds a protocol to a miniport when
-  one of them registers with it, and only the adapter-registering-last path works, so the network
-  task runs *before* the device pass and starts what it installs.
-  `network-tools` is its companion: the command-line utilities (`ipconfig`, `ping`, `route`,
-  `arp`, `tracert`, `nslookup`, `hostname`), each computed from a `[Closure]` seed.
-  It is a separate plugin because configuring devices and giving a user tools are different
-  concerns, and a build that wants one need not carry the other; enabling it pulls `hardware` in
-  by itself. Tools that cannot work in this image are deliberately left out — a staged tool that
-  always fails looks like a broken network rather than a missing feature.
-  `serialdebug` stands apart from all of these as a diagnostic: it turns the Windows kernel
-  debugger on over COM1, so a build that will not boot can be observed rather than guessed at — a
-  PE offers no event log and often not even a bugcheck screen, while the debugger streams every
-  `DbgPrint` and the bugcheck data. Disabled by default. Because the INF grammar can only *set* a
-  value, not append to one, it restates the base layer's whole `osloadoptions` per architecture
-  (the HAL differs) and adds the debug flags; `base.TestSerialDebugMatchesBase` pins the two
-  together, so a change to the base options fails the test rather than silently shipping an image
-  whose debugger never comes up.
+- `plugins/` — the built-in plugins bundled with pebuild (embedded via `go:embed`). Three kinds:
+  **build-capable** (ships source + a `[Build]` declaration compiled by the pre-pass, not a prebuilt
+  binary — `poweroff`, `ramdrive`, `pesuite`, `explorer-shell`, `hardware`, `startup`),
+  **closure-computed** (a `[Closure]` seed instead of a hand file list — `win32-gui`, `system-tools`,
+  `accessories`, `games`, `network-tools`), and plain `.inf`-only (`luna`, `wallpaper`, `serialdebug`,
+  `terminal-services`, `storage-pnp`). **Each plugin's own `README.md` holds its detail**
+  — mechanisms, decisions, gotchas; the index below is one line each, grouped by role:
+  - *Desktop:* `explorer-shell` boots to the Explorer desktop (ships `peshell`/`peshut`; owns the
+    Start-menu and COM-self-registration contracts other plugins contribute to; the Start-menu planner
+    `startmenu.c` has a host golden test in `smtest/`), with its supporting chain — `win32-gui` (shared
+    Win32 GUI runtime), `storage-pnp` (rebuilds the PnP tree so disks get a drive letter), `ramdrive`
+    (from-scratch WDM RAM-disk driver → a writable profile with no attached disk), and `system-tools` /
+    `accessories` (optional GUI utilities).
+  - *The XP look:* `pesuite` (system-start driver setting the product SuiteMask the session subsystem
+    gates on) → `terminal-services` (the session stack) → `luna` (the "Luna" visual style + Themes
+    service); `wallpaper` (the XP wallpaper via Active Desktop). Each depends leftward.
+  - *Networking* (each pulls `hardware` in): `hardware` ships `pehw`, the boot-time PnP driver-install
+    + `INetCfg` network-config pass; `network-tools` the CLI utilities (`ipconfig`, `ping`, …).
+  - *Infrastructure:* `startup` — the `HKLM\SOFTWARE\pe-builder\Startup` one-shot-task contract + the
+    `perun` runner that walks it (from `peshell` on a desktop build, `startnet.cmd` on a console one);
+    `hardware` is its first consumer.
+  - *Standalone:* `poweroff` (shutdown command; the reference build-capable plugin, driving the shell's
+    Turn Off via `peshut`), `games` (the XP games a minimal PE can run), `serialdebug` (turns the kernel
+    debugger on over COM1; `pebuild run --serial` attaches).
 - `internal/` — support packages: `golden` (golden-file test helper), `buildinfo`
   (version metadata, plus the product/author/copyright a plugin's binaries stamp into their
   Windows version resource — passed to a plugin's build in the environment so the several
