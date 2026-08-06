@@ -138,7 +138,7 @@ PE dependencies.
   binary — `poweroff`, `ramdrive`, `pesuite`, `explorer-shell`, `hardware`, `startup`),
   **closure-computed** (a `[Closure]` seed instead of a hand file list — `win32-gui`, `system-tools`,
   `accessories`, `games`, `network-tools`), and plain `.inf`-only (`luna`, `wallpaper`, `serialdebug`,
-  `terminal-services`, `storage-pnp`). **Each plugin's own `README.md` holds its detail**
+  `terminal-services`, `storage-pnp`, `network-ui`). **Each plugin's own `README.md` holds its detail**
   — mechanisms, decisions, gotchas; the index below is one line each, grouped by role:
   - *Desktop:* `explorer-shell` boots to the Explorer desktop (ships `peshell`/`peshut`; owns the
     Start-menu and COM-self-registration contracts other plugins contribute to; the Start-menu planner
@@ -150,7 +150,8 @@ PE dependencies.
     gates on) → `terminal-services` (the session stack) → `luna` (the "Luna" visual style + Themes
     service); `wallpaper` (the XP wallpaper via Active Desktop). Each depends leftward.
   - *Networking* (each pulls `hardware` in): `hardware` ships `pehw`, the boot-time PnP driver-install
-    + `INetCfg` network-config pass; `network-tools` the CLI utilities (`ipconfig`, `ping`, …).
+    + `INetCfg` network-config pass; `network-tools` the CLI utilities (`ipconfig`, `ping`, …);
+    `network-ui` the Network Connections folder, tray icon and adapter dialogs.
   - *Infrastructure:* `startup` — the `HKLM\SOFTWARE\pe-builder\Startup` one-shot-task contract + the
     `perun` runner that walks it (from `peshell` on a desktop build, `startnet.cmd` on a console one);
     `hardware` is its first consumer.

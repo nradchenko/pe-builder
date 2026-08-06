@@ -59,6 +59,12 @@ product type — so a 32-bit Server 2003 build hits them just as a 64-bit one do
 | Folder Options / Taskbar properties | works | fails | fails |
 | A drive's Properties dialog | works | fails | fails |
 | `wallpaper` renders | works | **not at boot**, applies manually | fails |
+| `network-ui` Status/Properties dialogs | work | fail | fail |
+
+`network-ui`'s Status and Properties dialogs also do not open on a **localized** source, which
+carries none of the service-pack resource satellites the dialogs read their templates from. Verified
+on a localized XP SP3 medium: the network itself works, the folder lists the adapter and the tray
+icon works — only the dialogs are affected.
 
 - **Folder Options and Taskbar properties do nothing.** Both open through the same shell
   entry point, which posts a message to the shell window; Explorer receives it and does not
@@ -68,6 +74,11 @@ product type — so a 32-bit Server 2003 build hits them just as a 64-bit one do
 - **A drive's Properties dialog does not work.** Right-clicking a drive and choosing
   **Properties** — the General/Hardware sheet that opens normally on a 2600 build — does
   nothing. The cause is not yet established.
+- **A connection's Status and Properties dialogs do not open.** The Network Connections folder
+  lists the adapter and the notification-area icon works, but both dialogs fail silently. This
+  follows from the networking gap below rather than being separate: the connection never finishes
+  coming up — it sits at "Acquiring network address" — and the property sheet enumerates installed
+  components through `INetCfg`, which is exactly what an incomplete component install breaks.
 - **The `wallpaper` plugin does not render at boot.** The desktop comes up on a flat colour
   instead of the image. The plugin builds and stages its files, and the wallpaper is
   configured in the registry — verified in the built hives: `Wallpaper` is a `REG_EXPAND_SZ`

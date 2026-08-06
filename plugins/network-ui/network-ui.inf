@@ -1,0 +1,101 @@
+; Copyright 2026 Nikita Radchenko
+; SPDX-License-Identifier: Apache-2.0
+;
+; network-ui — the Windows network UI on the Explorer desktop: the Network Connections folder in
+; Control Panel, a notification-area icon that shows link state and activity, and the adapter
+; Status and Properties dialogs behind it.
+;
+; Stages and configures only: it ships no code and needs no toolchain. The components it shows
+; are Microsoft's own shell DLLs, so the work is staging what they load by name and registering
+; them; the notification area itself belongs to explorer-shell.
+;
+; Off by default. Enabling it auto-enables the desktop it appears on and the pass that
+; configures the network it displays.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "Network UI"
+Enable = 0
+
+; explorer-shell = the desktop this appears on, and the shell that registers the COM servers named
+; below and loads shell service objects at start-up. hardware = the run-time pass that configures
+; the network being shown; without it the folder is correct and empty.
+[Update]
+depends = explorer-shell, hardware
+
+; The three modules the UI is made of: the folder and its classes, the connection manager, and the
+; Control Panel stub. Unscoped — every supported source carries all three under these names.
+; Why they are seeded rather than inherited: README.md § What it stages.
+[Closure]
+netshell.dll
+netman.dll
+ncpa.cpl
+
+; Delay-loaded, so invisible to the closure walk: netman reaches for hnetcfg and rasdlg, netshell
+; for rasdlg and wzcdlg. See README.md § What it stages.
+hnetcfg.dll
+rasdlg.dll
+wzcdlg.dll
+
+; The notification area's host: without it there is no tray icon *and* no Status dialog, both
+; being raised through this object. See README.md § The tray icon.
+stobject.dll
+
+; The resource satellites the dialogs read their templates from. Scoped by *build*, not
+; architecture: the split follows the source's codebase, so scoping by arch would stage XP's names
+; on a 32-bit 2003 source, which has none of them. See README.md § What it stages.
+; Attribute 4 = copy only if present. A localized source need not carry these: the satellite set
+; varies with the media's locale, and one of the 3790 names is LCID-specific. The consuming DLLs
+; name them the same way regardless, so their absence cannot be predicted from the binaries.
+; Required entries would fail such a build outright; optional ones degrade to the dialogs not
+; opening, which is what a source lacking them gives anyway.
+[SourceDisksFiles.2600]
+xpsp1res.dll = 2,, 4
+xpsp2res.dll = 2,, 4
+xpsp3res.dll = 2,, 4
+
+[SourceDisksFiles.3790]
+ws03res.dll = 2,, 4
+w03a2409.dll = 2,, 4
+xpsp2res.dll = 2,, 4
+netmsg.dll = 2,, 4
+
+[Software.AddReg]
+; --- COM registration ---
+; A /minint hive registers neither DLL. peshell registers every file named here; the value name is
+; the file and the data is unused. netshell's own registrar writes the Control Panel entry too,
+; which is why no namespace key is declared here. See README.md § Registration.
+0x1,"pe-builder\SelfRegister","netshell.dll",""
+0x1,"pe-builder\SelfRegister","netman.dll",""
+; Not for its own sake: both DLLs above register through ATL's registrar, which nothing in a PE
+; registers. Entries are processed in sorted name order and "atl" sorts ahead of both — which is
+; what makes stating it here sufficient. See README.md § Registration.
+0x1,"pe-builder\SelfRegister","atl.dll",""
+
+; --- The notification area ---
+; explorer-shell deliberately removes this shell-service-object entry; a build that has a network
+; puts it back. Deps-first plugin order is what makes this AddReg land after that DelReg.
+; See README.md § The tray icon.
+0x1,"Classes\CLSID\{35CEC8A3-2BE6-11D2-8773-92E220524153}","","SysTray"
+0x2,"Classes\CLSID\{35CEC8A3-2BE6-11D2-8773-92E220524153}\InprocServer32","","stobject.dll"
+0x1,"Classes\CLSID\{35CEC8A3-2BE6-11D2-8773-92E220524153}\InprocServer32","ThreadingModel","Both"
+0x1,"Microsoft\Windows\CurrentVersion\ShellServiceObjectDelayLoad","SysTray","{35CEC8A3-2BE6-11D2-8773-92E220524153}"
+
+; No entry is contributed to the Start-menu contract: Control Panel is where this belongs, and
+; netshell's own registrar puts it there.
+
+[Default.AddReg]
+; Which of SysTray's icon services run — a five-bit mask (stobject masks it with `and eax,0x1f`);
+; 0x1f is all five. Only the network one is wanted, and which bit that is has not been determined;
+; the volume module explorer-shell worried about is safe here because that plugin disables AudioSrv,
+; so its waveOut calls fail fast rather than blocking. See README.md § The tray icon.
+; DEFAULT because the PE runs as SYSTEM with no profile, so HKCU is HKU\.DEFAULT.
+0x4,"Software\Microsoft\Windows\CurrentVersion\Applets\SysTray","Services",0x1f
+0x4,"Software\Microsoft\Windows\CurrentVersion\Applets\SysTray","HotPlugFlags",0x2
+
+[SetupReg.AddReg]
+; The connection manager is already defined in the built SYSTEM hive; what it lacks is permission
+; to run, which in setup mode is this whitelist. See README.md § Registration.
+0x1,"Setup\AllowStart\Netman"

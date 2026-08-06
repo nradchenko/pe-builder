@@ -95,6 +95,24 @@ shfolder.dll
 ; DirectUI runtime for the modern Start panel. shell32 loads it by name at runtime, so no import
 ; closure sees it — it has to be seeded explicitly.
 duser.dll
+; The COM+ catalog, and the other half of the DCOM baseline this plugin starts above. Both
+; rpcss.dll (which serves DcomLaunch and RpcSs) and ole32.dll name CLBCATQ.DLL as a string and
+; LoadLibrary it — neither imports it — so no closure walk can see it. rpcss calls its
+; GetCatalogObject/GetCatalogObject2 to read a class's AppID configuration, which is how an
+; out-of-process server's identity is resolved at activation time.
+;
+; Without it, in-process COM works and so does attaching to an already-running LocalServer32,
+; while activating a service-hosted class fails after the launcher's timeout — a failure that
+; names neither COM nor this file. Seeding it also stages comres.dll, its only extra dependency.
+clbcatq.dll
+; advapi32 reaches for ntmarta.dll by name — the access-rights provider behind
+; GetNamedSecurityInfo and friends — whenever a security descriptor has to be evaluated, which is
+; what activating a service-hosted class does to its AppID's launch and access permissions.
+;
+; Measured: without it the DCOM launcher starts the service and then gives up waiting for its class
+; object, so activation fails with CO_E_SERVER_EXEC_FAILURE while the service sits there running,
+; and nothing in that failure names this file.
+ntmarta.dll
 
 [SourceDisksFiles]
 peshell.exe = 2
@@ -200,6 +218,10 @@ msgina.dll = 2
 "Classes\Drive\shellex\PropertySheetHandlers\{7988B573-EC89-11cf-9C00-00AA00A14F56}"
 ; Remove the SysTray notification-area object (stobject.dll): its volume/network/power icons
 ; are useless in an audio-less, network-less PE, and its volume module pokes WINMM.
+;
+; A build that *does* have a network puts it back: network-ui stages stobject and re-adds this
+; value, because the network tray icon is hosted by this object. Deps-first plugin order means
+; its AddReg lands after this DelReg.
 "Microsoft\Windows\CurrentVersion\ShellServiceObjectDelayLoad","SysTray"
 ; Two ghost (nameless) Control Panel items: these .cpls are registered but not staged.
 "Microsoft\Windows\CurrentVersion\Control Panel\Cpls","Internet Connection Firewall"
