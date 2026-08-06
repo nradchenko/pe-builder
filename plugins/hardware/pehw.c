@@ -22,6 +22,28 @@
 #include <initguid.h>
 #include <devguid.h>
 #include <netcfgx.h>
+/* netcon.h is the *connection* half of the network API (INetConnectionManager, the object the
+ * shell's network UI talks to), and netcfgx.h does not pull it in — the two describe different
+ * things: netcfgx configures components, netcon enumerates the connections that result. */
+#include <netcon.h>
+
+/* netcon.h declares these two as plain externs rather than through DEFINE_GUID, and no MinGW-w64
+ * import library defines them — so initguid.h cannot emit them and the link fails. Defined here
+ * instead. The values are not from memory: they are read back from a reference PE's registry,
+ * where the class key names itself "Network Connection Manager Class" and the interface key
+ * "INetConnectionManager". */
+DEFINE_GUID(pehw_CLSID_ConnectionManager,
+            0xBA126AD1, 0x2166, 0x11D1, 0xB1, 0xD0, 0x00, 0x80, 0x5F, 0xC1, 0x27, 0x0E);
+DEFINE_GUID(pehw_IID_INetConnectionManager,
+            0xC08956A2, 0x1CD3, 0x11D1, 0xB1, 0xC5, 0x00, 0x80, 0x5F, 0xC1, 0x27, 0x0E);
+
+/* IID_IUnknown and GUID_NULL are externs for the same reason as the two above. The probe below
+ * asks for the most basic interface, so that it tests activation and nothing else; GUID_NULL is
+ * what it compares a connection's declared UI class against before trying to create it. */
+DEFINE_GUID(pehw_IID_IUnknown,
+            0x00000000, 0x0000, 0x0000, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46);
+DEFINE_GUID(pehw_GUID_NULL,
+            0x00000000, 0x0000, 0x0000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
 
 /* Not in every MinGW-w64 setupapi.h, and cheap to state. */
 #ifndef DI_QUIETINSTALL
@@ -215,7 +237,7 @@ static void enable_install_privs(void)
         if (enable_priv(names[i]))
             say_v("privilege %s: enabled", names[i]);
         else
-            say("privilege %s: NOT enabled — installs will fail with access denied", names[i]);
+            say("privilege %s: NOT enabled - installs will fail with access denied", names[i]);
 }
 
 static void say_v(const char *fmt, ...)
@@ -417,7 +439,7 @@ static int install_one(HDEVINFO set, SP_DEVINFO_DATA *dev, const char *desc)
             && SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, set, dev))
             say("installed %s (restarted)", desc);
         else
-            say("installed %s (restart failed, error 0x%08lX — may need a reboot to start)",
+            say("installed %s (restart failed, error 0x%08lX - may need a reboot to start)",
                 desc, (unsigned long)GetLastError());
         g_ms_restart += SINCE(t);
         ok = 1;
@@ -480,7 +502,7 @@ static void report_inf_path(void)
         RegCloseKey(k);
     }
     if (!raw[0]) {
-        say("DevicePath is not set — setupapi has no INF search path");
+        say("DevicePath is not set - setupapi has no INF search path");
         return;
     }
     /* ExpandEnvironmentStrings reports the size it *needed*, and writes nothing when that
@@ -522,7 +544,7 @@ static void report_inf_path(void)
         t = CreateFileA(probe, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
                         FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, NULL);
         if (t == INVALID_HANDLE_VALUE)
-            say_v("  the INF directory is NOT writable (error %lu) — expected on boot media",
+            say_v("  the INF directory is NOT writable (error %lu) - expected on boot media",
                   (unsigned long)GetLastError());
         else {
             CloseHandle(t);
@@ -841,7 +863,7 @@ static int cmd_service(int argc, char **argv)
                  * does not read as "nothing to load". */
                 wsprintfA(derived, "system32\\drivers\\%s.sys", argv[i]);
                 resolve_image(derived, full, sizeof full);
-                say("    no ImagePath — the kernel derives it from the service name");
+                say("    no ImagePath - the kernel derives it from the service name");
             }
             say("      -> %s (%s)", full,
                 GetFileAttributesA(full) != INVALID_FILE_ATTRIBUTES ? "present" : "MISSING");
@@ -923,7 +945,7 @@ static const char *hresult_name(HRESULT hr)
     switch ((unsigned long)hr) {
     case 0x00000000UL: return "S_OK";
     case 0x00000001UL: return "S_FALSE";
-    case 0x0004A020UL: return "NETCFG_S_REBOOT (success — a PE never reboots, so nothing to do)";
+    case 0x0004A020UL: return "NETCFG_S_REBOOT (success - a PE never reboots, so nothing to do)";
     case 0x0004A024UL: return "NETCFG_S_CAUSED_SETUP_CHANGE";
     case 0x0004A025UL: return "NETCFG_S_COMMIT_NOW";
     case 0x8004A020UL: return "NETCFG_E_ALREADY_INITIALIZED";
@@ -931,8 +953,18 @@ static const char *hresult_name(HRESULT hr)
     case 0x8004A022UL: return "NETCFG_E_IN_USE";
     case 0x8004A024UL: return "NETCFG_E_NO_WRITE_LOCK";
     case 0x8004A025UL: return "NETCFG_E_NEED_REBOOT";
-    case 0x8004A027UL: return "NETCFG_E_ADAPTER_NOT_FOUND (no NIC — did `pehw devices` run?)";
+    case 0x8004A027UL: return "NETCFG_E_ADAPTER_NOT_FOUND (no NIC - did `pehw devices` run?)";
     case 0x80040154UL: return "REGDB_E_CLASSNOTREG (netcfgx.dll is not registered)";
+    /* The three out-of-process activation failures, which read alike and mean different things:
+     * the launcher gave up waiting for the server to register its class object; the server could
+     * not be reached at all; the server went away mid-call. The first is named without being
+     * interpreted — "the service never served" is the common reading, but running before the
+     * service stack is up produces the same code, and this file does not put a guess in front of
+     * a raw value. */
+    case 0x80080005UL: return "CO_E_SERVER_EXEC_FAILURE (launcher timed out waiting for the "
+                              "server's class object)";
+    case 0x800706BAUL: return "RPC_S_SERVER_UNAVAILABLE (the server could not be reached)";
+    case 0x80010108UL: return "RPC_E_DISCONNECTED (the server died during the call)";
     case 0x80004001UL: return "E_NOTIMPL";
     case 0x80004002UL: return "E_NOINTERFACE";
     case 0x80004005UL: return "E_FAIL";
@@ -941,12 +973,12 @@ static const char *hresult_name(HRESULT hr)
     case 0x80070002UL: return "ERROR_FILE_NOT_FOUND (the component INF is not on the search path)";
     /* setupapi errors reach COM as HRESULTs in facility 15: 0x800F0nnn is setupapi's 0xE0000nnn.
      * The two that matter here are one apart and mean very different things. */
-    case 0x800F0201UL: return "ERROR_CLASS_MISMATCH — asked the wrong network class to install it";
-    case 0x800F0202UL: return "ERROR_DUPLICATE_FOUND — already installed?";
+    case 0x800F0201UL: return "ERROR_CLASS_MISMATCH - asked the wrong network class to install it";
+    case 0x800F0202UL: return "ERROR_DUPLICATE_FOUND - already installed?";
     case 0x800F0203UL: return "ERROR_NO_DRIVER_SELECTED";
-    case 0x800F020AUL: return "ERROR_NO_INF — the component's INF is not on the search path";
-    case 0x800F0217UL: return "no associated service — an INF problem";
-    case 0xE0000217UL: return "no associated service — an INF problem";
+    case 0x800F020AUL: return "ERROR_NO_INF - the component's INF is not on the search path";
+    case 0x800F0217UL: return "no associated service - an INF problem";
+    case 0xE0000217UL: return "no associated service - an INF problem";
     default:           return "";
     }
 }
@@ -969,7 +1001,7 @@ static int register_netcfgx(void)
     WHERE("loading netcfgx.dll");
     m = LoadLibraryA("netcfgx.dll");
     if (!m) {
-        say("netcfgx.dll did not load (error %lu) — is it staged?",
+        say("netcfgx.dll did not load (error %lu) - is it staged?",
             (unsigned long)GetLastError());
         return 0;
     }
@@ -1082,7 +1114,7 @@ static int wait_service_running(const char *name, DWORD timeout_ms)
     CloseServiceHandle(scm);
     if (waited)
         say("waited %lu ms for %s: %s", (unsigned long)waited, name,
-            running ? "RUNNING" : "NOT running — continuing anyway");
+            running ? "RUNNING" : "NOT running - continuing anyway");
     return running;
 }
 
@@ -1114,7 +1146,7 @@ static void start_one(const char *name)
     char *argv[3];
 
     if (!service_exists(name)) {
-        say("  %s: not defined in this image — skipped", name);
+        say("  %s: not defined in this image - skipped", name);
         return;
     }
     argv[2] = (char *)name;
@@ -1152,7 +1184,7 @@ static void start_component_services(INetCfgComponent *comp, const GUID *cls)
     wsprintfW(key, L"SYSTEM\\CurrentControlSet\\Control\\Network\\%s\\%s\\Ndi", cls_s, inst_s);
 
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &k) != ERROR_SUCCESS) {
-        say("  (no Ndi key for the component — nothing started)");
+        say("  (no Ndi key for the component - nothing started)");
         return;
     }
 
@@ -1290,7 +1322,7 @@ static int cmd_net(int argc, char **argv)
          * components in one invocation need not share it. */
         cls = net_class_of(names[i], &id8);
         if (!cls) {
-            say("net: %s — unknown component; name its class as trans:%s (or client:/service:/"
+            say("net: %s - unknown component; name its class as trans:%s (or client:/service:/"
                 "adapter:)", names[i], names[i]);
             bad++;
             continue;
@@ -1309,7 +1341,7 @@ static int cmd_net(int argc, char **argv)
          * `id` as whatever was on the stack — which would then be handed to Install as the
          * thing to install. An over-long id is a bad argument; say so and move on. */
         if (!MultiByteToWideChar(CP_ACP, 0, id8, -1, id, sizeof id / sizeof id[0])) {
-            say("net: %s — component id is not usable (error %lu)", id8,
+            say("net: %s - component id is not usable (error %lu)", id8,
                 (unsigned long)GetLastError());
             INetCfgClassSetup_Release(setup);
             setup = NULL;
@@ -1393,7 +1425,7 @@ out:
      * task's Message, so anything that has to reach a human belongs here — including, above all,
      * the fact that the run never got as far as installing anything. */
     if (!reached)
-        say("net: ABORTED before installing anything — see the step above; nothing is configured");
+        say("net: ABORTED before installing anything - see the step above; nothing is configured");
     else
         say("net: %d of %d component(s) installed, %d failed", ok, count, bad);
     return (bad || !reached) ? 1 : 0;
@@ -1483,13 +1515,325 @@ static void ip_interfaces(void)
                         (unsigned long)t->table[j].dwIndex);
                 }
                 if (!t->dwNumEntries)
-                    say("      (not even loopback — TCP/IP has no interfaces at all)");
+                    say("      (not even loopback - TCP/IP has no interfaces at all)");
             } else {
                 say("    GetIpAddrTable: error %lu", (unsigned long)GetLastError());
             }
             HeapFree(GetProcessHeap(), 0, t);
         }
     }
+}
+
+/* --- `pehw netconn`: the connection, from both ends -----------------------------------------
+ * Read-only. Why both halves are reported rather than one: README.md § Reading the connection
+ * state. */
+
+static const char *netcon_status_name(NETCON_STATUS s)
+{
+    switch (s) {
+    case NCS_DISCONNECTED:             return "disconnected";
+    case NCS_CONNECTING:               return "connecting";
+    case NCS_CONNECTED:                return "CONNECTED";
+    case NCS_DISCONNECTING:            return "disconnecting";
+    case NCS_HARDWARE_NOT_PRESENT:     return "hardware not present";
+    case NCS_HARDWARE_DISABLED:        return "hardware disabled";
+    case NCS_HARDWARE_MALFUNCTION:     return "hardware malfunction";
+    case NCS_MEDIA_DISCONNECTED:       return "media disconnected (cable?)";
+    case NCS_AUTHENTICATING:           return "authenticating";
+    case NCS_AUTHENTICATION_SUCCEEDED: return "authenticated";
+    case NCS_AUTHENTICATION_FAILED:    return "authentication FAILED";
+    case NCS_INVALID_ADDRESS:          return "invalid address";
+    case NCS_CREDENTIALS_REQUIRED:     return "credentials required";
+    default:                           return "?";
+    }
+}
+
+static const char *netcon_media_name(NETCON_MEDIATYPE m)
+{
+    switch (m) {
+    case NCM_NONE:   return "none";
+    case NCM_DIRECT: return "direct";
+    case NCM_ISDN:   return "isdn";
+    case NCM_LAN:    return "LAN";
+    case NCM_PHONE:  return "phone";
+    case NCM_TUNNEL: return "tunnel";
+    case NCM_PPPOE:  return "pppoe";
+    case NCM_BRIDGE: return "bridge";
+    default:         return "?";
+    }
+}
+
+/* Print a wide string through say(), which is printf-family.
+ *
+ * %ls is not usable for this: msvcrt converts it in the C locale, which nothing sets, so the first
+ * code point above 0xFF fails to convert and printf stops emitting there. A localized source names
+ * its connection in the local script, so the name — the field this subcommand exists to show —
+ * would come out empty. Converting to the console's own code page avoids that, and also avoids the
+ * mojibake a setlocale() would give instead, since the ANSI and console code pages differ on those
+ * systems. */
+static const char *wide_str(const WCHAR *w, char *buf, int cap)
+{
+    if (cap <= 0)
+        return "(unprintable)";
+    if (!w)
+        return "(none)";
+    if (!WideCharToMultiByte(GetConsoleOutputCP(), 0, w, -1, buf, cap, NULL, NULL)) {
+        /* Too long and unconvertible are different findings, and folding them together would
+         * point the reader at a rendering fault when the value is simply longer than the buffer. */
+        return GetLastError() == ERROR_INSUFFICIENT_BUFFER ? "(too long)" : "(unprintable)";
+    }
+    buf[cap - 1] = 0;
+    return buf;
+}
+
+/* Read a REG_SZ and render it for the console, always NUL-terminated.
+ *
+ * Read through the *wide* API deliberately. RegQueryValueExA would return the value converted to
+ * the ANSI code page, which is not the console's on a localized system — printing it gives
+ * mojibake, in the same way %ls gives nothing. Taking the wide value and converting once, to the
+ * console code page, is the only path that is right on both.
+ *
+ * RegQueryValueEx also does not promise termination, and will return a non-string type into the
+ * same bytes; neither is trusted here. */
+static const char *reg_string(HKEY k, const WCHAR *value, char *buf, DWORD cap)
+{
+    WCHAR w[512];
+    DWORD sz = sizeof w, type = 0;
+    LONG r = RegQueryValueExW(k, value, NULL, &type, (BYTE *)w, &sz);
+
+    /* "absent" is itself the finding here — it is how a Connection entry the class installer never
+     * finished writing shows up — so only a genuinely missing value may report it. One that is
+     * present but unreadable (longer than the buffer, wrong type, access denied) says that
+     * instead, rather than being folded into the conclusion it would falsely support. */
+    if (r == ERROR_FILE_NOT_FOUND)
+        return "(absent)";
+    if (r != ERROR_SUCCESS)
+        return "(unreadable)";
+    if (type != REG_SZ && type != REG_EXPAND_SZ)
+        return "(not a string)";
+    /* Present but empty is its own answer: without this it prints as a blank field, which reads
+     * like pehw failed to render it rather than like the installer wrote nothing. */
+    if (sz < sizeof(WCHAR))
+        return "(empty)";
+    /* RegQueryValueEx does not promise termination: a value written without its NUL comes back
+     * exactly filling the buffer. sz is in bytes. */
+    w[sz / sizeof(WCHAR) < (sizeof w / sizeof(WCHAR))
+        ? sz / sizeof(WCHAR) : (sizeof w / sizeof(WCHAR)) - 1] = 0;
+    return wide_str(w, buf, (int)cap);
+}
+
+
+/* One connection's persisted registry entry. A missing entry is said out loud: it is a finding,
+ * not an absence of output. */
+static void report_connection_key(const char *guid)
+{
+    char sub[256];
+    HKEY k;
+    char buf[256];
+    DWORD sz, type, d;
+
+    _snprintf(sub, sizeof sub - 1,
+              "SYSTEM\\CurrentControlSet\\Control\\Network"
+              "\\{4D36E972-E325-11CE-BFC1-08002BE10318}\\%s\\Connection", guid);
+    sub[sizeof sub - 1] = 0;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, sub, 0, KEY_READ, &k) != ERROR_SUCCESS) {
+        say("  %s", guid);
+        say("    NO Connection subkey - the Net class installer did not write one");
+        return;
+    }
+    say("  %s", guid);
+    say("    Name          = %s", reg_string(k, L"Name", buf, sizeof buf));
+    say("    PnpInstanceID = %s", reg_string(k, L"PnpInstanceID", buf, sizeof buf));
+    sz = sizeof d;
+    /* Absent is the interesting case: netman reads an absent value as "hidden" rather than
+     * defaulting it, so this separates "never set" from "set and ignored". */
+    if (RegQueryValueExA(k, "ShowIcon", NULL, &type, (BYTE *)&d, &sz) == ERROR_SUCCESS
+        && type == REG_DWORD)
+        say("    ShowIcon      = %lu%s", (unsigned long)d, d ? "" : "  (icon hidden)");
+    else
+        say("    ShowIcon      = (absent)  - no tray icon for this connection");
+    RegCloseKey(k);
+}
+
+/* What netman enumerates — a live COM call into the service, not a registry read, so a failure
+ * here is the one the folder, the tray icon and the Status dialog each hit in their own way. */
+static void report_netman(void)
+{
+    INetConnectionManager *mgr = NULL;
+    IEnumNetConnection *e = NULL;
+    INetConnection *c = NULL;
+    HRESULT hr;
+    ULONG got = 0;
+    int n = 0;
+    char nbuf[256], dbuf[256];
+
+    hr = CoCreateInstance(&pehw_CLSID_ConnectionManager, NULL, CLSCTX_ALL,
+                          &pehw_IID_INetConnectionManager, (void **)&mgr);
+    if (FAILED(hr)) {
+        say("netman: CoCreateInstance(ConnectionManager) failed 0x%08lX %s",
+            (unsigned long)hr, hresult_name(hr));
+        say("  the shell's network UI talks to this object - with it unreachable, the folder is"
+            " empty and no dialog opens");
+        return;
+    }
+    hr = INetConnectionManager_EnumConnections(mgr, NCME_DEFAULT, &e);
+    if (FAILED(hr)) {
+        say("netman: EnumConnections failed 0x%08lX %s", (unsigned long)hr, hresult_name(hr));
+        INetConnectionManager_Release(mgr);
+        return;
+    }
+    /* Test the pointer the call actually fills, not pceltFetched: an enumerator asked for exactly
+     * one item may leave that count untouched (the IEnumXxx contract even allows a NULL pointer
+     * for it there). Testing it would then end the walk before the first item, reporting no
+     * connections while netman was enumerating them fine — and leaking the one already handed
+     * back. `got` is kept only because the call needs somewhere to write. */
+    for (;;) {
+        NETCON_PROPERTIES *p = NULL;
+
+        c = NULL;
+        if (IEnumNetConnection_Next(e, 1, &c, &got) != S_OK || !c)
+            break;
+        n++;
+        hr = INetConnection_GetProperties(c, &p);
+        if (SUCCEEDED(hr) && p) {
+            say("  \"%s\"", wide_str(p->pszwName, nbuf, sizeof nbuf));
+            say("    device      = %s", wide_str(p->pszwDeviceName, dbuf, sizeof dbuf));
+            say("    status      = %s", netcon_status_name(p->Status));
+            say("    media       = %s", netcon_media_name(p->MediaType));
+            /* NCCF_SHOW_ICON is derived from the registry ShowIcon above, so decoding it here
+             * lets the two be compared: disagreement localises the fault to netman. */
+            say("    character   = 0x%08lX%s", (unsigned long)p->dwCharacter,
+                (p->dwCharacter & NCCF_SHOW_ICON) ? "  (NCCF_SHOW_ICON set)"
+                                                  : "  (NCCF_SHOW_ICON CLEAR - no tray icon)");
+            /* The class the shell instantiates to raise this connection's Status and Properties
+             * dialogs — in-process, so a failure mode of its own. Exercised here because the
+             * shell reports nothing when it cannot raise a dialog: double-clicking simply does
+             * nothing. Creating the same class by hand turns that into an HRESULT.
+             *
+             * NOTE this is the one step of `netconn` that is not purely a read: it loads a
+             * third-party in-process server and runs its DllMain and constructor, on an STA with
+             * no message pump. Harmless against netshell, but it is why this subcommand must stay
+             * a by-hand tool and must not be added to the startup run list. */
+            {
+                IUnknown *ui = NULL;
+                HRESULT u;
+                wchar_t g[64];
+                char gbuf[64];
+
+                if (StringFromGUID2(&p->clsidUiObject, g, 64))
+                    say("    UI class    = %s", wide_str(g, gbuf, sizeof gbuf));
+                /* A connection with no UI class of its own is a fact about the connection, not a
+                 * registration fault — creating CLSID_NULL would report REGDB_E_CLASSNOTREG and
+                 * send the reader after a problem that does not exist. */
+                if (IsEqualGUID(&p->clsidUiObject, &pehw_GUID_NULL)) {
+                    say("    UI object   = (this connection declares no UI class)");
+                } else {
+                    u = CoCreateInstance(&p->clsidUiObject, NULL, CLSCTX_INPROC_SERVER,
+                                         &pehw_IID_IUnknown, (void **)&ui);
+                    if (SUCCEEDED(u) && ui) {
+                        say("    UI object   = created OK");
+                        ui->lpVtbl->Release(ui);
+                    } else if (SUCCEEDED(u)) {
+                        say("    UI object   = created nothing (0x%08lX %s)",
+                            (unsigned long)u, hresult_name(u));
+                    } else {
+                        say("    UI object   = FAILED 0x%08lX %s - this is what the Status and"
+                            " Properties dialogs are raised from",
+                            (unsigned long)u, hresult_name(u));
+                    }
+                }
+            }
+            /* NETCON_PROPERTIES and its two strings are one allocation chain owned by the
+             * caller; the strings go first because freeing the struct loses the pointers.
+             *
+             * netcon.h declares NcFreeNetconProperties for this, which no MinGW-w64 import library
+             * exports — using it would mean resolving it by hand at run time. Freeing the members
+             * is what the marshalled case requires anyway: MIDL allocated each string separately
+             * on this side, and netman is always out-of-process here (its AppID is a LocalService),
+             * so the single-block layout that would make this wrong cannot arise. */
+            CoTaskMemFree(p->pszwName);
+            CoTaskMemFree(p->pszwDeviceName);
+            CoTaskMemFree(p);
+        } else if (hr == S_OBJECT_NO_LONGER_VALID) {
+            /* A *success* code (0x00000002, declared in netcon.h beside NETCON_PROPERTIES), so
+             * SUCCEEDED() is true while nothing is returned: the connection went away between the
+             * enumeration and this call. Reporting it as a failure would name an HRESULT that
+             * hresult_name cannot look up, for something that is not a fault. */
+            say("  (a connection that went away during the walk)");
+        } else if (SUCCEEDED(hr)) {
+            /* Any other success that returned no properties. Calling this "failed 0x00000000
+             * S_OK" would be self-contradicting output. */
+            say("  (a connection whose GetProperties returned nothing, 0x%08lX %s)",
+                (unsigned long)hr, hresult_name(hr));
+        } else {
+            say("  (a connection whose GetProperties failed 0x%08lX %s)",
+                (unsigned long)hr, hresult_name(hr));
+        }
+        INetConnection_Release(c);
+        c = NULL;
+    }
+    IEnumNetConnection_Release(e);
+    INetConnectionManager_Release(mgr);
+    if (!n)
+        say("  netman enumerates NO connections");
+    else
+        say("netman enumerates %d connection(s)", n);
+}
+
+static int cmd_netconn(void)
+{
+    static const char *kConnClass =
+        "SYSTEM\\CurrentControlSet\\Control\\Network"
+        "\\{4D36E972-E325-11CE-BFC1-08002BE10318}";
+    HKEY cls;
+    HRESULT hr;
+
+    SetUnhandledExceptionFilter(crash_filter);
+
+    say("--- registry: Control\\Network\\{4D36E972-...} ---");
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, kConnClass, 0, KEY_READ, &cls) != ERROR_SUCCESS) {
+        say("  the class key itself is MISSING - no network component has ever been installed");
+    } else {
+        DWORD i;
+        int n = 0;
+
+        for (i = 0;; i++) {
+            char guid[64];
+            DWORD len = sizeof guid;
+
+            LONG r = RegEnumKeyExA(cls, i, guid, &len, NULL, NULL, NULL, NULL);
+
+            /* A failure leaves `guid` untouched, so nothing below may look at it. The two cases
+             * are separated deliberately: ERROR_MORE_DATA is about this one index (a name too
+             * long for the buffer) so the walk goes on, while anything else is about the key or
+             * the handle and would repeat for every index — continuing on that would spin. */
+            if (r == ERROR_MORE_DATA)
+                continue;
+            if (r != ERROR_SUCCESS)
+                break;
+            /* Descriptions and similar bookkeeping keys live here too; only a GUID-shaped name
+             * is a candidate connection, and report_connection_key says whether it really is. */
+            if (guid[0] != '{')
+                continue;
+            n++;
+            report_connection_key(guid);
+        }
+        RegCloseKey(cls);
+        if (!n)
+            say("  no adapter subkeys at all - the class installer wrote nothing");
+    }
+
+    say("");
+    hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    if (FAILED(hr)) {
+        say("  CoInitializeEx failed 0x%08lX %s", (unsigned long)hr, hresult_name(hr));
+        return 1;
+    }
+
+    say("--- netman: INetConnectionManager ---");
+    report_netman();
+    CoUninitialize();
+    return 0;
 }
 
 static int cmd_ip(void)
@@ -1569,6 +1913,8 @@ static void usage(void)
            "  pehw status           report what is bound, what is running, and why not\n"
            "  pehw service <name>.. report a driver service: SCM state, registry, ImagePath\n"
            "  pehw ip               what the IP layer itself has: adapters, addresses, DHCP\n"
+           "  pehw netconn          the network connection from both ends: its registry entry\n"
+           "                        and what netman enumerates (what the shell's UI talks to)\n"
            "\n  -v  print the per-device trace (hardware ids, candidates, skips)\n");
 }
 
@@ -1596,6 +1942,8 @@ int main(int argc, char **argv)
         return cmd_status();
     if (argc >= 2 && lstrcmpiA(argv[1], "ip") == 0)
         return cmd_ip();
+    if (argc >= 2 && lstrcmpiA(argv[1], "netconn") == 0)
+        return cmd_netconn();
     if (argc >= 3 && lstrcmpiA(argv[1], "service") == 0)
         return cmd_service(argc, argv);
     usage();

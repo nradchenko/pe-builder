@@ -150,7 +150,25 @@ iterated on without rebooting.
     pehw status             what is bound, what is running, and the PnP problem code for what is not
     pehw service <name>     an `sc qc` for an image with no sc.exe
     pehw ip                 what the IP layer has: adapters, addresses, the DHCP lease
+    pehw netconn            the connection from both ends — see below
     perun --task devices    the same pass, through the run list, recording a verdict
+
+## Reading the connection state
+
+A network **connection** is a different object from the adapter the device pass installed, and
+`pehw netconn` prints both halves because either can exist without the other:
+
+- **The registry entry** — `Control\Network\{4D36E972-…}\<GUID>\Connection`, written by netcfgx's
+  Net class installer, holding `Name`, `PnpInstanceID` and `ShowIcon`.
+- **netman's view** — what `INetConnectionManager` enumerates live. This is what the Network
+  Connections folder, the tray icon and the Status dialog actually talk to.
+
+Reading one without the other is what makes this class of fault hard to place. A populated netman
+side with no registry entry means the class installer never finished, and nothing about the shell
+says so. `NCCF_SHOW_ICON` in the reported character flags is derived from the registry `ShowIcon`
+above, so the two disagreeing localises the fault to netman rather than to the value written.
+
+It is read-only, and safe to run at any point after boot.
 
 ## Reading a run
 
