@@ -341,11 +341,11 @@ vga64k.dll   =
 ; The default-user hive overlay (HKU\.DEFAULT).
 ; ---------------------------------------------------------------------------
 [Default.AddReg]
-; Preloaded keyboard layouts. The source's hivedef.inf ships none (GUI setup adds
-; them from the chosen locale); win32k loads these at Win32-subsystem init, so with
-; none present the layout load resolves to nothing. US is the base; the source
-; locale's own layout is preloaded after it (slot 2) from its detected locale.
-0x1,"Keyboard Layout\Preload","1","00000409"
+; Preloaded keyboard layouts are not seeded here. win32k loads them at Win32-subsystem
+; init, and a source's own hivedef.inf may already carry some — a Simplified Chinese one
+; preloads three input methods whose .ime files a PE does not stage. The whole list is
+; therefore rebuilt in locale.go, which drops what the source folded in and writes the
+; layouts this build ships: US, then the source locale's own.
 
 ; Default console font: the Unicode TrueType Lucida Console, so cmd.exe renders the
 ; source's Cyrillic text cleanly instead of misreading the OEM raster font. FontFamily

@@ -294,7 +294,6 @@ delreg hive=system subkey="ControlSet001\\Services\\IPSec" value=""
 delreg hive=system subkey="ControlSet001\\Services\\Ndisuio" value=""
 delreg hive=system subkey="ControlSet001\\Services\\NDProxy" value=""
 delreg hive=system subkey="ControlSet001\\Services\\PSched" value=""
-addreg hive=default type=0x1 subkey="Keyboard Layout\\Preload" value="1" data="00000409"
 addreg hive=default type=0x1 subkey="Console" value="FaceName" data="Lucida Console"
 addreg hive=default type=0x4 subkey="Console" value="FontFamily" data="0x36"
 addreg hive=default type=0x4 subkey="Console" value="FontWeight" data="0x190"
@@ -309,6 +308,8 @@ copy fastfat.sys dir="" rename="" area=system flags=optional
 copy c_1251.nls dir="" rename="" area=system flags=-
 copy c_866.nls dir="" rename="" area=system flags=-
 copy vga866.fon dir="2" rename="" area=system flags=-
+delreg hive=default subkey="Keyboard Layout\\Preload" value=""
+addreg hive=default type=0x1 subkey="Keyboard Layout\\Preload" value="1" data="00000409"
 copy kbdru.dll dir="2" rename="" area=system flags=-
 addreg hive=default type=0x1 subkey="Keyboard Layout\\Preload" value="2" data="00000419"
 addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Keyboard Layouts\\00000419" value="Layout File" data="KBDRU.DLL"

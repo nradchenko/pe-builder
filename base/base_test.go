@@ -45,6 +45,8 @@ func TestLocaleActions(t *testing.T) {
 		{Kind: action.CopyFile, Src: "c_1251.nls"},
 		{Kind: action.CopyFile, Src: "c_866.nls"},
 		{Kind: action.CopyFile, Src: "vga866.fon", DirID: "2"},
+		{Kind: action.DelReg, Hive: action.HiveDefault, Subkey: `Keyboard Layout\Preload`},
+		localeReg(action.HiveDefault, `Keyboard Layout\Preload`, "1", "00000409"),
 		{Kind: action.CopyFile, Src: "kbdru.dll", DirID: "2"},
 		localeReg(action.HiveDefault, `Keyboard Layout\Preload`, "2", "00000419"),
 		localeReg(action.HiveSystem, `ControlSet001\Control\Keyboard Layouts\00000419`, "Layout File", "KBDRU.DLL"),
@@ -55,13 +57,60 @@ func TestLocaleActions(t *testing.T) {
 	}
 }
 
-// TestLocaleActionsUnknown checks a source whose locale is not in the keyboard table
-// gets no locale layer — it keeps the US-English base.
-func TestLocaleActionsUnknown(t *testing.T) {
+// TestLocaleActionsUnknownKeyboard checks a source whose locale is not in the keyboard
+// table still stages its own code-page tables and console font. Staging those is how the
+// locale takes effect at all, so it must not depend on knowing the keyboard; only the
+// keyboard layer is skipped, leaving the US-English one in place.
+func TestLocaleActionsUnknownKeyboard(t *testing.T) {
 	l := fixtureLayout()
-	l.NLS.LangID = "0407" // German: not in the table
-	if got := localeActions(l); got != nil {
-		t.Errorf("localeActions for unknown locale = %v, want nil", got)
+	l.NLS.LangID = "0407" // German: not in the keyboard table
+	got := localeActions(l)
+	want := []action.Action{
+		{Kind: action.CopyFile, Src: "c_1251.nls"},
+		{Kind: action.CopyFile, Src: "c_866.nls"},
+		{Kind: action.CopyFile, Src: "vga866.fon", DirID: "2"},
+		{Kind: action.DelReg, Hive: action.HiveDefault, Subkey: `Keyboard Layout\Preload`},
+		localeReg(action.HiveDefault, `Keyboard Layout\Preload`, "1", "00000409"),
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("localeActions for unlisted keyboard mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestLocaleActionsSharedCodepage covers the shape a DBCS source has: one table named as
+// both the ANSI and the OEM code page, which must be staged once rather than twice. The
+// values are the real ones read from Simplified Chinese XP SP3 and Server 2003 media,
+// whose [nls] sections are identical, not invented ones.
+func TestLocaleActionsSharedCodepage(t *testing.T) {
+	l := fixtureLayout()
+	l.NLS = layout.NLS{
+		AnsiCodepageFile: "c_936.nls",
+		OemCodepageFile:  "c_936.nls",
+		OemHalFont:       "vgaoem.fon",
+		LangID:           "0804",
+	}
+	got := localeActions(l)
+	want := []action.Action{
+		{Kind: action.CopyFile, Src: "c_936.nls"},
+		{Kind: action.CopyFile, Src: "vgaoem.fon", DirID: "2"},
+		{Kind: action.CopyFile, Src: "simsun.ttc"},
+		localeReg(action.HiveSoftware, `Microsoft\Windows NT\CurrentVersion\Fonts`, "SimSun & NSimSun (TrueType)", "simsun.ttc"),
+		{Kind: action.CopyFile, Src: "vga936.fon"},
+		{Kind: action.CopyFile, Src: "svgafix.fon"},
+		{Kind: action.CopyFile, Src: "svgasys.fon"},
+		localeReg(action.HiveSoftware, `Microsoft\Windows NT\CurrentVersion\Console\TrueTypeFont`, "936", "新宋体"),
+		localeReg(action.HiveDefault, "Console", "FaceName", "新宋体"),
+		localeDword(action.HiveDefault, "Console", "FontFamily", 0x36),
+		localeDword(action.HiveDefault, "Console", "FontWeight", 400),
+		localeDword(action.HiveDefault, "Console", "FontSize", 16<<16),
+		{Kind: action.DelReg, Hive: action.HiveDefault, Subkey: `Keyboard Layout\Preload`},
+		localeReg(action.HiveDefault, `Keyboard Layout\Preload`, "1", "00000409"),
+		localeReg(action.HiveDefault, `Keyboard Layout\Preload`, "2", "00000804"),
+		localeReg(action.HiveSystem, `ControlSet001\Control\Keyboard Layouts\00000804`, "Layout File", "KBDUS.DLL"),
+		localeReg(action.HiveSystem, `ControlSet001\Control\Keyboard Layouts\00000804`, "Layout Text", "Chinese (Simplified) - US Keyboard"),
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("localeActions for shared ANSI/OEM code page mismatch (-want +got):\n%s", diff)
 	}
 }
 
