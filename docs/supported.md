@@ -20,7 +20,9 @@ mounted directory or an `.iso`.
 | Windows Fundamentals for Legacy PCs | **out of scope** | — | — | — | — |
 
 The 32-bit XP path is verified against both English and Russian volume-licence media, which
-behave identically apart from one Active Setup component present only on some locales.
+behave identically apart from one Active Setup component present only on some locales. A
+build's language comes from the source; see [Source language](#source-language) for what is
+verified in which language.
 
 **Service-pack floor.** A source must be at least XP SP3 (`5.1.2600.5512`, the revision SP3
 media ships `ntdll` at); anything older is refused when the source is probed. SP3 was the
@@ -40,6 +42,55 @@ than presenting as XP.
 as a Windows Imaging (`.wim`) image under `Setup\WIM`, and its `I386` holds a WinPE boot
 environment for the deployment tool rather than the file payload a build reads. Supporting it
 would mean a WIM reader and a second, image-based source model.
+
+### Source language
+
+Any source builds and boots regardless of language, and reaches whatever desktop its edition
+supports — that is the matrix above, not a language property. What language decides is whether
+the source's **own script** appears: Cyrillic, Japanese kana, Chinese characters. Latin text
+always renders, because the base a build starts from is US-English. Where a script is not
+configured, its characters come out as empty boxes:
+
+```
+活动的代码页: 936      <- configured
+□□□□□□□: 936           <- not configured
+```
+
+| Source language | Its script in the console | Its script in windows |
+|---|---|---|
+| English (1252) | — Latin only | — Latin only |
+| Russian (1251) | verified | verified |
+| Simplified Chinese (936, DBCS) | verified | verified |
+| Japanese (932, DBCS) | not configured | not configured |
+| Traditional Chinese (950, DBCS) | not configured | not configured |
+
+Simplified Chinese is verified from XP SP3 and Server 2003 R2 SP2 volume-licence media, the
+latter on both architectures. Japanese and Traditional Chinese build and boot, but no font or
+console face has been configured for them, so their own script does not appear; nothing else
+about them is known to be broken. A language not listed behaves the same way — its code pages
+and keyboard layout come from the source automatically, so expect boxes until its fonts and
+console face are added.
+
+The two routes are configured separately, which is why one can work while the other shows
+nothing but boxes:
+
+- **Windowed text** resolves through the font links the source's own registry supplies, which
+  name the locale's font (`SIMSUN.TTC` for Simplified Chinese). Staging that font is all this
+  route needs.
+- **The console** does not follow those links. It picks a face from the system's console-font
+  list keyed by the code page, and nothing on the media populates that list or selects a face —
+  Windows setup writes them in a locale pass a PE never runs, so the build supplies both.
+
+A double-byte locale also loads the Text Services Framework input-context handler
+(`msctfime.ime`) whenever a window takes input focus, which a single-byte one never does. It is
+loaded by name, so no dependency scan finds it; the base layer seeds it for every source
+because a build without it deadlocks the shell when a dialog returns focus.
+
+A locale whose keyboard layout the build does not yet know still gets its own code pages and
+console font; only the keyboard falls back to US-English. Simplified Chinese types through an
+input method over the US layout and has no layout DLL of its own, so it uses that fallback by
+design. **No input method is installed** — the handler above is input-context plumbing, not an
+IME — so a Chinese build renders Chinese but cannot type it.
 
 ### What differs on an x64 build
 
