@@ -66,21 +66,43 @@ static void wait_services(void){
     }
 }
 
+/* Name a self-registration failure instead of dropping it. Registration stays best-effort —
+ * nothing here aborts the boot — but a component that never registers surfaces far from here,
+ * as an applet that dies or a dialog that wedges, with nothing pointing back at this pass.
+ * Goes to the kernel debugger, so the serialdebug plugin makes it readable; see README.md
+ * § Diagnosing a boot that stops partway. ASCII only: this text reaches a console that may be in
+ * any code page. */
+static void reg_fail(const char *dll, const char *what, DWORD code){
+    /* Sized off SELFREG_NAME, the bound on the longest name that reaches here, rather than off
+     * today's worst case: wsprintfA does not truncate, and that constant is documented as
+     * generous and as something to raise (see self_register_declared). Coupling them here means
+     * widening it cannot silently turn this into a stack overrun. */
+    char msg[SELFREG_NAME + 96];
+    wsprintfA(msg,"peshell: self-register %s: %s (0x%08lx)\n",dll,what,code);
+    OutputDebugStringA(msg);
+}
+
 /* Self-register one shell/COM DLL through its own DllInstall entry point. Best-effort.
  * NOTE: DllInstall's argument is DLL-specific — each one parses the string itself, and a value
  * it does not recognise is silently ignored, so this call is only as good as the arg. */
 static void dll_install(const char *dll, const WCHAR *arg){
-    HMODULE h=LoadLibraryA(dll); if(!h) return;
+    HMODULE h=LoadLibraryA(dll);
+    if(!h){ reg_fail(dll,"load failed",GetLastError()); return; }
     DLLINSTALL p=(DLLINSTALL)GetProcAddress(h,"DllInstall");
-    if(p) p(TRUE,arg);
+    /* The module is deliberately left loaded, as before — these are servers the shell goes on
+     * to use, so report through the branch rather than returning early out of a held handle. */
+    if(!p) reg_fail(dll,"no DllInstall entry point",GetLastError());
+    else { HRESULT hr=p(TRUE,arg); if(FAILED(hr)) reg_fail(dll,"DllInstall failed",(DWORD)hr); }
 }
 
 /* Register a plain COM server's classes (DllRegisterServer) — the standard entry point, unlike
  * the shell DLLs above whose DllInstall takes a private argument. Best-effort. */
 static void dll_register(const char *dll){
-    HMODULE h=LoadLibraryA(dll); if(!h) return;
+    HMODULE h=LoadLibraryA(dll);
+    if(!h){ reg_fail(dll,"load failed",GetLastError()); return; }
     DLLREGISTER p=(DLLREGISTER)(void*)GetProcAddress(h,"DllRegisterServer");
-    if(p) p();
+    if(!p) reg_fail(dll,"no DllRegisterServer entry point",GetLastError());
+    else { HRESULT hr=p(); if(FAILED(hr)) reg_fail(dll,"DllRegisterServer failed",(DWORD)hr); }
 }
 
 /* Register the COM servers plugins declare under HKLM\SOFTWARE\pe-builder\SelfRegister — one
@@ -334,8 +356,20 @@ static void splash_start(void){
     HANDLE th=CreateThread(NULL,0,SplashThread,NULL,0,NULL); if(th) CloseHandle(th);
     if(g_splashReady) WaitForSingleObject(g_splashReady,4000);
 }
+/* Every stage transition also goes to the kernel debugger, so a serialdebug boot reads as a
+ * timeline of how far the shell bring-up got. This is the one place stages are announced, so
+ * logging here keeps the trace complete as stages are added, and a boot that stops partway
+ * names the stage it stopped in rather than going quiet. ASCII only: the debugger output may
+ * be read on a console in any code page. */
 static void splash_status(const char *msg){
     lstrcpynA(g_status,msg,sizeof g_status);
+    /* Format the truncated copy, never the caller's string: perun_progress passes a 320-byte
+     * buffer (a task label, or a name up to the contract's 255 characters — and under a
+     * double-byte code page each character may convert to two), while wsprintfA does not bound
+     * its output. Sized off g_status so the two cannot drift apart. */
+    char line[sizeof g_status + 24];
+    wsprintfA(line,"peshell: stage: %s\n",g_status);
+    OutputDebugStringA(line);
     if(g_splash) PostMessageA(g_splash,WM_SPLASH_UPDATE,0,0);
 }
 static void splash_close(void){ if(g_splash){ PostMessageA(g_splash,WM_CLOSE,0,0); g_splash=NULL; } }
@@ -392,12 +426,29 @@ static BOOL g_postShellDone=FALSE;   /* post-shell is one-shot across Explorer r
 
 static void run_startup_stage(const WCHAR *stage){
     HMODULE m=LoadLibraryA("perun.dll");
-    if(!m) return;                      /* the startup plugin is not in this build */
+    if(!m){                             /* the startup plugin is not in this build */
+        OutputDebugStringA("peshell: startup stage skipped, no perun.dll\n");
+        return;
+    }
     PERUN_RUNSTAGE run=(PERUN_RUNSTAGE)(void(*)(void))GetProcAddress(m,"PerunRunStage");
-    /* The required-failure count is deliberately ignored: the callback has already put every
-     * failure on the splash and the runner has written each verdict to its status key, and a
-     * failed task must not change what the boot does next. */
-    if(run){ int failed=0; run(stage,perun_progress,NULL,&failed); }
+    /* Announce the stage only once it can actually run, and name the missing export the way the
+     * self-registration paths name theirs. peshell and the startup plugin are decoupled, so a
+     * stale perun.dll is possible by design — reporting "stage started" and then nothing would
+     * be indistinguishable from a stage that ran empty or hung, which is what this trace exists
+     * to tell apart. */
+    if(!run){
+        OutputDebugStringA("peshell: startup stage skipped, perun.dll has no PerunRunStage\n");
+    } else {
+        /* Both callers pass a compile-time literal ("pre-shell"/"post-shell"), so the only
+         * growth room needed is for a longer stage name; 96 leaves ~70 characters of it. */
+        char line[96];
+        wsprintfA(line,"peshell: startup stage %ls\n",stage);
+        OutputDebugStringA(line);
+        /* The required-failure count is deliberately ignored: the callback has already put every
+         * failure on the splash and the runner has written each verdict to its status key, and a
+         * failed task must not change what the boot does next. */
+        int failed=0; run(stage,perun_progress,NULL,&failed);
+    }
     FreeLibrary(m);
 }
 
@@ -766,6 +817,7 @@ static void setup_user_picture(const char *allusers){
 
 int WINAPI WinMain(HINSTANCE i,HINSTANCE p,LPSTR c,int s){
     (void)i;(void)p;(void)c;(void)s;
+    OutputDebugStringA("peshell: start\n");
 
     char drive=find_writable_drive();
     char au[MAX_PATH]; au[0]=0;
@@ -830,9 +882,14 @@ int WINAPI WinMain(HINSTANCE i,HINSTANCE p,LPSTR c,int s){
      * the same way the first one was. */
     if(!launch_desktop(TRUE)) splash_close();
     for(int deaths=0; deaths<4; deaths++){
+        /* "relaunching" rather than "explorer exited": the loop is also entered when the first
+         * launch never started Explorer at all, and this trace exists to diagnose a boot that
+         * stopped partway — asserting a state that did not happen would defeat that. */
+        OutputDebugStringA("peshell: relaunching explorer\n");
         if(!launch_desktop(FALSE)) break;
         Sleep(500);
     }
+    OutputDebugStringA("peshell: desktop gone, falling back to cmd.exe\n");
     run_and_wait("cmd.exe");
     return 0;
 }

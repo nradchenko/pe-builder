@@ -85,6 +85,43 @@ relative order does not matter, but registry value enumeration order is a proper
 value list rather than a guarantee — sorting means that if one entry ever does depend on another,
 it fails the same way every time instead of intermittently.
 
+Registration is best-effort — nothing here aborts the boot — but it is not silent. A DLL that
+will not load, one missing the entry point, and one returning a failure `HRESULT` are each
+reported by name and reason. A component that never registers surfaces far from here, as an
+applet that dies or a dialog that wedges, with nothing pointing back at this pass.
+
+## Diagnosing a boot that stops partway
+
+`peshell` reports its progress to the kernel debugger, so a build carrying the `serialdebug`
+plugin, booted with `pebuild run --serial`, prints a timeline of the bring-up:
+
+```
+peshell: start
+peshell: stage: Starting services...
+peshell: startup stage pre-shell
+peshell: stage: Registering shell components...
+peshell: stage: Setting up the Start menu...
+peshell: stage: Preparing the Control Panel...
+peshell: stage: Applying the visual style...
+peshell: stage: Launching the desktop...
+peshell: relaunching explorer                      (only if Explorer exits)
+peshell: desktop gone, falling back to cmd.exe
+```
+
+Stage lines come from `splash_status`, the one place stages are announced, so whatever the splash
+tells the user the debugger gets too and the trace cannot fall behind as stages are added. The
+phases with no splash message report separately: process entry, each startup stage (including
+`skipped, no perun.dll` and `skipped, perun.dll has no PerunRunStage`, which are otherwise silent
+no-ops), Explorer relaunch, and the `cmd.exe` fallback.
+
+A boot that stops therefore names the stage it stopped in, and `self-register` lines name any
+component that failed to register. All of it is ASCII: the output may be read on a console in any
+code page, and a build from double-byte media would otherwise turn it into mojibake.
+
+Everything printed here is bounded — the buffers are sized off the constants that bound their
+inputs (`g_status`, `SELFREG_NAME`) rather than off a worst case measured today, because
+`wsprintfA` does not truncate and those constants are meant to be raised.
+
 ## Visual style
 
 `peshell` applies the visual style the registry selects, before it launches Explorer — the same
