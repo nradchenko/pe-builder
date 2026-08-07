@@ -5,6 +5,83 @@ All notable changes to pe-builder are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-08-07
+
+The networking and provenance release. A built PE now **configures its own hardware and reaches
+the network** at boot — and, with `network-ui`, shows that connection on the **desktop**, not just
+the command line. Every build leaves a **receipt** recording exactly what it was made from, which
+`pebuild verify` checks against the tool that produced it. **Windows Server 2003** joins the
+supported sources, and new inspection (`pebuild image`) and debugging (`serialdebug`) tools round
+out the toolbox.
+
+### Added
+
+- **A PE configures its hardware and networking at boot.** The `hardware` plugin runs the PnP
+  driver-install pass a PE otherwise never gets — letting setupapi choose each driver, installed
+  read-only so nothing is written to boot media — then installs the network components through
+  `INetCfg`, so an image binds its NIC and takes a DHCP address. Its companion `network-tools`
+  stages the command-line utilities (`ipconfig`, `ping`, `route`, `arp`, `tracert`, `nslookup`,
+  `hostname`). Verified on 32-bit XP; see *Known limitations* for build 3790.
+- **The network is visible on the desktop.** The `network-ui` plugin adds the **Network
+  Connections** folder to Control Panel and a **notification-area icon** showing link state and
+  activity, with the adapter Status and Properties dialogs behind it — until now a configured
+  network had no sign of itself outside the command line. It ships no code: it stages the shell
+  components that draw the UI, including the ones they load by name that no import scan can see,
+  and registers them. The icon is user-toggled, as it is on stock XP.
+- **Windows Server 2003 sources build the Explorer desktop**, on both architectures — which took
+  reading the NT product type from the source (to tell it from XP x64, which shares its build
+  number), a product-aware splash banner, and staging Common-Controls from the cabinet 2003 media
+  pack it in.
+- **Published plugin conventions** ([`docs/plugins/conventions.md`](docs/plugins/conventions.md)) —
+  the documentation, C-lint, version-resource and architecture-scoping standards a plugin follows.
+- **A one-shot startup-task contract.** The `startup` plugin declares a registry list of tasks to
+  run once at boot and ships `perun` to walk it — from the shell's splash on a desktop build, or
+  `startnet.cmd` on a console build — recording each task's verdict so a failed task never costs the
+  boot. `hardware` is its first consumer.
+- **`pebuild verify` — what an image was built from.** Every build now writes a receipt
+  (`PEBUILD.TXT`) into the image: the manifest, the Windows source, the resolved plugin set with its
+  option values, a content hash of pebuild's embedded base and built-in plugins, and a **taint**
+  verdict for anything out-of-tree. `verify` reads it back and reports what has changed since, so a
+  stale ISO is no longer indistinguishable from a fresh one.
+- **`pebuild image ls|extract`** — read files out of a *built* PE (a mastered `.iso`, an output
+  directory, or a reference image from another tool), completing the inspection surface beside
+  `source` and `hive dump`.
+- **A `serialdebug` plugin** boots the image with the kernel debugger enabled on COM1;
+  `pebuild run --serial` attaches the host to it.
+- **`pebuild plugins info` lists a plugin's `[Options]`** — the knobs a manifest may set, with each
+  default and allowed set.
+- **Taskbar locking is a plugin option** on `explorer-shell`.
+- **Every binary the build emits carries a Windows version resource** (product, author, version,
+  copyright), so a shipped PE identifies itself in Windows Properties → Details and Task Manager.
+
+### Changed
+
+- **The Shutdown Event Tracker is turned off** — a PE has no use for the "why did you shut down?"
+  prompt.
+
+### Fixed
+
+- **The output ISO is published atomically** — mastered to a scratch file and renamed into place,
+  so a failed or interrupted build never leaves a truncated image where a good one should be.
+- **UTF-16 `.inf` files are decoded** inside the parser rather than misread.
+- **The `hardware` plugin's console output no longer garbles.** Its runtime messages used em dashes
+  that rendered as mojibake in the console's OEM code page on every locale; they're ASCII now.
+- **`peshut` links freestanding on both architectures.**
+- **The "My Documents" desktop icon is hidden** — in a PE it opens nothing, so it no longer sits
+  there dead.
+- **The base no longer seeds `portmon.exe`/`tzchange.exe`**, which are XP-only.
+
+### Known limitations
+
+- **Networking does not work on build 3790** (Windows XP x64 / Server 2003, both architectures): the
+  component install succeeds but the win32 co-services that would use it do not start. It tracks the
+  *codebase*, not the architecture — 32-bit Server 2003 fails identically. The same limitation stops
+  `network-ui`'s Status and Properties dialogs there: the connection never finishes coming up, and
+  the property sheet enumerates components through `INetCfg`. The folder and the tray icon work. See
+  [`docs/supported.md`](docs/supported.md).
+- Carried forward from 0.5.0: no sound; on amd64 the wallpaper, Folder Options and a drive's
+  Properties dialog do not work. Full detail in [`docs/supported.md`](docs/supported.md).
+
 ## [0.5.0] - 2026-07-26
 
 The 64-bit release. An amd64 Windows source now builds the **full themed desktop** — Explorer
@@ -383,6 +460,7 @@ build runs in about 4 seconds and produces a roughly 45 MB ISO.
 - Targets Windows XP sources; other source flavors and output targets are planned.
 - No plugin system yet — a build is the base layer only.
 
+[0.6.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.6.0
 [0.5.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.5.0
 [0.4.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.4.0
 [0.3.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.3.0
