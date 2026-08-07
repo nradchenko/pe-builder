@@ -27,6 +27,7 @@ copy basesrv.dll dir="" rename="" area=system flags=-
 copy winsrv.dll dir="" rename="" area=system flags=-
 copy psbase.dll dir="2" rename="" area=system flags=-
 copy rsaenh.dll dir="2" rename="" area=system flags=-
+copy msctfime.ime dir="2" rename="" area=system flags=-
 copy services.exe dir="" rename="" area=system flags=-
 copy winlogon.exe dir="" rename="" area=system flags=-
 copy lsass.exe dir="" rename="" area=system flags=-

@@ -118,6 +118,14 @@ psbase.dll   = 2
 ; own SOFTWARE hive builds and loaded by that name at run time, so no import closure reaches it.
 rsaenh.dll   = 2
 
+; The Text Services Framework input-context handler, loaded by name when USER32 attaches an
+; input context to a window — so, like the two above, no import closure reaches it. Seeded for
+; every source although only a double-byte locale loads it: it is one file, it is the same file
+; on every locale's media, and gating it on the code page would leave the next DBCS source to
+; rediscover this. Absent, a DBCS build deadlocks the shell when a dialog hands focus back — the
+; drive Properties sheet was where it showed, wedging the parent Explorer window on close.
+msctfime.ime = 2
+
 ; Session, logon, and service host — the chain that reaches the shell.
 services.exe =
 winlogon.exe =

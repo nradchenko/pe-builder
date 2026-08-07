@@ -1,5 +1,5 @@
 identity: winxp build 2600 (i386)
-written: 256
+written: 257
 skipped: 
 
 BOOTFONT.BIN 4952
@@ -192,6 +192,7 @@ i386/system32/mobsync.dll 207872
 i386/system32/more.com 16896
 i386/system32/mpr.dll 59904
 i386/system32/msasn1.dll 57344
+i386/system32/msctfime.ime 177152
 i386/system32/msgina.dll 1000448
 i386/system32/msimg32.dll 4608
 i386/system32/msls31.dll 146432
