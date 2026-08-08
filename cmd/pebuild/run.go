@@ -55,9 +55,18 @@ type machine struct {
 	RAM int
 	// KVM enables hardware acceleration.
 	KVM bool
-	// USBTablet adds a USB tablet, whose absolute pointing lets the host cursor
-	// cross into the guest without a grab. It needs a guest driver to be useful,
-	// so it is opt-in rather than a default that silently does nothing.
+	// USBTablet adds a USB tablet, which is the default pointer. Its absolute
+	// positions are what let the cursor cross between host and guest window with
+	// no grab.
+	//
+	// Every image drives it, with no plugin: the source carries its USB HID stack
+	// in the text-setup boot configuration so USB keyboards work during setup, and
+	// the base layer loads those classes, so the chain comes up on a bare cmd.exe
+	// image as much as on a desktop one.
+	//
+	// The machine's PS/2 mouse belongs to the built-in i8042 controller and cannot
+	// be removed, so the tablet is added beside it and QEMU routes pointer input to
+	// whichever the guest has enabled, preferring the absolute one.
 	USBTablet bool
 	// Serial is a QEMU -serial specification, e.g. "unix:/tmp/kd.sock,server,nowait".
 	// It exists so an image built with the serialdebug plugin can be booted with this
@@ -70,7 +79,7 @@ type machine struct {
 
 func newRunCmd() *cobra.Command {
 	var ram int
-	var usbTablet bool
+	var ps2Mouse bool
 	var serial string
 
 	cmd := &cobra.Command{
@@ -120,15 +129,16 @@ func newRunCmd() *cobra.Command {
 				Arch:      arch,
 				RAM:       ram,
 				KVM:       kvm,
-				USBTablet: usbTablet,
+				USBTablet: !ps2Mouse,
 				Serial:    serial,
 			})
 		},
 	}
 	cmd.Flags().IntVar(&ram, "ram", defaultRAM,
 		"guest memory size in MiB (128 or more for a desktop image)")
-	cmd.Flags().BoolVar(&usbTablet, "usb-tablet", false,
-		"add a USB tablet for seamless mouse (needs the guest usb-input plugin)")
+	cmd.Flags().BoolVar(&ps2Mouse, "ps2-mouse", false,
+		"offer no USB tablet, leaving the guest the machine's PS/2 mouse "+
+			"(the cursor is then grabbed)")
 	cmd.Flags().StringVar(&serial, "serial", "",
 		"attach COM1 to a QEMU chardev, e.g. unix:/tmp/kd.sock,server,nowait "+
 			"(for an image built with the serialdebug plugin)")

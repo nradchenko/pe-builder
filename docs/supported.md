@@ -149,12 +149,27 @@ machine presents. The two architectures differ only in the CPU:
 | Chipset | i440FX (QEMU's `pc` machine) | same |
 | CPU | any x86 | must support **long mode** (x86-64) |
 | Display | standard VGA | same |
-| Input | PS/2 keyboard and mouse | same |
+| Input | PS/2 keyboard and mouse, or USB HID | same |
 | Storage | IDE/ATAPI CD-ROM | same |
 | Memory | 128 MB minimum for a desktop image, less for `cmd.exe`; tested at 512 MB | tested at 512 MB |
 
-`run` boots with 512 MB; `--ram <MB>` sets it, and `--usb-tablet` adds a USB tablet for
-seamless mouse, which needs a guest that drives one.
+`run` boots with 512 MB and `--ram <MB>` sets it.
+
+**The pointer is a USB tablet by default**, and **every image drives it — no plugin needed**.
+XP carries its USB HID stack in the source's own text-setup boot configuration, in
+`txtsetup.sif`'s `[InputDevicesSupport]` class, so that USB keyboards work during setup; the
+base layer loads those classes, so the controller → hub → tablet → HID chain comes up even on
+a bare `cmd.exe` image. Because a tablet reports absolute positions, **the cursor crosses
+between host and guest window with no grab**, and the wheel works.
+
+**Verified** on 32-bit XP SP3, on a bare base image and on an Explorer desktop built without
+the `hardware` plugin, by QEMU reporting the tablet rather than the PS/2 mouse as the guest's
+active pointer.
+
+The PS/2 mouse is still present either way — it belongs to the machine's built-in i8042
+controller and cannot be removed, so the tablet is added *beside* it and QEMU routes input to
+whichever the guest has enabled, preferring the absolute one. `--ps2-mouse` offers no tablet
+at all, for reproducing a plain XP-era machine or when the input stack is under investigation.
 
 **Network.** With the `hardware` plugin enabled an image configures networking at boot and
 takes a DHCP address; without it no network stack is configured at all.
@@ -176,7 +191,7 @@ tracks the *codebase*, not the architecture: 32-bit Server 2003 fails identicall
 which is what rules out an amd64 cause. `plugins/hardware/README.md` records what has been
 measured and what has been ruled out.
 
-No sound or USB input stack is configured on either. UEFI is not supported — the
+No sound is configured on either. UEFI is not supported — the
 boot chain is XP's own real-mode loader, which is also why it is identical on both
 architectures and why a 64-bit source still keeps that part of itself in `I386`.
 

@@ -56,6 +56,13 @@ func TestMachineArgs(t *testing.T) {
 				"-device", "usb-ehci,id=ehci", "-device", "usb-tablet,bus=ehci.0"},
 		},
 		{
+			// Declining the tablet adds no pointer device at all — the PS/2 mouse it
+			// falls back to is part of the machine and needs no argument.
+			name: "ps2 mouse adds nothing",
+			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512, USBTablet: false},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso"},
+		},
+		{
 			name: "ram",
 			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 128},
 			want: []string{"-M", "pc", "-m", "128", "-boot", "d", "-cdrom", "pe.iso"},
@@ -78,6 +85,27 @@ func TestMachineArgs(t *testing.T) {
 				t.Errorf("args =\n  %v\nwant\n  %v", args, tc.want)
 			}
 		})
+	}
+}
+
+// TestPointerFlagDefault pins the shape of the pointer flag: an opt-out named
+// --ps2-mouse that is off by default, so a plain run gets the tablet. The argv tests
+// above set machine.USBTablet directly and so say nothing about which way the flag
+// points; this is the half of the default that lives in the command's surface.
+//
+// It does not reach the RunE inversion that turns the flag into a machine, which
+// needs a real image and a QEMU on PATH to exercise.
+func TestPointerFlagDefault(t *testing.T) {
+	f := newRunCmd().Flags().Lookup("ps2-mouse")
+	if f == nil {
+		t.Fatal("no --ps2-mouse flag")
+	}
+	if f.DefValue != "false" {
+		t.Errorf("--ps2-mouse defaults to %q, want %q (the USB tablet is the default pointer)",
+			f.DefValue, "false")
+	}
+	if got := newRunCmd().Flags().Lookup("usb-tablet"); got != nil {
+		t.Error("--usb-tablet still registered; the tablet is the default and --ps2-mouse opts out")
 	}
 }
 
