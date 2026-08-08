@@ -28,6 +28,11 @@ const defaultRAM = 512
 // kvmDevice is the host interface whose presence decides hardware acceleration.
 const kvmDevice = "/dev/kvm"
 
+// usbBusID names the USB controller the tablet is attached to. QEMU's id namespace
+// is per-machine and this command builds the whole command line, so a fixed id
+// cannot collide with anything.
+const usbBusID = "ehci"
+
 // qemuBinaries lists the QEMU binaries that can boot an image of each architecture,
 // in preference order. The binary follows the *image's* architecture rather than the
 // host's: qemu-system-i386 presents a 32-bit CPU, which an x64 Windows will not boot
@@ -287,7 +292,13 @@ func (m machine) args() []string {
 		args = append(args, "-cpu", "qemu64")
 	}
 	if m.USBTablet {
-		args = append(args, "-device", "usb-tablet")
+		// The tablet needs a controller to plug into, and the "pc" machine has no
+		// USB bus at all, so a bare -device usb-tablet is refused outright ("No
+		// 'usb-bus' bus found"). The controller is therefore added with the device
+		// and the device attached to it by name rather than left to a default bus
+		// that does not exist.
+		args = append(args, "-device", "usb-ehci,id="+usbBusID,
+			"-device", "usb-tablet,bus="+usbBusID+".0")
 	}
 	if m.Serial != "" {
 		args = append(args, "-serial", m.Serial)

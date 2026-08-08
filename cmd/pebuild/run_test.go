@@ -48,9 +48,12 @@ func TestMachineArgs(t *testing.T) {
 			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso", "-enable-kvm"},
 		},
 		{
+			// The tablet brings its own controller: the "pc" machine has no USB bus,
+			// so a lone -device usb-tablet is refused before the guest ever starts.
 			name: "usb tablet",
 			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512, USBTablet: true},
-			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso", "-device", "usb-tablet"},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso",
+				"-device", "usb-ehci,id=ehci", "-device", "usb-tablet,bus=ehci.0"},
 		},
 		{
 			name: "ram",
