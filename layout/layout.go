@@ -11,14 +11,20 @@
 // directory-ID table and the driver *.Load lists; layout.inf and txtsetup.sif both
 // carry [SourceDisksFiles], and their per-file target directories agree — layout
 // seeds from layout.inf and lets a non-empty txtsetup.sif directory win.
+//
+// One further question the media answer for themselves is read here too, because it
+// is the same kind of answer: whether the source is a workstation or a server product
+// (see readProductType), which the media state in hivesys.inf and txtsetup.sif.
 package layout
 
 import (
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"path"
 	"strings"
 
+	"github.com/nradchenko/pe-builder/compress"
 	"github.com/nradchenko/pe-builder/inf"
 	"github.com/nradchenko/pe-builder/source"
 )
@@ -85,9 +91,11 @@ type Layout struct {
 	// NLS is the source's national-language configuration (code pages, OEM console
 	// font, language ID), read from txtsetup.sif's [nls] section.
 	NLS NLS
-	// ServerProduct reports whether the source is a server product, from txtsetup.sif's
-	// [SetupData] ProductType. It is the media's own answer, and the only thing that
-	// separates XP Professional x64 Edition from Server 2003 x64.
+	// ServerProduct reports whether the source is a server product, from the product type
+	// the media's own hivesys.inf declares or, for a source that declares none, from
+	// txtsetup.sif's [SetupData] ProductType (see readProductType). It is the media's own
+	// answer, and the only thing that separates XP Professional x64 Edition from Server
+	// 2003 x64.
 	ServerProduct bool
 }
 
@@ -141,22 +149,137 @@ func Parse(src source.Backing, id source.Identity) (*Layout, error) {
 	l.readFiles(txt, id.Build, suffix)
 	l.readLoad(txt, id.Build)
 	l.readNLS(txt, id.Build)
-	l.readSetupData(txt, id.Build)
+	l.readProductType(src, id, txt)
 	return l, nil
 }
 
-// readSetupData fills ServerProduct from txtsetup.sif's [SetupData] ProductType, which
-// the media states as 0 for a workstation and 1 for a server. Absent or unparsable, it
-// stays false — the workstation answer, which is what every build assumed before this
-// was read at all.
-func (l *Layout) readSetupData(f *inf.File, build int) {
+// ntProductTypes classifies the product-type strings ProductOptions can carry, reporting
+// whether each names a server. NT defines exactly these three: a workstation, a stand-alone
+// server, and a domain controller.
+var ntProductTypes = map[string]bool{
+	"winnt":    false,
+	"servernt": true,
+	"lanmannt": true,
+}
+
+// setupDataProductTypes classifies the [SetupData] ProductType values measured on real
+// media. The field enumerates the SKU rather than answering workstation-or-server, and no
+// mapping of it is published, so it is read against the values actually seen rather than by
+// a rule: an unlisted value means a SKU nobody here has measured. Reading every non-zero
+// value as a server — as this once did — brands a workstation SKU ServerNT, and that
+// misbrands more than the registry: the kernel then reports VER_NT_SERVER, so the shell's
+// splash asks msgina.dll for the server banner, which on XP media is stale pre-release
+// artwork.
+var setupDataProductTypes = map[int64]bool{
+	0: false, // XP Professional, x86 and x64 alike; the XP SP3 OPK
+	4: false, // XP Home Edition and XP Starter Edition, which state the same value
+	1: true,  // Server 2003 (Standard), x86 and amd64 alike
+	6: true,  // Small Business Server 2003
+}
+
+// readProductType fills ServerProduct from the media's own answers. Two exist, and they are
+// not equally good.
+//
+// hivesys.inf — the GUI-mode system config the hive stage folds onto SYSTEM — states the
+// product-type string itself, so it needs no decoding and holds for any SKU. Every XP-branch
+// medium measured declares "WinNt" there, XP Professional x64 Edition included, which is the
+// case this derivation exists for at all. It is preferred for that reason: it answers for XP
+// SKUs whose [SetupData] value has never been measured.
+//
+// Server 2003 media declare no ProductOptions at all (measured on Standard, x86 and amd64),
+// so a silent source falls back to txtsetup.sif's [SetupData] ProductType and the SKU values
+// measured for it. A value that is not among them is reported rather than guessed at, and
+// settles on the workstation answer — which is what every build produced before this was
+// read at all.
+//
+// The declared string decides only which product this is; the value written to the built
+// hive stays base's own, because the string the media declares is not the one an installed
+// system carries: hivesys.inf states "WinNt" where a real XP SYSTEM hive holds "WinNT".
+func (l *Layout) readProductType(src source.Backing, id source.Identity, txt *inf.File) {
+	if s, ok := declaredProductType(src, id); ok {
+		if server, known := ntProductTypes[strings.ToLower(s)]; known {
+			l.ServerProduct = server
+			return
+		}
+		slog.Warn("source declares an unknown NT product type; falling back to its SKU value",
+			"producttype", s)
+	}
+
+	v, ok := setupDataProductType(txt, id.Build)
+	if !ok {
+		return // nothing stated anywhere: the workstation answer, as before
+	}
+	server, known := setupDataProductTypes[v]
+	if !known {
+		slog.Warn("source states an unrecognized SKU and declares no product type; building as a workstation",
+			"setupdata_producttype", v)
+		return
+	}
+	l.ServerProduct = server
+}
+
+// setupDataProductType reports txtsetup.sif's [SetupData] ProductType, and whether the
+// source stated a parsable one.
+func setupDataProductType(f *inf.File, build int) (int64, bool) {
+	var v int64
+	var found bool
 	for _, ln := range f.Section("SetupData", build) {
 		if strings.EqualFold(ln.Key, "ProductType") {
-			if v, ok := inf.ParseInt(strings.TrimSpace(ln.Field(0))); ok {
-				l.ServerProduct = v != 0
+			if n, ok := inf.ParseInt(strings.TrimSpace(ln.Field(0))); ok {
+				v, found = n, true
 			}
 		}
 	}
+	return v, found
+}
+
+// declaredProductType reports the product-type string the source's hivesys.inf writes to
+// ControlSet001\Control\ProductOptions, and whether it declares one at all. A source that
+// cannot be read for it is treated as declaring nothing: this is a preferred answer, not a
+// required one, and the caller has a second.
+func declaredProductType(src source.Backing, id source.Identity) (string, bool) {
+	data, packed, found := ReadSourceFile(src, id.Roots(), source.AreaSystem, "hivesys.inf")
+	if !found {
+		return "", false
+	}
+	if packed {
+		d, err := compress.DecompressBytes(data)
+		if err != nil {
+			return "", false
+		}
+		data = d
+	}
+	f, err := inf.Parse(data)
+	if err != nil {
+		return "", false
+	}
+	// The lines are setupapi AddReg directives: root, subkey, value name, flags, data.
+	for _, ln := range f.Section("AddReg", 0) {
+		fields := ln.Fields()
+		if len(fields) < 5 || !strings.EqualFold(fields[0], "HKLM") {
+			continue
+		}
+		if !strings.EqualFold(fields[2], "ProductType") || !isProductOptions(fields[1]) {
+			continue
+		}
+		if s := strings.TrimSpace(fields[4]); s != "" {
+			return s, true
+		}
+	}
+	return "", false
+}
+
+// isProductOptions reports whether a hivesys.inf subkey path names the SYSTEM hive's
+// Control\ProductOptions, under either the CurrentControlSet the INF writes or the real
+// control set an offline hive carries.
+func isProductOptions(p string) bool {
+	p = strings.Trim(p, `\`)
+	parts := strings.Split(p, `\`)
+	if len(parts) != 4 || !strings.EqualFold(parts[0], "SYSTEM") {
+		return false
+	}
+	return (strings.EqualFold(parts[1], "CurrentControlSet") || strings.EqualFold(parts[1], "ControlSet001")) &&
+		strings.EqualFold(parts[2], "Control") && strings.EqualFold(parts[3], "ProductOptions")
 }
 
 // readNLS fills NLS from txtsetup.sif's [nls] section: the ANSI/OEM code-page table

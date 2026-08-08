@@ -226,30 +226,71 @@ func sortedKeysNumeric(m map[string]string) []string {
 	return keys
 }
 
-// TestReadSetupDataProductType covers the value that decides whether a build reports itself
-// as a workstation or a server — the only thing on the media separating XP Professional x64
+const sifHeader = "[Version]\nSignature = \"$Windows NT$\"\n\n"
+
+// hivesysINF renders a hivesys.inf whose [AddReg] declares the given product-type string,
+// or declares none at all when it is empty — the two shapes real media come in.
+func hivesysINF(declared string) []byte {
+	s := "[Version]\nSignature = \"$Windows NT$\"\n\n[AddReg]\n"
+	if declared != "" {
+		s += `HKLM,"SYSTEM\CurrentControlSet\Control\ProductOptions","ProductType",0x00000002,"` +
+			declared + "\"\n"
+	}
+	// A line the reader must step over either way: same key, a different value.
+	s += `HKLM,"SYSTEM\CurrentControlSet\Control\ProductOptions","ProductSuite",0x00010002,""` + "\n"
+	return []byte(s)
+}
+
+// TestReadProductType covers the answer that decides whether a build reports itself as a
+// workstation or a server — the only thing on the media separating XP Professional x64
 // Edition from Server 2003 x64, which share both a build number and an architecture.
-func TestReadSetupDataProductType(t *testing.T) {
-	const sifHeader = "[Version]\nSignature = \"$Windows NT$\"\n\n"
+//
+// The media state it two ways and the cases below pin which wins: hivesys.inf declares the
+// product-type string outright (every XP-branch medium measured does), and a source that
+// declares none falls back to the SKU in txtsetup.sif's [SetupData] ProductType.
+func TestReadProductType(t *testing.T) {
 	tests := []struct {
 		name    string
 		section string
+		hivesys []byte // nil = the source ships no hivesys.inf at all
 		want    bool
 	}{
-		{"workstation media declares 0", "[SetupData]\nProductType = 0\n", false},
-		{"server media declares 1", "[SetupData]\nProductType = 1\n", true},
-		// A source that states nothing must not be guessed into a server: workstation is
-		// what every build produced before this value was read at all.
-		{"absent section falls back to workstation", "", false},
-		{"absent value falls back to workstation", "[SetupData]\nMinimumMemory = 32\n", false},
+		// Declared outright — the preferred answer, whatever the SKU says.
+		{"declared WinNt is a workstation", "", hivesysINF("WinNt"), false},
+		{"declared ServerNT is a server", "", hivesysINF("ServerNT"), true},
+		{"declared LanmanNT is a server", "", hivesysINF("LanmanNT"), true},
+		// XP media declare WinNt and state SKU 0; the two must not be able to disagree
+		// into a server.
+		{"declared workstation outranks the SKU", "[SetupData]\nProductType = 1\n", hivesysINF("WinNt"), false},
+		// An unknown string is not decoded as anything: fall through to the SKU.
+		{"unknown declared string falls back to the SKU", "[SetupData]\nProductType = 1\n", hivesysINF("EmbeddedNT"), true},
+
+		// Server 2003 media declare no ProductOptions at all, so the SKU decides.
+		{"silent media, SKU 1 is a server", "[SetupData]\nProductType = 1\n", hivesysINF(""), true},
+		{"silent media, SKU 6 is a server", "[SetupData]\nProductType = 6\n", hivesysINF(""), true},
+		{"silent media, SKU 0 is a workstation", "[SetupData]\nProductType = 0\n", hivesysINF(""), false},
+		// The field names a SKU, not a yes/no: XP Starter Edition media states 4, and
+		// reading any non-zero as "server" brands that build ServerNT — which the kernel
+		// then reports, putting the server banner on the shell's splash.
+		{"silent media, SKU 4 is a workstation", "[SetupData]\nProductType = 4\n", hivesysINF(""), false},
+		// A SKU nobody has measured is not guessed into a server.
+		{"silent media, unmeasured SKU falls back to workstation", "[SetupData]\nProductType = 9\n", hivesysINF(""), false},
+
+		// A source that states nothing anywhere must not be guessed into a server:
+		// workstation is what every build produced before this was read at all.
+		{"no hivesys.inf and no SKU", "", nil, false},
+		{"absent value falls back to workstation", "[SetupData]\nMinimumMemory = 32\n", hivesysINF(""), false},
 		// Unparsable data must not read as non-zero and flip the product silently.
-		{"unparsable value falls back to workstation", "[SetupData]\nProductType = server\n", false},
+		{"unparsable SKU falls back to workstation", "[SetupData]\nProductType = server\n", hivesysINF(""), false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			src := fstest.MapFS{
 				"i386/txtsetup.sif": {Data: []byte(sifHeader + syntheticTxtsetup + "\n" + tt.section)},
 				"i386/layout.inf":   {Data: []byte(syntheticLayout)},
+			}
+			if tt.hivesys != nil {
+				src["i386/hivesys.inf"] = &fstest.MapFile{Data: tt.hivesys}
 			}
 			l, err := Parse(src, source.Identity{Arch: "i386", Build: 2600})
 			if err != nil {

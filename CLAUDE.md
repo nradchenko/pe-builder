@@ -60,7 +60,11 @@ PE dependencies.
     Microsoft's, which is what keeps it clean-room.
   - `layout/` — resolve the source's `txtsetup.sif` / `layout.inf` (file → target
     directory, on-disk name, boot-driver lists, and the source's locale from the
-    `[nls]` section).
+    `[nls]` section). It also settles whether the source is a workstation or a server
+    product — the one thing separating XP Professional x64 Edition from Server 2003 x64,
+    which are otherwise the same build number and architecture — from the product type
+    the media's own `hivesys.inf` declares, falling back for a source that declares none
+    to the SKU in `txtsetup.sif`'s `[SetupData] ProductType`.
   - `action/` — the build action IR (copy-file, mkdir, registry, text-edit) that the
     base layer and plugins compile to. A copy or mkdir carries the source area it
     works in (see `source/`); a copy is read from and written to the same area, so it
