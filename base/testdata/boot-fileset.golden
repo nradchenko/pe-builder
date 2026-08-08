@@ -45,7 +45,6 @@ fltmc.exe
 framebuf.dll
 fs_rec.sys
 gdi32.dll
-gptext.dll
 hidclass.sys
 hidparse.sys
 imagehlp.dll

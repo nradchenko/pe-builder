@@ -1,5 +1,5 @@
 identity: winxp build 2600 (i386)
-written: 257
+written: 256
 skipped: 
 
 BOOTFONT.BIN 4952
@@ -165,7 +165,6 @@ i386/system32/fltlib.dll 16896
 i386/system32/fltmc.exe 23040
 i386/system32/framebuf.dll 9344
 i386/system32/gdi32.dll 285184
-i386/system32/gptext.dll 200704
 i386/system32/hal.dll 105344
 i386/system32/halaacpi.dll 131840
 i386/system32/halacpi.dll 81152

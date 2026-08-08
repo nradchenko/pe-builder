@@ -77,7 +77,6 @@ copy esent.dll dir="" rename="" area=system flags=-
 copy fc.exe dir="" rename="" area=system flags=-
 copy fltlib.dll dir="" rename="" area=system flags=-
 copy fltmc.exe dir="" rename="" area=system flags=-
-copy gptext.dll dir="" rename="" area=system flags=-
 copy intl.cpl dir="" rename="" area=system flags=-
 copy iologmsg.dll dir="" rename="" area=system flags=-
 copy kerberos.dll dir="" rename="" area=system flags=-

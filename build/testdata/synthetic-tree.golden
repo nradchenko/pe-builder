@@ -1,5 +1,5 @@
 identity: winxp build 2600 (i386)
-written: 115
+written: 114
 skipped: [cabonly.sys]
 hives: [i386/system32/SETUPREG.HIV i386/system32/config/SOFTWARE i386/system32/config/DEFAULT i386/system32/config/SAM i386/system32/config/SECURITY]
 
@@ -50,7 +50,6 @@ i386/system32/fltlib.dll
 i386/system32/fltmc.exe
 i386/system32/framebuf.dll
 i386/system32/fs_rec.sys
-i386/system32/gptext.dll
 i386/system32/imm32.dll
 i386/system32/intl.cpl
 i386/system32/iologmsg.dll
