@@ -697,7 +697,7 @@ static NTSTATUS RamStartDevice(PRAM_EXT ext)
         status = IoSetDeviceInterfaceState(&ext->InterfaceName, TRUE);
     }
     if (!NT_SUCCESS(status)) {
-        RAM_DBG("Mount Manager interface registration failed 0x%08x — failing start\n", status);
+        RAM_DBG("Mount Manager interface registration failed 0x%08x, failing start\n", status);
         return status;
     }
 
