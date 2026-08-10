@@ -733,10 +733,42 @@ static void setup_start_menu(char drive){
     pin_top_level(&x);      /* top-level items into the modern panel's pinned list */
 }
 
+/* Put an account picture where the modern Start panel looks for one: explorer builds the path as
+ * <Common AppData>\Microsoft\User Account Pictures\<user>.bmp and draws nothing at all if the file
+ * is absent. The bitmap to copy is whatever a plugin declared under HKLM\SOFTWARE\pe-builder as
+ * UserPicture (see README.md § Account picture); no value = no picture, and this does nothing.
+ *
+ * The file name is the *token's* user, from GetUserName — not %USERNAME%, which is set to
+ * "Default User" for the profile — so ask for it the same way explorer will rather than assume the
+ * account. That lookup goes through the LSA, which is why this runs after the service wait. */
+static void setup_user_picture(const char *allusers){
+    char val[MAX_PATH]={0}, dir[MAX_PATH], src[MAX_PATH], dst[MAX_PATH], user[MAX_PATH];
+    DWORD dl=sizeof val-1, type, n=sizeof user;
+    HKEY k;
+    if(RegOpenKeyExA(HKEY_LOCAL_MACHINE,"SOFTWARE\\pe-builder",0,KEY_READ,&k)!=ERROR_SUCCESS) return;
+    LONG r=RegQueryValueExA(k,"UserPicture",NULL,&type,(LPBYTE)val,&dl);
+    RegCloseKey(k);
+    if(r!=ERROR_SUCCESS || (type!=REG_SZ && type!=REG_EXPAND_SZ) || !val[0]) return;
+    /* Zero is failure; anything above the buffer size is the *required* size, and leaves src
+     * untouched — both mean there is no path to copy from. */
+    DWORD ex=ExpandEnvironmentStringsA(val,src,MAX_PATH);
+    if(ex==0 || ex>MAX_PATH) return;
+    if(!GetUserNameA(user,&n)) return;
+    /* Create the folder ourselves: explorer asks for it with CSIDL_FLAG_CREATE, but not until it
+     * reads the picture, which is after we have to have written one. */
+    wsprintfA(dir,"%s\\Application Data\\Microsoft",allusers);
+    CreateDirectoryA(dir,NULL);
+    wsprintfA(dir,"%s\\Application Data\\Microsoft\\User Account Pictures",allusers);
+    CreateDirectoryA(dir,NULL);
+    wsprintfA(dst,"%s\\%s.bmp",dir,user);
+    CopyFileA(src,dst,FALSE);
+}
+
 int WINAPI WinMain(HINSTANCE i,HINSTANCE p,LPSTR c,int s){
     (void)i;(void)p;(void)c;(void)s;
 
     char drive=find_writable_drive();
+    char au[MAX_PATH]; au[0]=0;
     if(drive){
         char up[MAX_PATH]; wsprintfA(up,"%c:\\profile",drive);
         char pd[MAX_PATH];
@@ -750,7 +782,7 @@ int WINAPI WinMain(HINSTANCE i,HINSTANCE p,LPSTR c,int s){
         char tmp[MAX_PATH]; wsprintfA(tmp,"%s\\Local Settings\\Temp",up);
         SetEnvironmentVariableA("TEMP",tmp);
         SetEnvironmentVariableA("TMP",tmp);
-        char au[MAX_PATH]; wsprintfA(au,"%c:\\All Users",drive);
+        wsprintfA(au,"%c:\\All Users",drive);
         static const char *cd[]={"","\\Desktop","\\Start Menu","\\Start Menu\\Programs",
             "\\Startup","\\Application Data","\\Documents",NULL};   /* Startup off Programs — see kProfileDirs */
         for(int k=0;cd[k];k++){ char x[MAX_PATH]; wsprintfA(x,"%s%s",au,cd[k]); CreateDirectoryA(x,NULL); }
@@ -775,6 +807,11 @@ int WINAPI WinMain(HINSTANCE i,HINSTANCE p,LPSTR c,int s){
 
     splash_status("Setting up the Start menu...");
     setup_start_menu(drive);
+    /* After wait_services, not with the rest of the profile setup: naming the file needs the
+     * account name, and that lookup goes through the LSA — which is not reachable at the point
+     * the profile directories are created. Still before explorer, which reads the picture once
+     * when it builds the Start panel and caches it. */
+    if(au[0]) setup_user_picture(au);
 
     splash_status("Preparing the Control Panel...");
     prune_ghost_cpl();      /* after self-reg: shell32 adds the CP namespace entries there */

@@ -40,7 +40,8 @@ reimplemented independently here.
 5. **Self-registration** — run the shell/COM `DllInstall` pass (see
    [Self-registration](#self-registration)); without it Explorer exits immediately.
 6. **Start menu** — create the shortcuts declared in the registry (see
-   [Start-menu items](#start-menu-items)).
+   [Start-menu items](#start-menu-items)), and put the account picture where the Start panel
+   looks for it (see [Account picture](#account-picture)).
 7. **Prune ghost Control Panel items** — drop `ControlPanel\NameSpace` entries whose
    backing handler DLL isn't present/loadable, so they don't render as empty folders.
 8. **Visual style** — apply the style the registry selects, if any (see
@@ -306,6 +307,42 @@ Explorer starts. That call is registry I/O plus a change notification: it needs 
 object and no running shell, and the panel re-reads the list every time it opens, so nothing has to
 be notified. Letting shell32 author the entries (rather than writing the blob by hand) also stores
 each one relative to a known folder, so no drive letter is baked in.
+
+### Account picture
+
+The panel's header can carry the account picture (the tile beside the user name). Explorer draws it
+from `<Common AppData>\Microsoft\User Account Pictures\<user>.bmp` and draws nothing at all if the
+file is missing, so `peshell` puts one there at boot. **The bitmap comes from another plugin**, via
+a one-value contract:
+
+    HKLM\SOFTWARE\pe-builder    UserPicture = REG_EXPAND_SZ   path to a staged .bmp
+
+`peshell` expands that path and copies the file to the name Explorer will ask for. No value, no
+copy — which is the state of a build with no visual style, since the tile cannot render there
+anyway. `luna` is the plugin that declares one today; whether the tile is *drawn* is decided by its
+`logon_type` option (see luna's README § Logon type).
+
+The copy is unconditional whenever the value is set: whether the tile is actually *drawn* is
+decided by Explorer, not here, so `peshell` writes the file and lets the shell decide. A few KB on
+the ramdrive is cheaper than teaching the shell launcher which gates the panel applies.
+
+Two details decide whether the copy lands:
+
+- **The file name is the account, not `%USERNAME%`.** Explorer builds it from `GetUserName`, i.e.
+  the process token — `SYSTEM` in a PE — while `%USERNAME%` is set to "Default User" for the
+  profile. `peshell` asks the same way rather than assuming, so the two always agree.
+- **It runs after the service wait**, with the Start-menu step, not with the profile setup that
+  creates the folders. The account lookup goes through the LSA, which is not reachable that early;
+  run there it fails, and the tile silently never appears. It still has to precede Explorer, which
+  reads the picture once when it builds the panel and caches the bitmap — a file that appears later
+  is not picked up until the shell restarts.
+
+Clicking the tile does nothing, deliberately. Explorer's handler calls shell32's
+`SHRunControlPanel` with `nusrmgr.cpl ,initialTask=ChangePicture` — the User Accounts applet on
+its "change your picture" task. That applet manages Windows accounts against the SAM, and this PE
+runs empty SAM/SECURITY hives, so it isn't staged; the call fails silently, which is a better
+outcome than opening an applet onto a database that isn't there. The cursor still hot-tracks to a
+hand over the tile, since that is the panel's own rendering.
 
 ## Start-menu items
 

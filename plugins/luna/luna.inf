@@ -28,6 +28,12 @@ depends = explorer-shell, terminal-services
 ; name = default, type[, allowed...]
 color = NormalColor, string, NormalColor, HomeStead, Metallic
 size  = NormalSize,  string, NormalSize,  LargeFonts, ExtraLargeFonts
+; Which logon mode the shell believes the machine is in: 0 = classic (the default, and what a PE
+; behaves as without this), 1 = the XP Welcome screen. A PE logs nobody on, so what this actually
+; changes is what the shell draws — the Turn Off dialog, and the account picture in the Start
+; panel's header. Typed int rather than bool — a bool substitutes the literal text "true", which
+; is not a DWORD. See README.md § Logon type.
+logon_type = 0, int, 0, 1
 
 ; The Themes service host: svchost loads this DLL (ThemeServiceMain), and its client half is what
 ; peshell talks to. Its static closure is common runtime already present, so this stages shsvcs
@@ -50,6 +56,10 @@ luna.the = b, luna.theme
 ; name. See README.md § Fonts.
 trebuc.ttf   = 22
 trebucbd.ttf = 22
+; One of the source's own 48x48 account bitmaps, for the Start panel's header tile. It lives here
+; rather than with the desktop because the tile is drawn only on a themed panel.
+; See README.md § Account picture.
+chess.bmp = 2
 
 ; --- The Themes service (SYSTEM hive) ---
 ; hivesys.inf does not carry it, so define it here: a svchost-hosted Win32 service (Type 0x20) in
@@ -71,6 +81,20 @@ trebucbd.ttf = 22
 ; The "Themes" svchost group lists the one service svchost -k Themes hosts.
 [Software.AddReg]
 0x7,"Microsoft\Windows NT\CurrentVersion\Svchost","Themes","Themes"
+
+; --- Logon mode, and the account picture that rides on it ---
+; The mode itself. Both the shell's Turn Off dialog and the Start panel's header tile are gated on
+; IsOS(OS_WELCOMELOGONUI), which is false unless this is non-zero — the same reason a domain-joined
+; XP shows the user name in the header with no picture. Nothing in /minint renders a logon UI from
+; it; it only tells the shell which mode to draw for. 0 is the default and leaves the shell exactly
+; as it behaves without this plugin. See README.md § Logon type.
+0x4,"Microsoft\Windows NT\CurrentVersion\Winlogon","LogonType",$(logon_type)
+; The picture the header tile draws, as a contract with peshell: it copies the bitmap named here to
+; the file Explorer looks for, under the running account's name. Written unconditionally — file
+; staging cannot be templated by an option, so the switch is the mode above, and at logon_type = 0
+; peshell copies a few KB that Explorer never reads. REG_EXPAND_SZ because the system drive is
+; not C:. See README.md § Logon type and explorer-shell's README § Account picture.
+0x2,"pe-builder","UserPicture","%SystemRoot%\System32\chess.bmp"
 
 ; --- Theme selection for the (default) user the PE runs as (DEFAULT hive) ---
 ; The contract with peshell: it reads these four values at shell start and applies the style they

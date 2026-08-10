@@ -25,9 +25,13 @@ plugin "luna" {
 
   # Colour scheme and font size. These are the defaults; color also takes "HomeStead" (olive)
   # or "Metallic" (silver), and size "LargeFonts" or "ExtraLargeFonts".
+  #
+  # logon_type = 1 puts the shell in XP's Welcome-screen mode: a different Turn Off dialog, and
+  # the account picture in the Start menu's header. 0 (classic) is the default.
   # options {
-  #   color = "NormalColor"
-  #   size  = "NormalSize"
+  #   color      = "NormalColor"
+  #   size       = "NormalSize"
+  #   logon_type = 0
   # }
 }
 

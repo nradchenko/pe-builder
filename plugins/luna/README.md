@@ -96,6 +96,45 @@ directory. Only the files are needed — the SOFTWARE hive already registers the
 them the caption falls back to a font with no glyphs for the source's language and the title draws
 as empty rectangles at the larger sizes.
 
+## Logon type
+
+`Winlogon\LogonType` tells the shell which logon mode the machine is in: `0` (or absent) classic,
+`1` the XP **Welcome screen**. A `/minint` PE logs nobody on and renders no logon UI from it — what
+the value actually changes is what the *shell* draws for that mode. The `logon_type` option sets
+it, and it is **`0` by default**:
+
+    plugin "luna" {
+      enabled = true
+      options { logon_type = 1 }
+    }
+
+At `1` you get two visible changes, both gated on `IsOS(OS_WELCOMELOGONUI)`, which reads this value:
+
+- **A different Turn Off dialog.** shell32 picks the dialog by this flag; this is the change you
+  cannot miss. (Verified still shutting the machine down.)
+- **The account picture** in the Start panel's header — the tile beside the user name. This is the
+  reason it lives in *this* plugin rather than with the desktop: Explorer reads the `StartPanel`
+  theme's `TMT_USERPICTURE` bool before anything else, so an unthemed desktop has no theme handle,
+  no tile, and no way to turn one on. Set this on an unthemed build and you get the dialog change
+  and nothing else.
+
+The default is `0` because a PE with no logon is honestly in the classic mode, and because the
+dialog change is not a trade every build wants made for it. At `0` the shell behaves exactly as it
+does without this plugin.
+
+The picture itself is a contract with peshell, in `[Software.AddReg]`:
+
+| Value | Meaning |
+|---|---|
+| `SOFTWARE\pe-builder` → `UserPicture` | the staged bitmap peshell copies into place (`chess.bmp`, one of the source's own 48×48 account pictures). See explorer-shell's README § Account picture for the copy and its timing. |
+
+It is written **unconditionally**, because `[Options]` can substitute into a registry value but
+cannot template a `[SourceDisksFiles]` line — so the bitmap ships either way, and at `logon_type =
+0` peshell copies a few KB that Explorer never reads. That is the cheaper half of the trade.
+
+Another visual style wanting the tile needs both values; staging a different bitmap only means
+pointing `UserPicture` at it.
+
 ## Adding another visual style
 
 Copy this file, change the staged `.msstyles` and the four `ThemeManager` values. No code, no
