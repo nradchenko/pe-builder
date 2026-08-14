@@ -65,6 +65,9 @@ entries in both FAT copies, and a root-directory volume-label entry so the volum
 the FAT16 range; it can also be pinned via a parameter. The layout follows the public FAT
 specification.
 
+Don't change that label: a WDM disk reports `DRIVE_FIXED` like a real one, so it is all that
+tells this volume from an attached disk — `explorer-shell` matches it to place the profile here.
+
 ## Disk and Mount Manager IOCTLs
 
 FastFAT and the volume/Mount Manager stack probe the disk through IOCTLs, which the driver

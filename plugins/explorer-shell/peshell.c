@@ -34,17 +34,69 @@ static const char *kProfileDirs[] = {
     "\\Local Settings\\Temporary Internet Files", "\\Local Settings\\History", NULL
 };
 
+/* The volume label the ramdrive plugin's FAT16 formatter writes. This is the contract that
+ * identifies the RAM volume to us — see README.md § The profile volume for why we match on the
+ * label rather than on DRIVE_RAMDISK. */
+#define RAMDISK_LABEL "PE RAMDISK"
+
+/* Is this the ramdrive volume? DRIVE_RAMDISK first for any ramdisk that does report it (ours,
+ * a WDM disk through the storage stack, comes back DRIVE_FIXED like a real disk would). */
+static BOOL is_ramdisk(char d){
+    char root[4]={d,':','\\',0};
+    if(GetDriveTypeA(root)==DRIVE_RAMDISK) return TRUE;
+    char label[MAX_PATH+1];
+    if(!GetVolumeInformationA(root,label,sizeof(label),NULL,NULL,NULL,NULL,0)) return FALSE;
+    /* The label is an 11-byte space-padded FAT field, and FastFAT hands it back trimmed —
+     * measured, on the boot this fix was verified against. Trim anyway: an exact compare would
+     * make the whole fix rest on that, and if it ever did not hold the profile would go quietly
+     * back to the attached disk this exists to avoid, with only a "(fallback)" line to show it. */
+    int n=lstrlenA(label);
+    while(n>0 && label[n-1]==' ') label[--n]=0;
+    return lstrcmpiA(label,RAMDISK_LABEL)==0;
+}
+
+static BOOL drive_writable(char d){
+    char probe[MAX_PATH]; wsprintfA(probe,"%c:\\pe_wt.tmp",d);
+    HANDLE h=CreateFileA(probe,GENERIC_WRITE,0,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_TEMPORARY|FILE_FLAG_DELETE_ON_CLOSE,NULL);
+    if(h==INVALID_HANDLE_VALUE) return FALSE;
+    CloseHandle(h); return TRUE;
+}
+
+/* Pick the volume the user profile lives on. Two passes: the ramdisk first, then any writable
+ * volume. Taking the first writable drive letter instead would hand the profile to an attached
+ * scratch disk whenever one sorts ahead of the RAM volume — writing user data to a disk the
+ * user never asked us to touch. The second pass keeps a boot with no ramdrive working. */
 static char find_writable_drive(void){
+    /* Suppress the hard-error dialogs the scan can raise, and restore the mode after: a drive
+     * with no media or an unformatted one answers a probe with "There is no disk in drive X:",
+     * which here would appear before the splash, on a desktop with no Winlogon and nobody to
+     * dismiss it — the bring-up would simply stop on a black screen. Scoped to the scan rather
+     * than set for the process, because child processes inherit the mode and explorer's own
+     * dialogs are not ours to suppress. Pass 0 makes this worth handling: it probes every
+     * letter before accepting any, where the old scan stopped at the first writable one. */
+    UINT prev=SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOOPENFILEERRORBOX);
+    char found=0;
     DWORD mask=GetLogicalDrives();
-    for(char d='C';d<='Z';d++){
-        if(!(mask&(1u<<(d-'A')))) continue;
-        char root[4]={d,':','\\',0}; UINT t=GetDriveTypeA(root);
-        if(t!=DRIVE_FIXED && t!=DRIVE_REMOVABLE && t!=DRIVE_RAMDISK) continue;
-        char probe[MAX_PATH]; wsprintfA(probe,"%c:\\pe_wt.tmp",d);
-        HANDLE h=CreateFileA(probe,GENERIC_WRITE,0,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_TEMPORARY|FILE_FLAG_DELETE_ON_CLOSE,NULL);
-        if(h!=INVALID_HANDLE_VALUE){ CloseHandle(h); return d; }
+    for(int pass=0;pass<2 && !found;pass++){
+        for(char d='C';d<='Z';d++){
+            if(!(mask&(1u<<(d-'A')))) continue;
+            char root[4]={d,':','\\',0}; UINT t=GetDriveTypeA(root);
+            if(t!=DRIVE_FIXED && t!=DRIVE_REMOVABLE && t!=DRIVE_RAMDISK) continue;
+            if(pass==0 && !is_ramdisk(d)) continue;
+            if(!drive_writable(d)) continue;
+            /* Say which volume, and which pass found it. Falling through to the fallback is
+             * the failure this scan exists to prevent, and from inside a booted PE there is
+             * no other sign of it — the profile simply is not where it should be. Goes to the
+             * kernel debugger; see README.md § Diagnosing a boot that stops partway. */
+            char msg[64];
+            wsprintfA(msg,"peshell: profile volume %c: (%s)\n",d,pass?"fallback":"ramdisk");
+            OutputDebugStringA(msg);
+            found=d; break;
+        }
     }
-    return 0;
+    if(!found) OutputDebugStringA("peshell: no writable volume; running without a profile\n");
+    SetErrorMode(prev);
+    return found;
 }
 
 /* Block until the COM baseline the shell needs is reachable, then return. The fixed SCM

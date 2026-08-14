@@ -28,8 +28,8 @@ reimplemented independently here.
 
 `peshell` runs as the setup command line and performs, in order:
 
-1. **Profile** — find a writable fixed/removable volume, create the user-profile skeleton
-   on it, and point `USERPROFILE` / `ALLUSERSPROFILE` at it.
+1. **Profile** — pick the profile volume (see [The profile volume](#the-profile-volume)),
+   create the user-profile skeleton on it, and point `USERPROFILE` / `ALLUSERSPROFILE` at it.
 2. **Splash** — show the "Please wait…" status window (see [Splash](#splash)).
 3. **Wait for services** — block until the SCM/COM baseline is reachable. It does *not*
    wait for every service to reach RUNNING; they finish in the background while the desktop
@@ -50,6 +50,18 @@ reimplemented independently here.
 9. **Launch Explorer** — start `explorer.exe` as the shell; once the taskbar paints, run the
    `post-shell` startup tasks, then close the splash. Relaunch Explorer if it dies, and
    finally fall back to `cmd.exe` so the machine is never headless.
+
+## The profile volume
+
+The profile, `All Users` and `TEMP`/`TMP` all go on one volume, chosen in two passes: the
+`ramdrive` volume first, then any writable volume.
+
+Drive type can't find the ramdisk — a WDM disk reports `DRIVE_FIXED` exactly like an attached
+one — so taking the first writable letter put the profile on a scratch HDD whenever one sorted
+ahead of the RAM volume, persisting user data to a disk nobody asked us to write to. The first
+pass therefore matches the volume label `PE RAMDISK` (or `DRIVE_RAMDISK`, for a ramdisk that
+does report it); the second is the old any-writable scan, so a build without `ramdrive` still
+boots.
 
 ## Startup tasks
 
@@ -97,6 +109,7 @@ plugin, booted with `pebuild run --serial`, prints a timeline of the bring-up:
 
 ```
 peshell: start
+peshell: profile volume R: (ramdisk)                (or "(fallback)" — see below)
 peshell: stage: Starting services...
 peshell: startup stage pre-shell
 peshell: stage: Registering shell components...
@@ -113,6 +126,11 @@ tells the user the debugger gets too and the trace cannot fall behind as stages 
 phases with no splash message report separately: process entry, each startup stage (including
 `skipped, no perun.dll` and `skipped, perun.dll has no PerunRunStage`, which are otherwise silent
 no-ops), Explorer relaunch, and the `cmd.exe` fallback.
+
+The `profile volume` line names the drive the profile went to and which pass found it (see
+[The profile volume](#the-profile-volume)). `(fallback)` means the ramdisk wasn't found and the
+profile is on an ordinary disk — a boot that writes user data where it shouldn't looks entirely
+normal from the desktop, so this line is the only warning of it.
 
 A boot that stops therefore names the stage it stopped in, and `self-register` lines name any
 component that failed to register. All of it is ASCII: the output may be read on a console in any
