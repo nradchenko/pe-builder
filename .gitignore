@@ -3,8 +3,13 @@
 # Third-party freeware binaries used for reference (do not distribute)
 .cache/
 
-# Local Windows test source: the developer symlinks real media in for real-source tests
-/testdata/iso/
+# Local Windows test sources: real media the developer supplies for the real-source
+# tests, as files or as symlinks. The directory itself is kept in the tree — its README
+# says what to put there — so everything inside is ignored except that README. Ignoring
+# the directory instead would take the README with it, since git cannot re-include a
+# file whose directory is excluded.
+/testdata/iso/*
+!/testdata/iso/README.md
 
 # Local, developer-specific instructions
 CLAUDE.local.md
