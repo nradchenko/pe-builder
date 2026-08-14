@@ -23,7 +23,7 @@ func sample() *Receipt {
 			Digest: "sha256:bb",
 		},
 		Source: Source{
-			Identity: "winxp build 2600 (i386)",
+			Identity: "build 2600 (i386)",
 			File:     "winxp-sp3.iso",
 			Size:     617754624,
 			MTime:    time.Date(2026, 7, 17, 19, 28, 0, 0, time.UTC),

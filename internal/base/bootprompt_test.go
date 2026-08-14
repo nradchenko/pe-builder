@@ -31,7 +31,7 @@ const bootfixFile = "bootfix.bin"
 // copy actions for one file, which the tree assembler resolves without complaining.
 func TestBootPromptIsNotInBase(t *testing.T) {
 	for _, arch := range []string{"i386", "amd64"} {
-		acts, err := Actions(nil, fixtureLayout(), source.Identity{Flavor: "winxp", Build: 2600, Arch: arch})
+		acts, err := Actions(nil, fixtureLayout(), source.Identity{Build: 2600, Arch: arch})
 		if err != nil {
 			t.Fatalf("%s: base actions: %v", arch, err)
 		}

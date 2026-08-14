@@ -17,10 +17,10 @@ const (
 // productActions derives the NT product type from the source's own txtsetup.sif, the way the
 // boot drivers and the locale are derived.
 //
-// Do not take this from source.Identity: its Flavor is looked up from the build number alone,
-// so XP Professional x64 Edition — build 3790 and amd64, exactly like Server 2003 x64 —
-// probes as "win2003", and anything identity-derived turns it into a server. txtsetup.sif is
-// the one place the two disagree.
+// It cannot come from source.Identity, which carries only what the media state about
+// themselves as a whole: XP Professional x64 Edition is build 3790 on amd64, exactly like
+// Server 2003 x64, so anything derived from build and architecture makes one of them the
+// other. The media's own setup metadata is where the two finally disagree.
 func productActions(l *layout.Layout) []action.Action {
 	t := productTypeWorkstation
 	if l != nil && l.ServerProduct {

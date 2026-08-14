@@ -61,7 +61,7 @@ cabonly = cabonly.sys
 // the source, and asserts assemble places them all. It bypasses Probe (which gates on
 // a real ntdll version resource) via the internal assemble entry point.
 func TestAssemblePipeline(t *testing.T) {
-	id := source.Identity{Build: 2600, Arch: "i386", Flavor: "winxp"}
+	id := source.Identity{Build: 2600, Arch: "i386"}
 
 	// setupreg.hiv is a real (empty) regf image; the three hive*.inf files seed the
 	// remaining base hives. Together they let the hive stage run hermetically.
@@ -119,7 +119,7 @@ func TestAssemblePipeline(t *testing.T) {
 // an enabled plugin ships a file (placed from the plugin, not the source) and writes a
 // SOFTWARE registry value (merged into the built hive on top of the base layer).
 func TestAssembleWithPlugin(t *testing.T) {
-	id := source.Identity{Build: 2600, Arch: "i386", Flavor: "winxp"}
+	id := source.Identity{Build: 2600, Arch: "i386"}
 
 	sysHive, err := hive.WriteHive(hive.NewHive("$$$PROTO.HIV"))
 	if err != nil {
@@ -403,7 +403,7 @@ func TestRunPluginBuildsScratchOutsideWorkDir(t *testing.T) {
 // build-capable plugin compiles tool.exe, which is placed into the tree from the build
 // output rather than the Windows source.
 func TestAssembleBuiltPlugin(t *testing.T) {
-	id := source.Identity{Build: 2600, Arch: "i386", Flavor: "winxp"}
+	id := source.Identity{Build: 2600, Arch: "i386"}
 	sysHive, err := hive.WriteHive(hive.NewHive("$$$PROTO.HIV"))
 	if err != nil {
 		t.Fatal(err)
@@ -464,7 +464,7 @@ func TestBuildRealSource(t *testing.T) {
 	testISO := repo.SourceISO(t)
 	out := t.TempDir()
 	m := &manifest.Manifest{
-		Source: manifest.Source{Path: testISO, Type: "auto"},
+		Source: manifest.Source{Path: testISO},
 		Build:  manifest.Build{WorkDir: out},
 	}
 
@@ -518,7 +518,7 @@ func TestBuildWin32GUIClosure(t *testing.T) {
 	testISO := repo.SourceISO(t)
 	out := t.TempDir()
 	m := &manifest.Manifest{
-		Source:  manifest.Source{Path: testISO, Type: "auto"},
+		Source:  manifest.Source{Path: testISO},
 		Output:  manifest.Output{Target: manifest.TargetNone},
 		Build:   manifest.Build{WorkDir: out, KeepWork: true},
 		Plugins: []manifest.Plugin{{Name: "win32-gui", Enabled: true}},
@@ -560,7 +560,7 @@ func TestBuildISO(t *testing.T) {
 	testISO := repo.SourceISO(t)
 	out := filepath.Join(t.TempDir(), "rescue.iso")
 	m := &manifest.Manifest{
-		Source: manifest.Source{Path: testISO, Type: "auto"},
+		Source: manifest.Source{Path: testISO},
 		Output: manifest.Output{Target: manifest.TargetISO, Path: out, VolumeLabel: "PEBUILDER"},
 		Build:  manifest.Build{WorkDir: filepath.Join(t.TempDir(), "tree")},
 	}
@@ -637,7 +637,7 @@ func TestBuildNone(t *testing.T) {
 	testISO := repo.SourceISO(t)
 	out := filepath.Join(t.TempDir(), "tree")
 	m := &manifest.Manifest{
-		Source: manifest.Source{Path: testISO, Type: "auto"},
+		Source: manifest.Source{Path: testISO},
 		Output: manifest.Output{Target: manifest.TargetNone},
 		Build:  manifest.Build{WorkDir: out},
 	}
@@ -668,7 +668,7 @@ func TestBuildISOKeepWork(t *testing.T) {
 	tree := filepath.Join(t.TempDir(), "tree")
 	out := filepath.Join(t.TempDir(), "rescue.iso")
 	m := &manifest.Manifest{
-		Source: manifest.Source{Path: testISO, Type: "auto"},
+		Source: manifest.Source{Path: testISO},
 		Output: manifest.Output{Target: manifest.TargetISO, Path: out, VolumeLabel: "PEBUILDER"},
 		Build:  manifest.Build{WorkDir: tree, KeepWork: true},
 	}
@@ -699,7 +699,7 @@ func TestBuildBadSource(t *testing.T) {
 // rather than being demoted to a non-fatal report error (which would let a cancelled
 // build look successful).
 func TestAssembleCancelled(t *testing.T) {
-	id := source.Identity{Build: 2600, Arch: "i386", Flavor: "winxp"}
+	id := source.Identity{Build: 2600, Arch: "i386"}
 	backing := fstest.MapFS{
 		"i386/txtsetup.sif": {Data: []byte(syntheticMeta)},
 		"i386/layout.inf":   {Data: []byte(syntheticMeta)},

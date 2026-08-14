@@ -10,9 +10,9 @@ import (
 )
 
 func TestIdentityString(t *testing.T) {
-	id := Identity{Build: 2600, Arch: "i386", Flavor: "winxp"}
+	id := Identity{Build: 2600, Arch: "i386"}
 	got := id.String()
-	want := "winxp build 2600 (i386)"
+	want := "build 2600 (i386)"
 	if got != want {
 		t.Errorf("Identity.String() = %q, want %q", got, want)
 	}

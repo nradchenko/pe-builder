@@ -35,12 +35,6 @@ var archFolders = []struct{ folder, arch string }{
 	{ArchI386, ArchI386},
 }
 
-// flavors maps a build number to its flavor name.
-var flavors = map[int]string{
-	2600: "winxp",
-	3790: "win2003",
-}
-
 // Probe detects the source's identity: architecture from the source folder, and
 // build/version from ntdll's PE version resource (decompressing the .??_ archive
 // when ntdll ships compressed).
@@ -63,11 +57,7 @@ func (s *source) Probe() (Identity, error) {
 			ver, minVersion)
 	}
 
-	return Identity{
-		Build:  ver.Build,
-		Arch:   arch,
-		Flavor: flavors[ver.Build], // empty for a supported-but-unclassified build
-	}, nil
+	return Identity{Build: ver.Build, Arch: arch}, nil
 }
 
 // archFolder finds the source's architecture folder and its Arch value.
@@ -86,7 +76,7 @@ func (s *source) archFolder() (folder, arch string, err error) {
 // *built* PE, which keeps the source's folder names but no longer carries the ntdll
 // archive Probe reads a version from. The folder is the same decisive signal Probe
 // uses, so the two cannot disagree about what an amd64 tree looks like; what a caller
-// gives up by asking here is the build number and flavor, which only a source has.
+// gives up by asking here is the build number, which only a source has.
 func DetectArch(b Backing) (arch string, ok bool) {
 	_, arch, ok = detectArchFolder(b)
 	return arch, ok

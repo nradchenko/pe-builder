@@ -73,7 +73,11 @@ PE dependencies.
     loader, so it ships no Microsoft boot binary (see `internal/build/` and the `wim-cd-boot` plugin
     below). The `wim` layout requires an ISO target.
   - `source/` — read a Windows installation source (directory or ISO) and probe its
-    identity (build number, architecture, flavor). It also owns the source's *areas*:
+    identity (build number, architecture). An identity carries only what the media state
+    about themselves as a whole, and deliberately not which *product* they are: build and
+    architecture cannot separate XP Professional x64 Edition from Server 2003 x64, so that
+    answer is `layout`'s, read from the media's own setup metadata. It also owns the
+    source's *areas*:
     a source keeps its files in two top-level folders — the OS payload and the
     real-mode boot chain — which are the same `I386` folder on x86 media and split on
     amd64 media, where the payload moves to `AMD64` and the boot chain (being real

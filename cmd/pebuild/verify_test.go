@@ -21,7 +21,7 @@ func testReceipt() *receipt.Receipt {
 		BuiltAt:  time.Date(2026, 7, 21, 9, 14, 3, 0, time.UTC),
 		PEBuild:  receipt.PEBuild{Version: "v0.5.0", EngineHash: "sha256:aa"},
 		Manifest: receipt.Manifest{File: "luna.hcl", Digest: "sha256:bb"},
-		Source:   receipt.Source{Identity: "winxp build 2600 (i386)", File: "winxp.iso"},
+		Source:   receipt.Source{Identity: "build 2600 (i386)", File: "winxp.iso"},
 		Output:   receipt.Output{Target: "iso", VolumeLabel: "PEBUILDER"},
 	}
 }
@@ -136,7 +136,7 @@ func TestPrintVerification(t *testing.T) {
 		name: "only unknowns",
 		fields: []build.Field{
 			{Name: "engine content", Value: "sha256:aa", Status: build.OK},
-			{Name: "source", Value: "winxp build 2600 (i386)", Status: build.Unknown,
+			{Name: "source", Value: "build 2600 (i386)", Status: build.Unknown,
 				Detail: []string{"the manifest's source could not be read"}},
 		},
 		want:    "INCOMPLETE:",

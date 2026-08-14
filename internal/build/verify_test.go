@@ -43,7 +43,7 @@ func TestCompare(t *testing.T) {
 
 func TestSourceField(t *testing.T) {
 	base := receipt.Source{
-		Identity: "winxp build 2600 (i386)",
+		Identity: "build 2600 (i386)",
 		File:     "winxp.iso",
 		Size:     617754624,
 		MTime:    time.Date(2026, 7, 17, 19, 28, 0, 0, time.UTC),
@@ -74,7 +74,7 @@ func TestSourceField(t *testing.T) {
 		name string
 		cur  receipt.Source
 	}{
-		{"identity", receipt.Source{Identity: "win2003 build 3790 (amd64)", File: base.File, Size: base.Size, MTime: base.MTime}},
+		{"identity", receipt.Source{Identity: "build 3790 (amd64)", File: base.File, Size: base.Size, MTime: base.MTime}},
 		{"file", receipt.Source{Identity: base.Identity, File: "other.iso", Size: base.Size, MTime: base.MTime}},
 		{"size", receipt.Source{Identity: base.Identity, File: base.File, Size: 1, MTime: base.MTime}},
 		{"mtime", receipt.Source{Identity: base.Identity, File: base.File, Size: base.Size, MTime: base.MTime.Add(time.Hour)}},

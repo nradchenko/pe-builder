@@ -18,7 +18,7 @@ func TestProbeISO(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Identity{Build: 2600, Arch: "i386", Flavor: "winxp"}
+	want := Identity{Build: 2600, Arch: "i386"}
 	if id != want {
 		t.Errorf("Probe() = %+v, want %+v", id, want)
 	}

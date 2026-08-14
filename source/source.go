@@ -3,7 +3,7 @@
 
 // Package source abstracts a Windows installation source. A source is backed by
 // either a directory or an .iso file, exposed uniformly as an fs.FS, and reports
-// its identity (build, architecture, flavor).
+// its identity (build, architecture).
 package source
 
 import (
@@ -124,6 +124,11 @@ func (r Roots) For(a Area) string {
 }
 
 // Identity describes a source as detected by Probe.
+//
+// It carries only what the media itself states about the source as a whole. It
+// deliberately does not name the *product* — build and architecture cannot tell
+// XP Professional x64 Edition from Server 2003 x64, which share both; that answer
+// is read from the media's own setup metadata (see layout.Layout.ServerProduct).
 type Identity struct {
 	// Build is the Windows build number, e.g. 2600 (XP) or 3790 (2003/x64).
 	Build int
@@ -131,13 +136,11 @@ type Identity struct {
 	// architecture folder (see Roots). Probe is the only producer, and emits exactly
 	// "i386" or "amd64"; an Identity assembled by hand is expected to honor that.
 	Arch string
-	// Flavor is the source flavor: "winxp", "win2003", ...
-	Flavor string
 }
 
 // String renders the identity for display.
 func (id Identity) String() string {
-	return fmt.Sprintf("%s build %d (%s)", id.Flavor, id.Build, id.Arch)
+	return fmt.Sprintf("build %d (%s)", id.Build, id.Arch)
 }
 
 // Roots reports the source's two top-level folders. The system area follows the
