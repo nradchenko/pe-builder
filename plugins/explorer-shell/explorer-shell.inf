@@ -66,11 +66,11 @@ show_drive_letters_first = 0, int, 0, 1, 2, 4
 Produces = peshell.exe peshut.dll
 
 [Build.i386]
-Requires = i686-w64-mingw32-gcc make
+Requires = make
 Command  = make ARCH=i386
 
 [Build.amd64]
-Requires = x86_64-w64-mingw32-gcc make
+Requires = make
 Command  = make ARCH=amd64
 
 ; Seed each module so its static import closure is staged (explorer for the shell itself). The

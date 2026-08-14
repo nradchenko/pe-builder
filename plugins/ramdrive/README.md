@@ -123,9 +123,13 @@ The driver source is architecture-neutral; only the toolchain differs. `make ARC
 (the default) and `make ARCH=amd64` select it, and the plugin's `[Build.<arch>]` sections
 name each architecture's compiler and
 pass the matching `ARCH`. One switch at the top of the `Makefile` carries the whole
-difference: toolchain triple, arch define, entry-point decoration (x64 has no `_…@8`),
-native subsystem version, and DDK include path. An `ARCH` the recipe has no flags for is an
-error rather than a fallback, so a wrong-architecture driver cannot be built silently.
+difference: toolchain triple, arch define, entry-point decoration (x64 has no `_…@8`), and
+native subsystem version. An `ARCH` the recipe has no flags for is an error rather than a
+fallback, so a wrong-architecture driver cannot be built silently.
+
+The DDK headers the driver compiles against are located from the compiler rather than
+hardcoded, so no toolchain layout is privileged and `DDK_INCLUDE=<dir>` overrides the search —
+see [plugin conventions](../../docs/plugins/conventions.md).
 
 **The amd64 build is not yet boot-proven.** It compiles, and its source carries no
 pointer-width assumptions (offsets are `LARGE_INTEGER`, the backing is capped well inside

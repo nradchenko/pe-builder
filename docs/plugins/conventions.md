@@ -99,11 +99,90 @@ The engine owns the shared parts, so adding a binary writes no new scaffolding:
   not ship your own.
 - The **values** arrive from `internal/buildinfo` in the build environment as `PEBUILD_VERSION`,
   `PEBUILD_VERSION_NUM`, `PEBUILD_PRODUCT`, `PEBUILD_COMPANY` and `PEBUILD_COPYRIGHT`.
+- The **`Makefile` settings** that turn those into a resource — `VER_RC`, the `verinfo` helper, and
+  the toolchain programs below — come from `pebuild/common.mk`, materialized the same way.
 
-Compile the resource with **`windres`** and add it to the plugin `Makefile`'s link step — copy an
-existing plugin's block. The only per-binary parts are the description, internal name, original
-filename, and the file type: `VFT_APP` for an exe, `VFT_DLL` for a DLL, and `VFT_DRV` +
-`FILESUBTYPE VFT2_DRV_SYSTEM` for a driver `.sys`.
+The only per-binary parts are the description, internal name, original filename, and the file type:
+`VFT_APP` for an exe, `VFT_DLL` for a DLL, and `VFT_DRV` + `FILESUBTYPE VFT2_DRV_SYSTEM` for a
+driver `.sys`.
+
+### Include the shared settings
+
+After the `ARCH` switch, which is what sets `TRIPLE`:
+
+```make
+include $(firstword $(wildcard pebuild/common.mk ../.shared/common.mk))
+ifndef PEBUILD_COMMON
+$(error no common.mk at pebuild/common.mk or ../.shared/common.mk)
+endif
+```
+
+The first path is the copy the build materializes, the second the in-tree fallback for a by-hand
+`make` in the plugin's own directory. Keep the guard: make ignores an `include` whose argument
+expands to nothing, and `CC` has a built-in default, so a missing `common.mk` is otherwise not an
+error.
+
+### Pass the values in a generated header, never as `-D` defines
+
+`verinfo` writes the values into a header the template includes; `windres` is given only that
+header's name:
+
+```make
+$(VEROBJ): $(VER_RC)
+	@$(call verinfo,verinfo.h,Power off the machine,poweroff,poweroff.exe,VFT_APP)
+	$(WINDRES) -I. -DVER_HEADER='\"verinfo.h\"' $< -o $@
+```
+
+The arguments are the header, description, internal name, original filename, file type, and — for
+a driver — the subtype. **Never pass a value as a `-D` define:** `windres` cannot carry one that
+contains a space, which the company name and every description do. The header's *name* is a define
+because a file name has none.
+
+Give each binary its own header. A plugin building two writes two names, since one shared name
+would race under `make -j`.
+
+## Toolchain programs are found, not assumed
+
+`common.mk` resolves `CC`, `WINDRES` and `OBJDUMP`, so a plugin names no program of its own:
+
+```make
+NATIVE_TRIPLE := $(filter $(TRIPLE),$(shell gcc -dumpmachine 2>/dev/null))
+find-tool      = $(if $(shell command -v $(TRIPLE)-$(1) 2>/dev/null),$(TRIPLE)-$(1),\
+                   $(if $(NATIVE_TRIPLE),$(1),$(TRIPLE)-$(1)))
+CC      := $(call find-tool,gcc)
+```
+
+Each is resolved on its own, because a cross-toolchain prefixes its programs with the target
+triple, a native one does not, and one toolchain may do both for different programs. The prefixed
+name wins where it exists. The plain name is taken only when the compiler on `PATH` targets
+`TRIPLE`, so `make ARCH=amd64` from a 32-bit environment stops at a missing program rather than
+building for the wrong architecture.
+
+## Kernel drivers locate the DDK headers
+
+A driver plugin compiles against MinGW-w64's DDK headers, which every toolchain keeps somewhere
+else. Derive the directory from the compiler — copy the block from `ramdrive` or `pesuite`:
+
+```make
+GCC_LIBDIR  := $(dir $(shell $(CC) -print-libgcc-file-name 2>/dev/null))
+DDK_ROOT    := $(if $(GCC_LIBDIR),$(GCC_LIBDIR)../../../..)
+DDK_INCLUDE ?= $(patsubst %/ntddk.h,%,$(firstword \
+                 $(wildcard $(DDK_ROOT)/$(TRIPLE)/include/ddk/ntddk.h $(DDK_ROOT)/include/ddk/ntddk.h) \
+                 /usr/$(TRIPLE)/include/ddk/ntddk.h))
+```
+
+`libgcc.a` sits four levels below the toolchain root, which is the one thing the layouts agree on;
+the headers are in whichever candidate holds `ntddk.h`, with the Debian path as the last resort.
+Match on that header rather than on a `ddk` directory, so an empty leftover one cannot be selected,
+and guard the recipe with the same test so a miss names `DDK_INCLUDE`:
+
+```make
+	@test -f '$(DDK_INCLUDE)/ntddk.h' || { echo "ERROR: no DDK headers at '$(DDK_INCLUDE)' —" \
+	    "install the MinGW-w64 DDK headers, or set DDK_INCLUDE to the directory holding ntddk.h"; exit 1; }
+```
+
+`DDK_INCLUDE=<dir>` overrides the search for a toolchain neither candidate matches. Quote it in the
+`-I`, since such a path may contain spaces.
 
 ## Architecture-specific files are scoped by architecture
 

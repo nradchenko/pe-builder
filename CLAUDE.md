@@ -102,9 +102,11 @@ PE dependencies.
   - `internal/plugin/` — plugin discovery, parsing, dependency resolution (auto-enable the
     transitive `depends` closure and order it deps-first), evaluation into actions, the
     `[Build]` pre-pass that compiles a build-capable plugin's payload from source (in a copy
-    of the plugin's own directory, into which the engine also materializes the build support
-    every plugin may use — currently the shared Windows `VERSIONINFO` template, under
-    `pebuild/`, so one copy serves them all rather than each plugin shipping its own), the
+    of the plugin's own directory, into which the engine also materializes everything in
+    `plugins/.shared` — the Windows `VERSIONINFO` template and the make settings every
+    plugin `Makefile` includes, which is where the toolchain programs are resolved and the
+    version resource's values assembled — under `pebuild/`, so one copy serves them all
+    rather than each plugin shipping its own), the
     `[Closure]` section that computes a plugin's file set from the static import closure
     of its seed modules (the shared engine the base layer also uses), the `[SourcePaths]`
     section that copies a source file by its exact path (for a basename a name lookup

@@ -19,11 +19,11 @@ Name = "poweroff"
 Produces = poweroff.exe
 
 [Build.i386]
-Requires = i686-w64-mingw32-gcc make
+Requires = make
 Command  = make ARCH=i386
 
 [Build.amd64]
-Requires = x86_64-w64-mingw32-gcc make
+Requires = make
 Command  = make ARCH=amd64
 
 [SourceDisksFiles]

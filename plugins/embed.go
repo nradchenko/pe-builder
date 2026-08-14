@@ -17,13 +17,14 @@ import "embed"
 //
 // .shared is not a plugin: it carries the build-support files the engine materializes into
 // every plugin's build directory (see plugin.writeBuildSupport), which is how one VERSIONINFO
-// template serves them all. Discovery already skips it for holding no .inf; the leading dot
-// says so at a glance, and marks it as not a name anyone should add an .inf to. It is embedded
-// here, among the plugins, so that it stays inside the tree a build receipt hashes: a change to
-// it changes every plugin binary and must change the engine hash too. Its path is named in full
-// rather than as a directory — either form works, since the rule that excludes dot-prefixed
-// entries applies to what a directory pattern walks and not to the directory a pattern names,
-// but naming the file keeps the directive honest about what ships.
+// template and one set of shared make settings serve them all. Discovery already skips it for
+// holding no .inf; the leading dot says so at a glance, and marks it as not a name anyone
+// should add an .inf to. It is embedded here, among the plugins, so that it stays inside the
+// tree a build receipt hashes: a change to it changes every plugin binary and must change the
+// engine hash too. Their paths are named in full rather than as a directory — either form
+// works, since the rule that excludes dot-prefixed entries applies to what a directory pattern
+// walks and not to the directory a pattern names, but naming each file keeps the directive
+// honest about what ships.
 //
 // Keep every //go:embed line contiguous and last in this comment: a prose line between two of
 // them is what gofmt reflows, so a comment inserted mid-block moves on the next `make fmt`.
@@ -35,6 +36,6 @@ import "embed"
 //go:embed pesuite/pesuite.c pesuite/Makefile
 //go:embed startup/perun.c startup/perun.h startup/perundll.c startup/perunmain.c startup/Makefile
 //go:embed hardware/pehw.c hardware/Makefile
-//go:embed .shared/version.rc
+//go:embed .shared/version.rc .shared/common.mk
 //go:embed win32-gui/rundll32.exe.manifest win32-gui/explorer.exe.manifest win32-gui/rundll32.amd64.manifest win32-gui/explorer.amd64.manifest
 var FS embed.FS

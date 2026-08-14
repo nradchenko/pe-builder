@@ -6,13 +6,22 @@
  *
  * This file is shared, not per-plugin: the build materializes it into every plugin's
  * build directory as `pebuild/version.rc` (see plugin/build.go). It holds no values of
- * its own — the Makefile supplies all of them as windres -D defines, which is what lets
- * one template serve an EXE, a DLL and a driver. Defaults cover only what a caller may
+ * its own — the Makefile writes them into a header this includes, which is what lets one
+ * template serve an EXE, a DLL and a driver. Defaults cover only what a caller may
  * legitimately leave unset; the rest must be given, so a missing one is a build error
  * rather than a binary that ships blank.
+ *
+ * VER_HEADER names the header the Makefile generates, so a plugin building two binaries
+ * gives each its own. It is a define, rather than the values themselves, because windres
+ * cannot carry a value containing a space and a file name has none.
  */
 
 #include <winver.h>
+
+#ifndef VER_HEADER
+#define VER_HEADER "verinfo.h"
+#endif
+#include VER_HEADER
 
 #ifndef VER_FILETYPE
 #define VER_FILETYPE VFT_APP

@@ -47,8 +47,7 @@ image needs only Go.
 **Status: tested.** `pebuild` builds and boots all three image types on Windows — a bare
 `cmd.exe` image, the classic Explorer desktop, and the themed Luna desktop — verified on
 Windows 10/11. A bare `cmd.exe` image needs nothing but `pebuild.exe`. A **desktop** image
-needs the MinGW-w64 toolchain, and there are two rough edges (below) until the Makefile
-portability fix lands.
+needs the MinGW-w64 toolchain.
 
 ### A `cmd.exe` image (no toolchain)
 
@@ -66,28 +65,19 @@ pebuild.exe build minimal.hcl
    pacman -Syu           # run twice if it asks you to reopen the shell
    pacman -S mingw-w64-i686-gcc make
    ```
-3. Set up the build environment. Two workarounds are needed for now — see *Known rough
-   edges*:
+3. Put the toolchain on `PATH`:
    ```sh
    export PATH=/mingw32/bin:$PATH
-   ln -s /mingw32 /usr/i686-w64-mingw32     # see the caveat below
    ```
 4. Build from that same MSYS2 shell:
    ```sh
    pebuild.exe build luna.hcl
    ```
 
-### Known rough edges (Windows)
-
-- **The `ln -s` above deep-copies, it does not link.** MSYS2 emulates symlinks by copying the
-  tree unless `MSYS=winsymlinks:nativestrict` is set, so the command duplicates `/mingw32`
-  (a few hundred MB) into `/usr/i686-w64-mingw32` — which is why it takes a few seconds. It
-  works, but it is a snapshot: if you later `pacman -Syu` the toolchain, re-run it to refresh
-  the copy.
-- **Why the copy is needed at all:** the plugin Makefiles hardcode the Debian cross-toolchain
-  layout (`-I/usr/$(TRIPLE)/include/ddk`), which does not match where MSYS2 keeps its DDK
-  headers (`/mingw32/include/ddk`). The copy makes the Debian path resolve. A Makefile change
-  to make that path overridable is planned, after which the symlink step goes away.
+The kernel-driver plugins need the MinGW DDK headers, which MSYS2 keeps at
+`/mingw32/include/ddk`. Their Makefiles locate that directory from the compiler itself, so
+nothing has to be configured; if your toolchain keeps them somewhere neither the MSYS2 nor
+the Debian layout predicts, `export DDK_INCLUDE=<directory holding ntddk.h>` points them at it.
 
 ## macOS
 
@@ -101,9 +91,9 @@ A desktop image would need the MinGW-w64 cross-compiler, available via Homebrew:
 brew install mingw-w64
 ```
 
-The same Makefile assumption that bites on Windows (the hardcoded Debian DDK path) very likely
-applies here too, since Homebrew keeps its headers elsewhere again — expect to need the same
-kind of workaround until the Makefile fix lands. Reports welcome.
+The driver plugins locate the DDK headers from the compiler rather than from a fixed path, so
+Homebrew's layout should need no configuration; if it is not found, `export
+DDK_INCLUDE=<directory holding ntddk.h>` points the build at it. Reports welcome.
 
 ## Shell completion
 

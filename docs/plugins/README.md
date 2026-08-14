@@ -155,10 +155,26 @@ so nothing opaque is bundled. See `plugins/poweroff/` for the reference:
 
 ```ini
 [Build]
-Requires = i686-w64-mingw32-gcc make   ; tools checked on PATH first
 Produces = poweroff.exe                ; the built file, served to [SourceDisksFiles]
-; Command defaults to `make`, run in a temp copy of the plugin directory
+
+[Build.i386]
+Requires = make                        ; tools checked on PATH first
+Command  = make ARCH=i386              ; run in a temp copy of the plugin directory
+
+[Build.amd64]
+Requires = make
+Command  = make ARCH=amd64
 ```
+
+**Scope the build by architecture.** `Command` is what hands the target architecture to the
+build; an unscoped `[Build]` takes the default `Command` of `make`, so the `Makefile` builds for
+whatever *it* defaults to and a binary of the wrong architecture is staged with no error. A
+plugin that scopes any `[Build.<arch>]` must scope every architecture it supports — a missing
+one is refused rather than silently falling back.
+
+List a tool in `Requires` only if its name is the same everywhere. A compiler's is not — which
+one a MinGW-w64 toolchain installs varies — so the built-in plugins let their `Makefile` find it
+and report a miss, and name only `make` here.
 
 Built-in plugins build automatically. A build-capable plugin from a drop-in directory
 runs an arbitrary command, so it is refused unless you opt in with

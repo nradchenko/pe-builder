@@ -91,9 +91,13 @@ name each architecture's compiler and pass the matching `ARCH` — so the presen
 tests the compiler actually needed rather than a superset. The whole per-architecture
 difference is one switch at the top of the `Makefile`: the toolchain triple, the arch
 define (`_X86_` / `_AMD64_`), the entry-point name (x64 has no `_…@8` stdcall
-decoration), the native subsystem version (5.01 / 5.02), and the DDK include path. An
-`ARCH` the recipe has no flags for is an error, not a fallback — a driver silently built
-for the wrong architecture would not load, and would look like a driver that did nothing.
+decoration), and the native subsystem version (5.01 / 5.02). An `ARCH` the recipe has no
+flags for is an error, not a fallback — a driver silently built for the wrong architecture
+would not load, and would look like a driver that did nothing.
+
+The DDK headers the driver compiles against are located from the compiler rather than
+hardcoded, so no toolchain layout is privileged and `DDK_INCLUDE=<dir>` overrides the search —
+see [plugin conventions](../../docs/plugins/conventions.md).
 
 **Proven with:**
 

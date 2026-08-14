@@ -39,8 +39,8 @@ func TestBuiltinPoweroff(t *testing.T) {
 	if !p.Build.Present {
 		t.Fatal("poweroff has no [Build] section")
 	}
-	if !containsStr(p.Build.Requires, "i686-w64-mingw32-gcc") || !containsStr(p.Build.Produces, "poweroff.exe") {
-		t.Errorf("poweroff [Build] = %+v, want mingw Requires and poweroff.exe Produces", p.Build)
+	if !containsStr(p.Build.Requires, "make") || !containsStr(p.Build.Produces, "poweroff.exe") {
+		t.Errorf("poweroff [Build] = %+v, want make in Requires and poweroff.exe Produces", p.Build)
 	}
 
 	// It ships source, not a binary.
@@ -51,13 +51,25 @@ func TestBuiltinPoweroff(t *testing.T) {
 		t.Errorf("poweroff.c not embedded: %v", err)
 	}
 
-	// Build it for real when the mingw toolchain is available.
-	if _, err := exec.LookPath("i686-w64-mingw32-gcc"); err != nil {
-		t.Skip("mingw i686 toolchain not present; skipping the compile")
+	// Build it for real when the host can. Two gates, because they fail differently:
+	//
+	// make is looked up by name, which is legitimate precisely because that name is invariant
+	// — it is the one thing [Build] Requires still names. Without it RunBuild refuses before
+	// the recipe runs, so the recipe's own verdict never appears.
+	//
+	// The compiler is not looked up: which name a MinGW-w64 toolchain installs varies, and
+	// gating on the Debian one turns a native toolchain into a silent skip, so the compile
+	// would never run on the platform that resolution exists for. Attempt the build and skip
+	// only on the recipe's own "no toolchain" verdict.
+	if _, err := exec.LookPath("make"); err != nil {
+		t.Skip("make not present; skipping the compile")
 	}
 	d := &Discovered{Name: canonical, Source: BuiltinLabel, FS: fsys, Units: []*Plugin{p}}
 	built, err := RunBuild(context.Background(), d, t.TempDir(), "i386")
 	if err != nil {
+		if strings.Contains(err.Error(), "no MinGW-w64 toolchain") {
+			t.Skip("no MinGW-w64 toolchain on PATH; skipping the compile")
+		}
 		t.Fatalf("poweroff build failed: %v", err)
 	}
 	if !built.Produces["poweroff.exe"] {
@@ -69,6 +81,71 @@ func TestBuiltinPoweroff(t *testing.T) {
 	}
 	if !bytes.HasPrefix(bin, []byte("MZ")) {
 		t.Error("produced poweroff.exe is not a PE/DOS executable (no MZ header)")
+	}
+}
+
+// toolchainLiteral reports why a [Build] Requires entry is a toolchain program name, or "" if
+// it is not one. Both halves matter, and neither covers the other: a triple-prefixed name is
+// absent on a native toolchain, while a plain one is absent on a cross-only host (a CI image
+// carrying i686-w64-mingw32-gcc and no host gcc) — and names the wrong compiler where it does
+// exist. Either way RunBuild's LookPath refuses a build the recipe would have completed.
+func toolchainLiteral(tool string) string {
+	if strings.Contains(tool, "-w64-mingw32") {
+		return "a toolchain-specific program name"
+	}
+	switch tool {
+	case "gcc", "cc", "g++", "c++", "clang", "ld", "ar", "as", "nm", "objdump", "windres", "strip":
+		return "a toolchain program under its plain name"
+	}
+	return ""
+}
+
+// TestBuiltinRequiresNoToolchainLiteral holds every built-in to the rule, not just the one
+// poweroff demonstrates: a [Build] Requires entry may name only a program whose name is the
+// same on every toolchain.
+//
+// RunBuild LookPaths each entry before make runs, so a triple-prefixed name there refuses a
+// build that would have succeeded — a native MinGW-w64 toolchain installs its programs under
+// plain names, and its compiler may carry no prefixed alias at all. The Makefile resolves the
+// toolchain itself (plugins/.shared/common.mk) and reports a miss, which is why the literal is
+// not needed here. Matching on the triple is what the rule is about: it is precisely the part
+// of a name that varies.
+func TestBuiltinRequiresNoToolchainLiteral(t *testing.T) {
+	names, err := Builtin().List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var checked int
+	for _, name := range names {
+		fsys, canonical, ok := Builtin().Resolve(name)
+		if !ok {
+			t.Errorf("Resolve(%s) not found in the built-in source", name)
+			continue
+		}
+		for _, arch := range []string{"i386", "amd64"} {
+			p, err := ParseFS(fsys, canonical, Target{Build: 2600, Arch: arch})
+			if err != nil {
+				t.Errorf("ParseFS(%s, %s): %v", name, arch, err)
+				continue
+			}
+			if !p.Build.Present {
+				continue
+			}
+			checked++
+			for _, tool := range p.Build.Requires {
+				if why := toolchainLiteral(tool); why != "" {
+					t.Errorf("plugin %s [Build] for %s: Requires names %q, %s; it must name only "+
+						"programs called the same everywhere (the Makefile finds the toolchain)",
+						name, arch, tool, why)
+				}
+			}
+		}
+	}
+	// A rule nothing is measured against is not enforced: all six build-capable plugins, both
+	// architectures.
+	if want := 12; checked != want {
+		t.Errorf("checked %d build-capable [Build] sections, want %d — has a plugin gained or "+
+			"lost a [Build], or stopped parsing?", checked, want)
 	}
 }
 
@@ -527,12 +604,12 @@ func TestRunBuildMissingProduces(t *testing.T) {
 // symptom would be every build-capable plugin failing at once on a missing prerequisite —
 // or, worse, quietly producing binaries with no version resource.
 func TestRunBuildProvidesBuildSupport(t *testing.T) {
-	// A build that records what it was handed: the materialized template, then the
+	// A build that records what it was handed: the materialized support files, then the
 	// environment it ran with. No ';' — an INF reads that as a comment, which would
 	// silently truncate the command rather than fail.
 	const src = "[Version]\nSignature=\"$Windows NT$\"\n[PEBuilder]\nName=\"X\"\n" +
 		"[Build]\nProduces = out.txt\n" +
-		"Command = cp pebuild/version.rc out.txt && env >> out.txt\n"
+		"Command = cat pebuild/version.rc pebuild/common.mk > out.txt && env >> out.txt\n"
 	f, err := inf.Parse([]byte(src))
 	if err != nil {
 		t.Fatal(err)
@@ -556,6 +633,12 @@ func TestRunBuildProvidesBuildSupport(t *testing.T) {
 	// The template is there and is the real one, not an empty file.
 	if !strings.Contains(got, "VS_VERSION_INFO VERSIONINFO") {
 		t.Errorf("pebuild/version.rc was not materialized into the build dir; got:\n%s", got)
+	}
+	// So is every other file in .shared — the shared make settings each plugin Makefile
+	// includes. Without it a plugin build finds no compiler and stops, so the check is for
+	// the sentinel the Makefiles test rather than merely a non-empty file.
+	if !strings.Contains(got, "PEBUILD_COMMON := 1") {
+		t.Errorf("pebuild/common.mk was not materialized into the build dir; got:\n%s", got)
 	}
 	// Each value reaches the build, and the quad matches what buildinfo derived rather
 	// than a literal — so a change to the derivation cannot pass this by accident.

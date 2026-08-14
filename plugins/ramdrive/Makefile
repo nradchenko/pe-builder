@@ -36,31 +36,30 @@ else
   $(error unknown ARCH '$(ARCH)' — expected i386 or amd64)
 endif
 
-CC      := $(TRIPLE)-gcc
-OBJDUMP := $(TRIPLE)-objdump
-WINDRES := $(TRIPLE)-windres
+# The toolchain programs (CC, WINDRES, OBJDUMP) and the VERSIONINFO attribution come from the
+# shared settings, materialized here by the build; ../.shared is the by-hand fallback. It needs
+# TRIPLE, so it is included after the switch above.
+include $(firstword $(wildcard pebuild/common.mk ../.shared/common.mk))
+ifndef PEBUILD_COMMON
+$(error no common.mk at pebuild/common.mk or ../.shared/common.mk)
+endif
+
 TARGET  := ramdrive.sys
 SRC     := ramdrive.c
 VEROBJ  := version.o
 
-# Attribution for the VERSIONINFO resource. pebuild passes all of these to the plugin's
-# [Build]; the defaults are what a by-hand `make` in this directory gets. VERSION_NUM is
-# the version reduced to the four numbers FILEVERSION takes — derived once, in Go
-# (buildinfo.VersionQuad), because as shell here it drifted and got it wrong.
-PEBUILD_VERSION     ?= dev
-PEBUILD_VERSION_NUM ?= 0,0,0,0
-PEBUILD_PRODUCT     ?= pe-builder
-PEBUILD_COMPANY     ?= Nikita Radchenko
-PEBUILD_COPYRIGHT   ?= Copyright 2026 Nikita Radchenko. Apache-2.0
-VER_STR             := $(PEBUILD_VERSION)
-VER_NUM             := $(PEBUILD_VERSION_NUM)
-# The resource template is shared, so the build materializes it here rather than the
-# plugin shipping a copy; the fallback is the in-tree path, for a by-hand build.
-VER_RC              := $(firstword $(wildcard pebuild/version.rc ../.shared/version.rc))
+# The DDK headers are found rather than hardcoded, since every toolchain keeps them
+# somewhere else; DDK_INCLUDE=<dir> overrides the search. Why it is written this way:
+# docs/plugins/conventions.md § Kernel drivers locate the DDK headers.
+GCC_LIBDIR  := $(dir $(shell $(CC) -print-libgcc-file-name 2>/dev/null))
+DDK_ROOT    := $(if $(GCC_LIBDIR),$(GCC_LIBDIR)../../../..)
+DDK_INCLUDE ?= $(patsubst %/ntddk.h,%,$(firstword \
+                 $(wildcard $(DDK_ROOT)/$(TRIPLE)/include/ddk/ntddk.h $(DDK_ROOT)/include/ddk/ntddk.h) \
+                 /usr/$(TRIPLE)/include/ddk/ntddk.h))
 
 CFLAGS  := -ffreestanding $(ARCHDEF) -O2 -Wall -Wextra -Wno-multichar \
            -fno-asynchronous-unwind-tables \
-           -I/usr/$(TRIPLE)/include/ddk
+           -I'$(DDK_INCLUDE)'
 
 LDFLAGS := -nostdlib -shared \
            -Wl,--subsystem,$(SUBSYS) \
@@ -80,19 +79,19 @@ all: $(TARGET)
 # FILESUBTYPE — VFT2_DRV_SYSTEM, the catch-all for one that is not a printer, keyboard
 # or other device class Windows enumerates by name.
 $(VEROBJ): $(VER_RC)
-	$(WINDRES) -DVER_NUM='$(VER_NUM)' -DVER_STR='\"$(VER_STR)\"' \
-	           -DVER_PRODUCT='\"$(PEBUILD_PRODUCT)\"' \
-	           -DVER_COMPANY='\"$(PEBUILD_COMPANY)\"' \
-	           -DVER_COPYRIGHT='\"$(PEBUILD_COPYRIGHT)\"' \
-	           -DVER_DESC='\"RAM disk driver\"' \
-	           -DVER_INTERNAL='\"ramdrive\"' -DVER_ORIGINAL='\"ramdrive.sys\"' \
-	           -DVER_FILETYPE=VFT_DRV -DVER_FILESUBTYPE=VFT2_DRV_SYSTEM $< -o $@
+	@$(call verinfo,verinfo.h,RAM disk driver,ramdrive,ramdrive.sys,VFT_DRV,VFT2_DRV_SYSTEM)
+	$(WINDRES) -I. -DVER_HEADER='\"verinfo.h\"' $< -o $@
 
 $(TARGET): $(SRC) $(VEROBJ)
+	@test -f '$(DDK_INCLUDE)/ntddk.h' || { echo "ERROR: no DDK headers at '$(DDK_INCLUDE)' —" \
+	    "install the MinGW-w64 DDK headers, or set DDK_INCLUDE to the directory holding ntddk.h"; exit 1; }
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRC) $(VEROBJ) $(LDLIBS)
-	@$(OBJDUMP) -p $@ | awk '/CheckSum/ && $$2 ~ /^0+$$/ \
-		{ print "ERROR: $@ has a zero PE checksum — the driver will not load; " \
-		        "update binutils (link-time checksum) or add a checksum step"; exit 1 }'
+	@sum=`$(OBJDUMP) -p $@ 2>/dev/null | awk '/CheckSum/ { print $$2; exit }'`; \
+	    test -n "$$sum" || { echo "ERROR: $(OBJDUMP) reported no PE checksum for $@ — the" \
+	        "zero-checksum guard below cannot run; install the binutils for $(TRIPLE), or set OBJDUMP"; \
+	        exit 1; }; \
+	    case "$$sum" in *[!0]*) ;; *) echo "ERROR: $@ has a zero PE checksum — the driver will not" \
+	        "load; update binutils (link-time checksum) or add a checksum step"; exit 1;; esac
 
 clean:
-	rm -f $(TARGET) $(VEROBJ)
+	rm -f $(TARGET) $(VEROBJ) verinfo.h

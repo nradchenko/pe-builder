@@ -190,11 +190,14 @@ func parseUpdate(f *inf.File, build int) Update {
 // toolchain, which is inherently arch-specific (a cross-compiler and its target
 // differ per architecture), so [Build.<arch>] folds over [Build] the same way an
 // action section's arch variant does. The shared [Build] carries what is common (the
-// Produces list — a driver has the same name on either arch); the arch section names
-// that architecture's toolchain in Requires, so the presence check tests the compiler
-// actually needed, and its Command hands the architecture to the build (e.g.
-// "make ARCH=amd64"). A base [Build] is still required — it is what declares the
+// Produces list — a driver has the same name on either arch); the arch section's Command
+// hands the architecture to the build (e.g. "make ARCH=amd64"), which is what makes the
+// scoping load-bearing. A base [Build] is still required — it is what declares the
 // plugin build-capable and holds the shared Produces.
+//
+// Requires names only what is invariant. A built-in's compiler is not: which name it has
+// depends on the toolchain (see plugins/.shared/common.mk), so a literal here would refuse
+// builds that work, and the recipe checks for it instead.
 func parseBuild(f *inf.File, t Target) (BuildSpec, error) {
 	if !f.HasSection("Build") {
 		// A variant without the base section it varies is almost certainly a mistake, and
@@ -210,11 +213,10 @@ func parseBuild(f *inf.File, t Target) (BuildSpec, error) {
 	b := BuildSpec{Present: true, Command: "make"}
 
 	// A plugin that scopes its build by architecture but declares no variant for the target
-	// cannot be built for it: falling back to the base section would take its defaults — no
-	// Requires, so the toolchain-presence check is skipped entirely, and Command defaulting
-	// to "make", so the plugin's Makefile builds for whatever IT defaults to, staging a
-	// binary of the wrong architecture with no diagnostic anywhere. Record it rather than
-	// failing here (see MissingArchVariant); RunBuild refuses it. Build-number variants
+	// cannot be built for it: falling back to the base section would take its default Command
+	// of "make", so the plugin's Makefile builds for whatever IT defaults to, staging a binary
+	// of the wrong architecture with no diagnostic anywhere. Record it rather than failing
+	// here (see MissingArchVariant); RunBuild refuses it. Build-number variants
 	// ([Build.2600]) are not architecture scoping and do not count.
 	if arch := source.ResolveArch(t.Arch); archVariants(f, "Build") > 0 && !f.HasSection("Build."+arch) {
 		b.MissingArchVariant = arch

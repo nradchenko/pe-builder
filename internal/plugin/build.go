@@ -55,8 +55,8 @@ func RunBuild(ctx context.Context, d *Discovered, workRoot, arch string) (*Built
 	// through so it stays discoverable and describable; building it is what cannot work.
 	if spec.MissingArchVariant != "" {
 		return nil, fmt.Errorf("plugin %q declares no [Build.%s] and so cannot be built for %s: "+
-			"add that section naming the architecture's toolchain, or drop the scoping",
-			d.Name, spec.MissingArchVariant, spec.MissingArchVariant)
+			"add that section with a Command handing the architecture to the build, or drop "+
+			"the scoping", d.Name, spec.MissingArchVariant, spec.MissingArchVariant)
 	}
 
 	if d.FS == nil {
@@ -132,27 +132,40 @@ const buildSupportDir = "pebuild"
 
 // writeBuildSupport materializes the shared build-support files into dir.
 //
-// At present that is the VERSIONINFO resource script every plugin binary compiles. It is
-// shared rather than copied into each plugin because it is identical in all of them and
-// carries no values of its own; a plugin's Makefile supplies those as windres defines.
+// Those are the VERSIONINFO resource script every plugin binary compiles and the make
+// settings every plugin Makefile includes. They are shared rather than copied into each
+// plugin because they are identical in all of them and carry no plugin-specific values.
 // A plugin builds from a copy of only its own directory, so a shared file has to be put
 // there by the engine — there is nothing for a Makefile to reference otherwise.
 //
-// The template lives under plugins/ rather than beside this file so that it stays inside
+// Everything in .shared is written, rather than a list named here, so that adding a file
+// there is all it takes for every plugin to be able to use it. What ships is decided once,
+// by the //go:embed directive that names each file.
+//
+// They live under plugins/ rather than beside this file so that they stay inside
 // plugins.FS, which is half of what enginehash.Sum covers and therefore what a build
-// receipt records. Moved out, a change to it would alter every plugin binary while the
+// receipt records. Moved out, a change to one would alter every plugin binary while the
 // recorded engine hash claimed nothing had changed.
 func writeBuildSupport(dir string) error {
 	sub := filepath.Join(dir, buildSupportDir)
 	if err := os.MkdirAll(sub, 0o755); err != nil {
 		return fmt.Errorf("build support: %w", err)
 	}
-	data, err := fs.ReadFile(plugins.FS, ".shared/version.rc")
+	entries, err := fs.ReadDir(plugins.FS, ".shared")
 	if err != nil {
 		return fmt.Errorf("build support: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(sub, "version.rc"), data, 0o644); err != nil {
-		return fmt.Errorf("build support: %w", err)
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		data, err := fs.ReadFile(plugins.FS, ".shared/"+e.Name())
+		if err != nil {
+			return fmt.Errorf("build support: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(sub, e.Name()), data, 0o644); err != nil {
+			return fmt.Errorf("build support: %w", err)
+		}
 	}
 	return nil
 }

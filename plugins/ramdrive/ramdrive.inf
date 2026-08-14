@@ -23,11 +23,11 @@ depends = storage-pnp
 Produces = ramdrive.sys
 
 [Build.i386]
-Requires = i686-w64-mingw32-gcc make
+Requires = make
 Command  = make ARCH=i386
 
 [Build.amd64]
-Requires = x86_64-w64-mingw32-gcc make
+Requires = make
 Command  = make ARCH=amd64
 
 ; Stage the built driver into system32\drivers (directory id 4).

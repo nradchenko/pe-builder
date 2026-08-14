@@ -6,3 +6,7 @@
 *.o
 *.a
 *.lib
+# The VERSIONINFO values, written next to the shared template by the build. `clean` removes
+# them, but a build that fails at the compile step never reaches it.
+verinfo.h
+verinfo-*.h
