@@ -22,6 +22,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/nradchenko/pe-builder/compress"
@@ -107,6 +108,46 @@ type Layout struct {
 	// answer, and the only thing that separates XP Professional x64 Edition from Server
 	// 2003 x64.
 	ServerProduct bool
+	// ProductEvidence records how ServerProduct was reached.
+	ProductEvidence ProductEvidence
+}
+
+// ProductAnswer names which of the media's two answers settled the product type.
+type ProductAnswer int
+
+const (
+	// ProductAnswerNone means the media stated neither answer, so the workstation
+	// default stands.
+	ProductAnswerNone ProductAnswer = iota
+	// ProductAnswerDeclared means hivesys.inf declared a product-type string.
+	ProductAnswerDeclared
+	// ProductAnswerSetupData means txtsetup.sif's [SetupData] ProductType SKU was read,
+	// the media having declared no product type.
+	ProductAnswerSetupData
+)
+
+// ProductEvidence records which answer decided the product type, the raw value read,
+// and whether that value was one this build recognizes.
+//
+// The verdict alone hides the case worth seeing: the [SetupData] SKU enumerates the
+// product rather than answering workstation-or-server, and its mapping is measured
+// rather than published, so an unmeasured SKU settles on the workstation answer by
+// default. Recorded here, that is visible as "fell back and did not recognize it"
+// instead of passing for a read answer.
+type ProductEvidence struct {
+	// Answer names where Value was read from. It is the answer that decided, except
+	// where nothing could: a declared string this build does not know is recorded and
+	// then overwritten if the SKU settles it, so the strongest thing the media stated
+	// is what survives.
+	Answer ProductAnswer
+	// Value is the raw value that answer carried — the declared product-type string
+	// ("WinNt"), or the SKU rendered in decimal ("6"). Empty when the media stated
+	// neither, which is the zero value: no answer, nothing read.
+	Value string
+	// Recognized reports whether Value was one this build classifies, and so whether
+	// the verdict was read or defaulted to. False with a non-empty Value is the case
+	// worth surfacing: the media answered, and the answer meant nothing here.
+	Recognized bool
 }
 
 // NLS is a source's national-language configuration from txtsetup.sif's [nls]
@@ -219,25 +260,46 @@ var setupDataProductTypes = map[int64]bool{
 // The declared string decides only which product this is; the value written to the built
 // hive stays base's own, because the string the media declares is not the one an installed
 // system carries: hivesys.inf states "WinNt" where a real XP SYSTEM hive holds "WinNT".
+//
+// Which answer decided is recorded alongside the verdict (see ProductEvidence), so a
+// caller can show the reasoning rather than a bare workstation-or-server.
 func (l *Layout) readProductType(src source.Backing, id source.Identity, txt *inf.File) {
 	if s, ok := declaredProductType(src, id); ok {
 		if server, known := ntProductTypes[strings.ToLower(s)]; known {
 			l.ServerProduct = server
+			l.ProductEvidence = ProductEvidence{
+				Answer: ProductAnswerDeclared, Value: s, Recognized: true,
+			}
 			return
 		}
 		slog.Warn("source declares an unknown NT product type; falling back to its SKU value",
 			"producttype", s)
+		// Record the declaration even though it decided nothing. A source that states an
+		// answer this build cannot read is not a source that stated nothing, and the two
+		// must not report the same: the SKU below overwrites this when it decides.
+		l.ProductEvidence = ProductEvidence{Answer: ProductAnswerDeclared, Value: s}
 	}
 
 	v, ok := setupDataProductType(txt, id.Build)
 	if !ok {
-		return // nothing stated anywhere: the workstation answer, as before
+		return // no SKU to fall back on: the workstation answer, as before
 	}
 	server, known := setupDataProductTypes[v]
 	if !known {
-		slog.Warn("source states an unrecognized SKU and declares no product type; building as a workstation",
+		slog.Warn("source states a SKU this build does not recognize; building as a workstation",
 			"setupdata_producttype", v)
+		// A SKU that settles nothing does not displace a declaration: the media stated
+		// two things and neither decided, so the evidence keeps the stronger one. It is
+		// recorded only where there is nothing to keep.
+		if l.ProductEvidence.Answer == ProductAnswerNone {
+			l.ProductEvidence = ProductEvidence{
+				Answer: ProductAnswerSetupData, Value: strconv.FormatInt(v, 10),
+			}
+		}
 		return
+	}
+	l.ProductEvidence = ProductEvidence{
+		Answer: ProductAnswerSetupData, Value: strconv.FormatInt(v, 10), Recognized: true,
 	}
 	l.ServerProduct = server
 }

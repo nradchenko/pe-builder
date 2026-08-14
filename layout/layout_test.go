@@ -242,39 +242,61 @@ func hivesysINF(declared string) []byte {
 // product-type string outright (every XP-branch medium measured does), and a source that
 // declares none falls back to the SKU in txtsetup.sif's [SetupData] ProductType.
 func TestReadProductType(t *testing.T) {
+	// declared and sku name the evidence each case is expected to settle on; the zero
+	// ProductEvidence means nothing decided and the workstation default stands.
+	declared := func(s string) ProductEvidence {
+		return ProductEvidence{Answer: ProductAnswerDeclared, Value: s, Recognized: true}
+	}
+	sku := func(v string, recognized bool) ProductEvidence {
+		return ProductEvidence{Answer: ProductAnswerSetupData, Value: v, Recognized: recognized}
+	}
+
 	tests := []struct {
-		name    string
-		section string
-		hivesys []byte // nil = the source ships no hivesys.inf at all
-		want    bool
+		name     string
+		section  string
+		hivesys  []byte // nil = the source ships no hivesys.inf at all
+		want     bool
+		evidence ProductEvidence
 	}{
 		// Declared outright — the preferred answer, whatever the SKU says.
-		{"declared WinNt is a workstation", "", hivesysINF("WinNt"), false},
-		{"declared ServerNT is a server", "", hivesysINF("ServerNT"), true},
-		{"declared LanmanNT is a server", "", hivesysINF("LanmanNT"), true},
+		{"declared WinNt is a workstation", "", hivesysINF("WinNt"), false, declared("WinNt")},
+		{"declared ServerNT is a server", "", hivesysINF("ServerNT"), true, declared("ServerNT")},
+		{"declared LanmanNT is a server", "", hivesysINF("LanmanNT"), true, declared("LanmanNT")},
 		// XP media declare WinNt and state SKU 0; the two must not be able to disagree
 		// into a server.
-		{"declared workstation outranks the SKU", "[SetupData]\nProductType = 1\n", hivesysINF("WinNt"), false},
-		// An unknown string is not decoded as anything: fall through to the SKU.
-		{"unknown declared string falls back to the SKU", "[SetupData]\nProductType = 1\n", hivesysINF("EmbeddedNT"), true},
+		{"declared workstation outranks the SKU", "[SetupData]\nProductType = 1\n", hivesysINF("WinNt"), false, declared("WinNt")},
+		// An unknown string is not decoded as anything: fall through to the SKU, which is
+		// then what the evidence names — the string decided nothing.
+		{"unknown declared string falls back to the SKU", "[SetupData]\nProductType = 1\n", hivesysINF("EmbeddedNT"), true, sku("1", true)},
+		// ...but with no SKU to fall back on, the unreadable declaration is still what the
+		// media said. Recording nothing here would report media that answered as media
+		// that were silent, which is the one thing this field exists to keep apart.
+		{"unknown declared string with no SKU is still evidence", "", hivesysINF("EmbeddedNT"), false,
+			ProductEvidence{Answer: ProductAnswerDeclared, Value: "EmbeddedNT"}},
+		// Both answers present and neither readable: the SKU settled nothing, so it does
+		// not displace the declaration. Reporting only the SKU would name the weaker of
+		// two statements and lose that the media declared anything at all.
+		{"unknown declared string with an unmeasured SKU keeps the declaration", "[SetupData]\nProductType = 9\n",
+			hivesysINF("EmbeddedNT"), false, ProductEvidence{Answer: ProductAnswerDeclared, Value: "EmbeddedNT"}},
 
 		// Server 2003 media declare no ProductOptions at all, so the SKU decides.
-		{"silent media, SKU 1 is a server", "[SetupData]\nProductType = 1\n", hivesysINF(""), true},
-		{"silent media, SKU 6 is a server", "[SetupData]\nProductType = 6\n", hivesysINF(""), true},
-		{"silent media, SKU 0 is a workstation", "[SetupData]\nProductType = 0\n", hivesysINF(""), false},
+		{"silent media, SKU 1 is a server", "[SetupData]\nProductType = 1\n", hivesysINF(""), true, sku("1", true)},
+		{"silent media, SKU 6 is a server", "[SetupData]\nProductType = 6\n", hivesysINF(""), true, sku("6", true)},
+		{"silent media, SKU 0 is a workstation", "[SetupData]\nProductType = 0\n", hivesysINF(""), false, sku("0", true)},
 		// The field names a SKU, not a yes/no: XP Starter Edition media states 4, and
 		// reading any non-zero as "server" brands that build ServerNT — which the kernel
 		// then reports, putting the server banner on the shell's splash.
-		{"silent media, SKU 4 is a workstation", "[SetupData]\nProductType = 4\n", hivesysINF(""), false},
-		// A SKU nobody has measured is not guessed into a server.
-		{"silent media, unmeasured SKU falls back to workstation", "[SetupData]\nProductType = 9\n", hivesysINF(""), false},
+		{"silent media, SKU 4 is a workstation", "[SetupData]\nProductType = 4\n", hivesysINF(""), false, sku("4", true)},
+		// A SKU nobody has measured is not guessed into a server, and the evidence has to
+		// say so: the verdict is a default, not a reading.
+		{"silent media, unmeasured SKU falls back to workstation", "[SetupData]\nProductType = 9\n", hivesysINF(""), false, sku("9", false)},
 
 		// A source that states nothing anywhere must not be guessed into a server:
 		// workstation is what every build produced before this was read at all.
-		{"no hivesys.inf and no SKU", "", nil, false},
-		{"absent value falls back to workstation", "[SetupData]\nMinimumMemory = 32\n", hivesysINF(""), false},
+		{"no hivesys.inf and no SKU", "", nil, false, ProductEvidence{}},
+		{"absent value falls back to workstation", "[SetupData]\nMinimumMemory = 32\n", hivesysINF(""), false, ProductEvidence{}},
 		// Unparsable data must not read as non-zero and flip the product silently.
-		{"unparsable SKU falls back to workstation", "[SetupData]\nProductType = server\n", hivesysINF(""), false},
+		{"unparsable SKU falls back to workstation", "[SetupData]\nProductType = server\n", hivesysINF(""), false, ProductEvidence{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -291,6 +313,9 @@ func TestReadProductType(t *testing.T) {
 			}
 			if l.ServerProduct != tt.want {
 				t.Errorf("ServerProduct = %v, want %v", l.ServerProduct, tt.want)
+			}
+			if l.ProductEvidence != tt.evidence {
+				t.Errorf("ProductEvidence = %+v, want %+v", l.ProductEvidence, tt.evidence)
 			}
 		})
 	}
@@ -313,5 +338,12 @@ func TestRealSourceIsWorkstation(t *testing.T) {
 	}
 	if l.ServerProduct {
 		t.Errorf("XP media reported as a server product; want workstation")
+	}
+	// Real XP media declare the product type outright, so the verdict must come from the
+	// declaration and not from the SKU fallback: reaching the same answer down the weaker
+	// path would hide a regression in reading the stronger one.
+	want := ProductEvidence{Answer: ProductAnswerDeclared, Value: "WinNt", Recognized: true}
+	if l.ProductEvidence != want {
+		t.Errorf("ProductEvidence = %+v, want %+v", l.ProductEvidence, want)
 	}
 }
