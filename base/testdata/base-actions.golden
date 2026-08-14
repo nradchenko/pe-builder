@@ -1,7 +1,6 @@
 copy setupldr.bin dir="1" rename="" area=boot flags=-
 copy ntdetect.com dir="1" rename="" area=boot flags=-
 copy txtsetup.sif dir="1" rename="" area=system flags=-
-copy bootfix.bin dir="1" rename="" area=boot flags=optional
 copy setupdd.sys dir="4" rename="" area=system flags=-
 copy spddlang.sys dir="4" rename="" area=system flags=-
 copy acpi.sys dir="4" rename="" area=system flags=-

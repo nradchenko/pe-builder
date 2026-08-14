@@ -1,5 +1,5 @@
 identity: winxp build 2600 (i386)
-written: 256
+written: 255
 skipped: 
 
 BOOTFONT.BIN 4952
@@ -17,7 +17,6 @@ i386/Fonts/vgafix.fon 5360
 i386/Fonts/vgaoem.fon 5168
 i386/Fonts/vgasys.fon 7280
 i386/biosinfo.inf 48046
-i386/bootfix.bin 1024
 i386/ntdetect.com 47564
 i386/setupldr.bin 261392
 i386/system32/SETUPREG.HIV 401408

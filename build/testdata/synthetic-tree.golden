@@ -1,10 +1,9 @@
 identity: winxp build 2600 (i386)
-written: 114
+written: 113
 skipped: [cabonly.sys]
 hives: [i386/system32/SETUPREG.HIV i386/system32/config/SOFTWARE i386/system32/config/DEFAULT i386/system32/config/SAM i386/system32/config/SECURITY]
 
 i386/biosinfo.inf
-i386/bootfix.bin
 i386/ntdetect.com
 i386/setupldr.bin
 i386/system32/SETUPREG.HIV

@@ -1,0 +1,22 @@
+; SPDX-License-Identifier: Apache-2.0
+; Copyright 2026 Nikita Radchenko.
+;
+; boot-prompt — make the CD ask "Press any key to boot from CD" on a machine that has
+; something else to boot. See README.md, in particular why an image with this enabled
+; still boots straight in when there is no partitioned hard disk.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name   = "Press any key to boot from CD"
+Enable = 0
+
+; bootfix.bin is a standalone real-mode blob holding the prompt, the hard-disk check it
+; is conditional on, and the wait; the CD boot sector loads it by name if it is there,
+; and boots straight to the loader if it is not. Being real mode it belongs in the I386
+; folder on every architecture, which is attribute 16 (the boot area) — combined with
+; optional (4) as 4|16=20, so a source that does not carry the file still builds. It
+; just builds an image that does not ask.
+[SourceDisksFiles]
+bootfix.bin = 1,,20

@@ -142,7 +142,7 @@ PE dependencies.
   binary — `poweroff`, `ramdrive`, `pesuite`, `explorer-shell`, `hardware`, `startup`),
   **closure-computed** (a `[Closure]` seed instead of a hand file list — `win32-gui`, `system-tools`,
   `accessories`, `games`, `network-tools`), and plain `.inf`-only (`luna`, `wallpaper`, `serialdebug`,
-  `terminal-services`, `storage-pnp`, `network-ui`). **Each plugin's own `README.md` holds its detail**
+  `terminal-services`, `storage-pnp`, `network-ui`, `boot-prompt`). **Each plugin's own `README.md` holds its detail**
   — mechanisms, decisions, gotchas; the index below is one line each, grouped by role:
   - *Desktop:* `explorer-shell` boots to the Explorer desktop (ships `peshell`/`peshut`; owns the
     Start-menu and COM-self-registration contracts other plugins contribute to; the Start-menu planner
@@ -161,7 +161,10 @@ PE dependencies.
     `hardware` is its first consumer.
   - *Standalone:* `poweroff` (shutdown command; the reference build-capable plugin, driving the shell's
     Turn Off via `peshut`), `games` (the XP games a minimal PE can run), `serialdebug` (turns the kernel
-    debugger on over COM1; `pebuild run --serial` attaches).
+    debugger on over COM1; `pebuild run --serial` attaches), `boot-prompt` (stages the source's
+    `bootfix.bin`, so the CD asks "press any key to boot from CD" — but only on a machine whose
+    first hard disk has an active partition, which is the file's own condition, so a diskless VM
+    boots straight in either way; the base layer stages only what booting requires).
 - `internal/` — support packages: `golden` (golden-file test helper), `buildinfo`
   (version metadata, plus the product/author/copyright a plugin's binaries stamp into their
   Windows version resource — passed to a plugin's build in the environment so the several
