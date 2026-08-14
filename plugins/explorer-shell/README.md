@@ -51,6 +51,9 @@ reimplemented independently here.
    `post-shell` startup tasks, then close the splash. Relaunch Explorer if it dies, and
    finally fall back to `cmd.exe` so the machine is never headless.
 
+A named mutex keeps that to one instance: run again on the desktop it produced, `peshell` says
+so in a message box and exits rather than redo the sequence on a live session.
+
 ## The profile volume
 
 The profile, `All Users` and `TEMP`/`TMP` all go on one volume, chosen in two passes: the

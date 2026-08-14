@@ -34,6 +34,10 @@ static const char *kProfileDirs[] = {
     "\\Local Settings\\Temporary Internet Files", "\\Local Settings\\History", NULL
 };
 
+/* The name of the mutex that marks the primary shell instance — see the guard at the top of
+ * WinMain. */
+#define SHELL_MUTEX "pe-builder.peshell"
+
 /* The volume label the ramdrive plugin's FAT16 formatter writes. This is the contract that
  * identifies the RAM volume to us — see README.md § The profile volume for why we match on the
  * label rather than on DRIVE_RAMDISK. */
@@ -871,6 +875,38 @@ int WINAPI WinMain(HINSTANCE i,HINSTANCE p,LPSTR c,int s){
     (void)i;(void)p;(void)c;(void)s;
     OutputDebugStringA("peshell: start\n");
 
+    /* Bring the shell up once and only once. The boot runs this as Setup\CmdLine, but nothing
+     * stops it being started again from the desktop it produced — a shortcut, a stray double
+     * click — and everything below assumes a session that has not been set up yet: it would
+     * re-run the COM self-registration, rebuild the Start menu, reapply the visual style and
+     * start a second Explorer over the live one. So the first instance claims a named mutex and
+     * every later one says so and leaves. It says so in a message box because this is a GUI
+     * program: started from a command prompt it owns no console and the prompt is already back
+     * before it runs, and started from a shortcut there is no console at all — so a printed line
+     * would be either misplaced or invisible, in the two ways it can be launched.
+     *
+     * The object exists only while a handle to it is open, so the claim lasts exactly as long as
+     * this process stands for a desktop: a primary that died leaves nothing behind, and one that
+     * gave up on the desktop drops the claim itself (see the cmd fallback at the end). Re-running
+     * peshell in either state is a full bring-up — which is when redoing the sequence is the
+     * point.
+     *
+     * A plain name, not Global\: a PE has the one interactive session, and the session namespace
+     * needs no privilege. If the call fails outright we cannot tell, and carry on as before. */
+    HANDLE primary=CreateMutexA(NULL,FALSE,SHELL_MUTEX);
+    if(primary && GetLastError()==ERROR_ALREADY_EXISTS){
+        OutputDebugStringA("peshell: a shell is already running; this instance does nothing\n");
+        CloseHandle(primary);   /* the primary's handle is what keeps the object alive, not ours */
+        /* Whoever launched this is looking at the desktop it would have built, so the box has
+         * someone to dismiss it. MB_SETFOREGROUND because we are not the foreground process and
+         * a box behind the window they started us from is the silence this exists to end. */
+        MessageBoxA(NULL,"The desktop shell is already running.\n\n"
+                         "peshell starts the desktop once, at boot. There is nothing for this "
+                         "one to do.","pe-builder",
+                    MB_OK|MB_ICONINFORMATION|MB_SETFOREGROUND);
+        return 0;
+    }
+
     char drive=find_writable_drive();
     char au[MAX_PATH]; au[0]=0;
     if(drive){
@@ -942,6 +978,11 @@ int WINAPI WinMain(HINSTANCE i,HINSTANCE p,LPSTR c,int s){
         Sleep(500);
     }
     OutputDebugStringA("peshell: desktop gone, falling back to cmd.exe\n");
+    /* Drop the primary claim before the prompt. This process outlives the desktop it brought up —
+     * it sits here waiting on cmd — and running peshell from that prompt is the obvious way back.
+     * Still holding the mutex would answer that with "the desktop shell is already running", which
+     * is the one situation where it is not. */
+    if(primary) CloseHandle(primary);
     run_and_wait("cmd.exe");
     return 0;
 }
