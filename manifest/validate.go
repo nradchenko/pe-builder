@@ -24,6 +24,14 @@ func Validate(m *Manifest) error {
 	if !slices.Contains(Targets, m.Output.Target) {
 		errs = append(errs, fmt.Errorf("output.target %q is invalid (want one of %v)", m.Output.Target, Targets))
 	}
+	if !slices.Contains(Layouts, m.Layout) {
+		errs = append(errs, fmt.Errorf("layout %q is invalid (want one of %v)", m.Layout, Layouts))
+	}
+	// A WIM layout is a RAM-booted image mastered onto an iso; it has
+	// no meaning for the tree-only "none" target, so require the iso target explicitly.
+	if m.Layout == LayoutWIM && m.Output.Target != TargetISO {
+		errs = append(errs, fmt.Errorf("layout %q requires output.target %q", m.Layout, TargetISO))
+	}
 	// A path is required only for a target that writes a file; the "none" target
 	// (tree/hives only) needs none.
 	if m.Output.Path == "" && m.Output.Target == TargetISO {

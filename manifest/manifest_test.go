@@ -61,6 +61,7 @@ plugin "shell" {
 		Output: Output{Target: "iso", Path: "./out/rescue.iso", VolumeLabel: "RESCUE"},
 		Build:  Build{WorkDir: "./.work", KeepWork: true},
 
+		Layout:     DefaultLayout,
 		PluginsDir: "./plugins",
 		Plugins: []Plugin{
 			{
@@ -109,6 +110,7 @@ plugin "p" {}
 	want := &Manifest{
 		Source: Source{Path: "/isos/winxp.iso", Type: DefaultSourceType},
 		Output: Output{Target: DefaultTarget, Path: "./out/rescue.iso", VolumeLabel: DefaultVolumeLabel},
+		Layout: DefaultLayout,
 		Plugins: []Plugin{
 			{Name: "p", Enabled: true}, // enabled defaults to true
 		},
@@ -209,6 +211,7 @@ func TestValidate(t *testing.T) {
 		return &Manifest{
 			Source: Source{Path: "/x", Type: "auto"},
 			Output: Output{Target: "iso", Path: "./o", VolumeLabel: "OK"},
+			Layout: LayoutClassic,
 		}
 	}
 
@@ -222,6 +225,9 @@ func TestValidate(t *testing.T) {
 		{"bad source type", func(m *Manifest) { m.Source.Type = "win95" }, "source.type"},
 		{"missing output path", func(m *Manifest) { m.Output.Path = "" }, "output.path is required"},
 		{"bad target", func(m *Manifest) { m.Output.Target = "usb" }, "output.target"},
+		{"bad layout", func(m *Manifest) { m.Layout = "raw" }, "layout"},
+		{"wim layout", func(m *Manifest) { m.Layout = LayoutWIM }, ""},
+		{"wim layout needs iso", func(m *Manifest) { m.Layout = LayoutWIM; m.Output.Target = TargetNone }, `requires output.target "iso"`},
 		{"label too long", func(m *Manifest) { m.Output.VolumeLabel = strings.Repeat("A", 33) }, "volume_label"},
 		// 20 two-byte runes = 40 bytes: within 32 runes but over the 32-byte field.
 		{"label too many bytes", func(m *Manifest) { m.Output.VolumeLabel = strings.Repeat("é", 20) }, "volume_label"},

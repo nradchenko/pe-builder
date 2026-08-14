@@ -22,6 +22,7 @@ type rawManifest struct {
 	Source     rawSource   `hcl:"source,block"`
 	Output     rawOutput   `hcl:"output,block"`
 	Build      *rawBuild   `hcl:"build,block"`
+	Layout     string      `hcl:"layout,optional"`
 	PluginsDir string      `hcl:"plugins_dir,optional"`
 	Plugins    []rawPlugin `hcl:"plugin,block"`
 }
@@ -120,6 +121,7 @@ func toManifest(raw *rawManifest) (*Manifest, error) {
 			Path:        raw.Output.Path,
 			VolumeLabel: orDefault(raw.Output.VolumeLabel, DefaultVolumeLabel),
 		},
+		Layout:     orDefault(raw.Layout, DefaultLayout),
 		PluginsDir: raw.PluginsDir,
 	}
 	if raw.Build != nil {

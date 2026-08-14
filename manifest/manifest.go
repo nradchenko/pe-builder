@@ -14,6 +14,7 @@ const (
 	DefaultSourceType  = "auto"
 	DefaultTarget      = "iso"
 	DefaultVolumeLabel = "PEBUILDER"
+	DefaultLayout      = LayoutClassic
 	// maxVolumeLabelLen is the ISO9660 volume identifier length limit.
 	maxVolumeLabelLen = 32
 )
@@ -26,17 +27,36 @@ const (
 	TargetNone = "none"
 )
 
-// SourceTypes and Targets enumerate the values accepted in v0.
+// Boot layouts. The layout selects how the source is turned into a booting image.
+const (
+	// LayoutClassic masters the assembled tree directly onto a CDBOOT ISO — the
+	// installed-on-media PE the source's own boot chain loads.
+	LayoutClassic = "classic"
+	// LayoutWIM is the distributable WIM boot chain: grub4dos maps a small boot-core image
+	// (coreimg) into RAM as a CD and boots it with an unmodified setupldr; firadisk reclaims
+	// that RAM region and the wimmf overlay serves the rest of the tree from the compressed WIM
+	// on the real CD. It ships no Microsoft boot binary, and the boot device is a property of
+	// the boot-chain plugin the layout enables — currently the grub4dos CD chain. Requires the
+	// WIM-boot infrastructure plugins (grub4dos, firadisk, wimmf) and an iso target.
+	LayoutWIM = "wim"
+)
+
+// SourceTypes, Targets, and Layouts enumerate the values accepted in v0.
 var (
 	SourceTypes = []string{"auto", "winxp", "win2003"}
 	Targets     = []string{TargetISO, TargetNone}
+	Layouts     = []string{LayoutClassic, LayoutWIM}
 )
 
 // Manifest is a fully decoded, defaulted build manifest.
 type Manifest struct {
-	Source     Source
-	Output     Output
-	Build      Build
+	Source Source
+	Output Output
+	Build  Build
+	// Layout selects the boot layout: "classic" (default) or "wim". It is
+	// orthogonal to Output.Target — a WIM layout still produces an iso, but built
+	// a different way and carrying a different boot chain.
+	Layout     string
 	PluginsDir string
 	Plugins    []Plugin
 	// Path is the file the manifest was read from, empty when it was decoded from
