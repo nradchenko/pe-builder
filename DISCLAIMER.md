@@ -35,6 +35,19 @@ The same principle applies to everything else here: we have no wish to take anyo
 whatever it is. If you believe this project infringes a copyright, or fails to credit an
 author properly, please get in touch and we will put it right.
 
+## Redistribution
+
+pe-builder is provided for **personal and informational use only**. An image you build is
+assembled on your machine from the Windows source you supply and the plugins you install; it
+is meant for your own use.
+
+If you pass one on, **you** become its distributor and take on any obligations that follow —
+not this project. The image contains Microsoft binaries from your source, which Microsoft's
+licence generally does not permit redistributing; and any plugin components it embeds may be
+under their own licences, some copyleft, which then must be accompanied by their licence and
+corresponding source — provided by each plugin's own project. pe-builder ships no Microsoft
+files and bundles no plugin binaries; it only operates on inputs you supply.
+
 ## An experiment, for enthusiasts
 
 pe-builder is built on and inspired by software that is end-of-life and long abandoned. It
