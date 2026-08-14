@@ -209,6 +209,29 @@ func TestISOEmitFailureKeepsPrevious(t *testing.T) {
 	assertOnly(t, dir, "out.iso")
 }
 
+// TestReserveTempSitsBesideDest pins the invariant the atomic publish rests on: the
+// scratch file must be on the destination's filesystem, because publishing is a rename.
+//
+// Nothing above catches this. The two tests either side assert that no scratch file is
+// *left*, which is equally true of one created in the wrong place and cleaned up. A
+// scratch file under $TMPDIR would work on a machine where /tmp shares a filesystem with
+// the output and fail with EXDEV on one where it does not — so the bug would not be in
+// the code under test but in which machine ran it, and every build on that machine would
+// master a whole image and then fail to publish it.
+func TestReserveTempSitsBesideDest(t *testing.T) {
+	// reserveTemp unlinks the file before returning, so there is nothing to clean up:
+	// what it hands back is a reserved name, not an open file.
+	dest := filepath.Join(t.TempDir(), "out.iso")
+	tmp, err := reserveTemp(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := filepath.Dir(tmp), filepath.Dir(dest); got != want {
+		t.Errorf("scratch file reserved in %s, want beside the destination in %s\n"+
+			"(publishing renames it onto dest; across filesystems that fails with EXDEV)", got, want)
+	}
+}
+
 // assertOnly checks the directory holds exactly the named entries — no scratch file
 // left over from mastering.
 func assertOnly(t *testing.T, dir string, want ...string) {
