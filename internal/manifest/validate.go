@@ -17,10 +17,6 @@ func Validate(m *Manifest) error {
 	if m.Source.Path == "" {
 		errs = append(errs, errors.New("source.path is required"))
 	}
-	if !slices.Contains(SourceTypes, m.Source.Type) {
-		errs = append(errs, fmt.Errorf("source.type %q is invalid (want one of %v)", m.Source.Type, SourceTypes))
-	}
-
 	if !slices.Contains(Targets, m.Output.Target) {
 		errs = append(errs, fmt.Errorf("output.target %q is invalid (want one of %v)", m.Output.Target, Targets))
 	}

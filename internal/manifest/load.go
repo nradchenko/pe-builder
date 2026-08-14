@@ -29,7 +29,6 @@ type rawManifest struct {
 
 type rawSource struct {
 	Path string `hcl:"path"`
-	Type string `hcl:"type,optional"`
 }
 
 type rawOutput struct {
@@ -116,10 +115,7 @@ func Decode(src []byte, filename string) (*Manifest, error) {
 // toManifest maps the decoded raw manifest to the public type, applying defaults.
 func toManifest(raw *rawManifest) (*Manifest, error) {
 	m := &Manifest{
-		Source: Source{
-			Path: raw.Source.Path,
-			Type: orDefault(raw.Source.Type, DefaultSourceType),
-		},
+		Source: Source{Path: raw.Source.Path},
 		Output: Output{
 			Target:      orDefault(raw.Output.Target, DefaultTarget),
 			Path:        raw.Output.Path,

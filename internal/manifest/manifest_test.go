@@ -19,7 +19,6 @@ func TestDecodeFull(t *testing.T) {
 	src := `
 source {
   path = "/isos/winxp.iso"
-  type = "winxp"
 }
 
 output {
@@ -61,7 +60,7 @@ plugin "shell" {
 	}
 
 	want := &Manifest{
-		Source: Source{Path: "/isos/winxp.iso", Type: "winxp"},
+		Source: Source{Path: "/isos/winxp.iso"},
 		Output: Output{Target: "iso", Path: "./out/rescue.iso", VolumeLabel: "RESCUE"},
 		Build:  Build{WorkDir: "./.work", KeepWork: true},
 
@@ -112,7 +111,7 @@ plugin "p" {}
 	}
 
 	want := &Manifest{
-		Source: Source{Path: "/isos/winxp.iso", Type: DefaultSourceType},
+		Source: Source{Path: "/isos/winxp.iso"},
 		Output: Output{Target: DefaultTarget, Path: "./out/rescue.iso", VolumeLabel: DefaultVolumeLabel},
 		Layout: DefaultLayout,
 		Plugins: []Plugin{
@@ -195,6 +194,26 @@ func TestDecodeSyntaxError(t *testing.T) {
 	}
 }
 
+// A manifest written against the retired source.type must fail loudly rather than have
+// the setting quietly ignored: it never did anything, and a silent accept would keep
+// promising that it did.
+func TestDecodeRetiredSourceType(t *testing.T) {
+	src := `
+source {
+  path = "/x"
+  type = "winxp"
+}
+output { path = "./o" }
+`
+	_, err := Decode([]byte(src), "old.hcl")
+	if err == nil {
+		t.Fatal("expected a decode error for source.type, got nil")
+	}
+	if !strings.Contains(err.Error(), "type") {
+		t.Errorf("error does not name the offending attribute: %v", err)
+	}
+}
+
 func TestDecodeNonStringOption(t *testing.T) {
 	src := `
 source { path = "/x" }
@@ -239,7 +258,7 @@ plugin "p" {
 func TestValidate(t *testing.T) {
 	base := func() *Manifest {
 		return &Manifest{
-			Source: Source{Path: "/x", Type: "auto"},
+			Source: Source{Path: "/x"},
 			Output: Output{Target: "iso", Path: "./o", VolumeLabel: "OK"},
 			Layout: LayoutClassic,
 		}
@@ -252,7 +271,6 @@ func TestValidate(t *testing.T) {
 	}{
 		{"valid", func(*Manifest) {}, ""},
 		{"missing source path", func(m *Manifest) { m.Source.Path = "" }, "source.path is required"},
-		{"bad source type", func(m *Manifest) { m.Source.Type = "win95" }, "source.type"},
 		{"missing output path", func(m *Manifest) { m.Output.Path = "" }, "output.path is required"},
 		{"bad target", func(m *Manifest) { m.Output.Target = "usb" }, "output.target"},
 		{"bad layout", func(m *Manifest) { m.Layout = "raw" }, "layout"},

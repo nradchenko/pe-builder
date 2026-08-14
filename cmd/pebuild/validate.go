@@ -41,7 +41,7 @@ func printSummary(w io.Writer, path string, m *manifest.Manifest) error {
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "Manifest: %s\n", path)
-	fmt.Fprintf(&b, "Source:   %s (%s)\n", m.Source.Path, m.Source.Type)
+	fmt.Fprintf(&b, "Source:   %s\n", m.Source.Path)
 	// What a target writes is a property of the target, not of whether a path happens
 	// to be set: a "none" manifest may still carry a path (one written before the path
 	// became optional, which validates fine), and reporting it would promise a file the

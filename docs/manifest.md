@@ -32,14 +32,14 @@ pebuild validate pebuild.hcl
 
 It reports every schema and semantic error it finds, then summarizes the source, what
 the build would produce, and which plugins are enabled — resolved, so a defaulted
-`source.type` or `output.target` shows as the value a build would use.
+`output.target` shows as the value a build would use.
 
 It checks less than it looks like it does, and the gap is worth knowing. It reads the
 manifest alone: the paths in it are never resolved, and neither is anything a plugin
 declares. So a `source.path` that does not exist, a `plugins_dir` naming a missing
 directory, and an `options` key the plugin does not declare all pass `validate` cleanly
 and then fail the build. What it does check is this file's own shape — required fields,
-the values `target`, `type` and `layout` accept, the layout/target pairing, the volume
+the values `target` and `layout` accept, the layout/target pairing, the volume
 label's length, and duplicate plugin names.
 
 ## Relative paths
@@ -53,13 +53,14 @@ absolute paths.
 
 ## `source` — what to build from
 
-`source.path` is the one field always required; it takes a directory or an `.iso`, and
-which one it is gets detected rather than declared.
+`source.path` is the one field always required, and the block's only field; it takes a
+directory or an `.iso`, and which one it is gets detected rather than declared.
 
-`source.type` defaults to `auto`, which probes the media for its build number,
-architecture, and flavor and is almost always right; the explicit values exist to
-override a misdetection. `pebuild source probe` reports what the probe sees. Which
-sources are supported, and what each produces, is [`supported.md`](supported.md).
+What the media are — build number, architecture, and whether they are a workstation or a
+server product — is read from the media themselves, so a manifest neither states it nor
+overrides it. `pebuild source probe` reports what a build would read, and names the
+evidence behind the product type. Which sources are supported, and what each produces, is
+[`supported.md`](supported.md).
 
 The `iso` target additionally requires an **`.iso`** source, not a directory: a bootable
 image reuses the source media's own boot sector, so there has to be one to read. A

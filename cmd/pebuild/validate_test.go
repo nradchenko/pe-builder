@@ -45,7 +45,7 @@ func TestPrintSummaryOutputLine(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := &manifest.Manifest{
-				Source: manifest.Source{Path: "/isos/winxp.iso", Type: "auto"},
+				Source: manifest.Source{Path: "/isos/winxp.iso"},
 				Output: tt.out,
 				Layout: manifest.LayoutClassic,
 			}
@@ -69,7 +69,7 @@ func TestPrintSummaryOutputLine(t *testing.T) {
 // silently missing.
 func TestPrintSummaryPlugins(t *testing.T) {
 	m := &manifest.Manifest{
-		Source: manifest.Source{Path: "/isos/winxp.iso", Type: "auto"},
+		Source: manifest.Source{Path: "/isos/winxp.iso"},
 		Output: manifest.Output{Target: manifest.TargetISO, Path: "./o.iso", VolumeLabel: "PEBUILDER"},
 		Layout: manifest.LayoutClassic,
 		Plugins: []manifest.Plugin{

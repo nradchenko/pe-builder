@@ -21,12 +21,10 @@
 
 # --- The Windows installation source ------------------------------------------------------
 source {
-  # Required. A directory or an .iso; which one is detected automatically.
+  # Required, and the only field. A directory or an .iso; which one is detected
+  # automatically. What the media are — build, architecture, workstation or server — is
+  # read from the media themselves; run `pebuild source probe` to see what they say.
   path = "/path/to/winxp-sp3.iso"
-
-  # Source flavor. "auto" probes the media, which is almost always what you want; the
-  # explicit values exist to override a misdetection.
-  type = "auto" # auto | winxp | win2003
 }
 
 # --- What the build produces ---------------------------------------------------------------

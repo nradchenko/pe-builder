@@ -11,7 +11,6 @@ const DefaultManifestName = "pebuild.hcl"
 
 // Defaults applied to optional fields left unset in the manifest.
 const (
-	DefaultSourceType  = "auto"
 	DefaultTarget      = "iso"
 	DefaultVolumeLabel = "PEBUILDER"
 	DefaultLayout      = LayoutClassic
@@ -41,11 +40,10 @@ const (
 	LayoutWIM = "wim"
 )
 
-// SourceTypes, Targets, and Layouts enumerate the values accepted in v0.
+// Targets and Layouts enumerate the values accepted in v0.
 var (
-	SourceTypes = []string{"auto", "winxp", "win2003"}
-	Targets     = []string{TargetISO, TargetNone}
-	Layouts     = []string{LayoutClassic, LayoutWIM}
+	Targets = []string{TargetISO, TargetNone}
+	Layouts = []string{LayoutClassic, LayoutWIM}
 )
 
 // Manifest is a fully decoded, defaulted build manifest.
@@ -69,11 +67,12 @@ type Manifest struct {
 }
 
 // Source describes the Windows installation source to build from.
+//
+// It is the path alone: what the media are — build, architecture, product type — is
+// read from the media themselves, so a manifest neither states it nor overrides it.
 type Source struct {
 	// Path is a directory or an .iso file (auto-detected).
 	Path string
-	// Type is the source flavor: auto | winxp | win2003.
-	Type string
 }
 
 // Output describes the artifact to produce.
