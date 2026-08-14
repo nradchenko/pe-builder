@@ -132,6 +132,24 @@ or `PEBUILD_NO_CACHE=1` to disable it.
 
 This is early, fast-moving work — details change commit to commit.
 
+### Booting from a WIM (experimental)
+
+By default a build masters the file tree straight onto the ISO as loose files. Setting
+`layout = "wim"` in the manifest instead packs the whole tree into a single compressed
+Windows Imaging (`.wim`) image and boots the system out of it — the running OS reads its files
+on demand from the WIM — so the image is markedly smaller than the loose-file layout. It is the
+same idea as Hiren's BootCD "Mini XP", but built from an unmodified loader and an open-source
+overlay filter, from your own licensed Windows, with no patched or redistributed Microsoft
+binaries. It requires an ISO target.
+
+This path is **experimental** and needs three open-source plugins that live outside this
+repository, installed with `pebuild plugins add`: `wimmf` (the WIM overlay filter driver),
+`firadisk` (reclaims the RAM region as a disk), and `grub4dos` (the loader). The built-in
+`wim-cd-boot` plugin, which `layout = "wim"` enables for you, wires them together; without
+them installed the build stops and says which is missing.
+
+See [`docs/wim-boot.md`](docs/wim-boot.md) for how the chain works and a full walkthrough.
+
 ## Looking inside a source or a build
 
 `pebuild source` inspects a Windows installation source without unpacking it by hand —
@@ -203,6 +221,8 @@ The text and JSON formats scale to the full closure without this concern.
 - [`docs/inspecting.md`](docs/inspecting.md) — inspecting a source or a build:
   extracting files, listing what the media carries, reading INF sections and
   registry hives.
+- [`docs/wim-boot.md`](docs/wim-boot.md) — the `wim` layout: booting a compact,
+  open-source Windows PE from a WIM, how the chain works, and a build walkthrough.
 - [`docs/plugins/`](docs/plugins/) — using and writing plugins: a short guide, and
   the policy for what may be bundled with pe-builder.
 - [`docs/reference/`](docs/reference/) — a detailed, primary-source reference for

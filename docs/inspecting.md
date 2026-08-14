@@ -276,3 +276,25 @@ pebuild: "I386/SYSTEM32/VGAOEM.FON" and "I386/FONTS/VGAOEM.FON" both write
 Nothing is decompressed — a built image holds files as the build placed them. (An
 image built by another tool may still hold a compressed file, `SETUPREG.HI_` for
 instance; that comes out as the stored bytes.)
+
+### WIM-layout images
+
+An image built with the `wim` layout is arranged differently: its ISO holds the boot
+chain (`grldr`, `coreimg.gz`, `menu.lst`) and the payload **WIM**, `PE.wim`, and the
+entire Windows file tree *and every registry hive* live inside that WIM rather than on
+the ISO filesystem. `image` and `hive` read *through* `PE.wim` transparently, so the same
+commands work on a wim image as on a classic one — `image ls` lists the payload tree
+merged with the media-root files, `image extract` pulls a file out of the WIM, and `hive
+dump` reads a hive sealed inside it:
+
+```sh
+pebuild image ls out/pe.iso i386/system32/ntoskrnl.exe
+pebuild hive dump out/pe.iso 'SYSTEM\ControlSet001\Services\fltmgr'
+pebuild image extract out/pe.iso PE.wim -o .   # the WIM itself, as a blob
+```
+
+The payload is read on demand — listing costs the WIM's metadata, and extracting one
+file decodes only that file. If `PE.wim` itself cannot be read (a corrupt or unsupported
+WIM), the commands fall back to the media root and point you at extracting `PE.wim` to
+inspect with a dedicated WIM tool. `verify` is unaffected either way — it reads the build
+receipt, which the `wim` tail also places on the media root next to `PE.wim`.

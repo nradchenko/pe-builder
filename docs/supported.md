@@ -156,6 +156,21 @@ debugging — and any theory resting on something amd64-specific is already fals
 | Bootable ISO (El Torito, no-emulation) | supported |
 | USB image | not implemented |
 
+### ISO layout
+
+An ISO is assembled one of two ways, chosen by the manifest's `layout`:
+
+| Layout | What it produces | Status |
+|---|---|---|
+| `classic` (default) | the file tree mastered directly onto the ISO | supported |
+| `wim` | the tree packed into a compressed `.wim`, read on demand through an overlay filter — a smaller image | **experimental** — boots to the Luna desktop; verified on XP SP3 (32-bit), XP x64, and Server 2003 (both architectures) |
+
+The `wim` layout requires an ISO target and three out-of-tree
+plugins installed with `pebuild plugins add` — `wimmf` (the WIM overlay-filter driver),
+`firadisk` (reclaims the RAM-mapped boot core as a disk), and `grub4dos` (the loader); the
+built-in `wim-cd-boot` plugin that `layout = "wim"` enables wires them in. See the project
+README and [`docs/wim-boot.md`](wim-boot.md) for the overview.
+
 ## Where the result runs
 
 | Environment | Status |

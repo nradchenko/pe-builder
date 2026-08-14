@@ -39,7 +39,12 @@ PE dependencies.
 - `cmd/pewalk/` — the `pewalk` command: an "ldd for PE" that computes and renders the
   import closure of a Windows binary against a source (cobra).
 - Engine packages, roughly in pipeline order:
-  - `manifest/` — the HCL build manifest (load + validate).
+  - `manifest/` — the HCL build manifest (load + validate). Its `layout` switch picks how
+    the ISO is assembled: `classic` (the default) masters the file tree directly; `wim`
+    packs the tree into a compressed `.wim` behind a fully distributable grub4dos chain that
+    maps a small boot-core image (`coreimg`) into RAM as a CD and boots it with an unmodified
+    loader, so it ships no Microsoft boot binary (see `build/` and the `wim-cd-boot` plugin
+    below). The `wim` layout requires an ISO target.
   - `source/` — read a Windows installation source (directory or ISO) and probe its
     identity (build number, architecture, flavor). It also owns the source's *areas*:
     a source keeps its files in two top-level folders — the OS payload and the
@@ -107,7 +112,9 @@ PE dependencies.
     has the standard config it needs to start the Win32 services. SOFTWARE and DEFAULT are built
     from `hivesft.inf`/`hivedef.inf`, and the shell build grafts the machine classes from
     `hivecls.inf` into SOFTWARE\Classes.
-  - `target/` — output targets (e.g. a bootable ISO).
+  - `target/` — output targets (e.g. a bootable ISO). The El Torito no-emulation
+    mastering both ISO layouts share is factored into one `MasterElTorito` the classic
+    and WIM tails call.
   - `receipt/` — the record a build leaves inside the image it produced (`pebuild.txt` at
     the tree root, `PEBUILD.TXT` once the ISO stage uppercases the tree, so a booted PE can
     `type` it). It describes the build's *inputs* — the engine content hash, the manifest
@@ -121,7 +128,16 @@ PE dependencies.
     that decides what may run). The engine hash covers what is `go:embed`ed rather than the
     executable, whose bytes change on every link; a plugin pebuild does not embed carries its
     own content hash instead.
-  - `build/` — the orchestrator that wires the pipeline together.
+  - `build/` — the orchestrator that wires the pipeline together. Its media tail branches
+    on the manifest `layout`: the classic path masters the assembled tree; the `wim` path
+    (`build/wimcd.go`, `emitWIMCDISO`) instead masters the pre-wimmf boot closure into a
+    gzipped bootable `coreimg` (`internal/coreimg`), packs the tree into a `.wim`
+    (the external `go-wim` library, with the XP security descriptor and version policy supplied
+    by `build/wimsecurity.go`), relocates the boot chain a boot-chain plugin staged into a reserved
+    subtree to the media root, and writes the grub4dos `menu.lst` that maps the coreimg into
+    RAM as a CD — a chain that ships no Microsoft boot binary. The closure is resolved to tree
+    paths during assembly (`build/coreimg.go`, `coreMemberPaths`, from `base.ComputeBootCore`);
+    `build/wimmedia.go` holds the media helpers the tail shares.
 - `pewalk/` — the "ldd for PE" library: computes the transitive PE import closure
   (static + delay imports, or static-only for a boot-necessary set) of a binary against a
   source, resolving each imported module
@@ -165,6 +181,11 @@ PE dependencies.
     `bootfix.bin`, so the CD asks "press any key to boot from CD" — but only on a machine whose
     first hard disk has an active partition, which is the file's own condition, so a diskless VM
     boots straight in either way; the base layer stages only what booting requires).
+  - *WIM boot:* `wim-cd-boot` — the meta-plugin the `wim` layout enables implicitly. It ships **no
+    binaries**: it declares the FltMgr/`wimmf` boot-start registry contract and `txtsetup.sif` edits the
+    overlay needs, and `depends` on the out-of-tree plugins that carry the binaries — `wimmf` (the
+    overlay filter that reads the tree out of the WIM), `firadisk` (reclaims the grub4dos-mapped RAM as
+    a disk), and `grub4dos` (the loader) — which the user installs from packages.
 - `internal/` — support packages: `golden` (golden-file test helper), `buildinfo`
   (version metadata, plus the product/author/copyright a plugin's binaries stamp into their
   Windows version resource — passed to a plugin's build in the environment so the several
@@ -173,7 +194,13 @@ PE dependencies.
   `enginehash` (a
   deterministic content hash over the file trees pebuild embeds — the base layer and the
   built-in plugins — which is what a build receipt records in place of a hash of the
-  executable).
+  executable), and `coreimg`, which the WIM layout's media tail uses (master the pre-wimmf boot
+  closure — a subset of the assembled tree plus the source's own CDBOOT — into a minimal bootable
+  cdfs image and gzip it, the boot core the pre-loader maps into RAM as a CD; reuses the classic
+  `iso` target's mastering recipe). The `.wim` itself is written by the external `go-wim` library
+  rather than an in-tree package or `wimlib`; the build's own policy that library needs — the XP
+  security descriptor every file carries and the Windows version stamped into the image — lives in
+  `build/wimsecurity.go` and is handed to it as options.
 - `scripts/` — repository tooling. `gen-licenses.sh` (+ its template) regenerates the
   committed `THIRD-PARTY-LICENSES` notice from the binaries' transitive dependency closure
   via `go-licenses`; run it through `make licenses`.
@@ -221,7 +248,9 @@ The `image` commands read a **built** PE — one this tool produced, or a refere
 built by another tool — as a plain filesystem, with no identity probe and no layout
 resolution (a build has already resolved, decompressed and placed everything, so the
 `source` commands cannot read one). Matching is case-insensitive, which matters because
-the tree writes mixed case and the ISO stage uppercases. Full detail in
+the tree writes mixed case and the ISO stage uppercases. A `wim`-layout image keeps its
+payload inside `PE.wim`; `image` and `hive` read *through* the WIM (via the `go-wim`
+reader) transparently, so the same commands work on both layouts. Full detail in
 [`docs/inspecting.md`](docs/inspecting.md).
 
 So: do **not** mount the ISO, shell out to `7z`/`xorriso`/`cabextract`, hand-parse
