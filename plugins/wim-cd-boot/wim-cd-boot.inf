@@ -1,0 +1,68 @@
+; SPDX-License-Identifier: Apache-2.0
+; Copyright 2026 Nikita Radchenko.
+;
+; wim-cd-boot — the wiring meta-plugin for the distributable WIM boot layout (layout =
+; "wim", which enables it implicitly). It ships no binaries: it declares the fltmgr/wimmf
+; boot-start registry contract and txtsetup edits the WIM overlay needs, and depends on the
+; out-of-tree plugins that carry the binaries (wimmf, firadisk, grub4dos).
+; See README.md for the contract detail and the decisions behind it.
+
+[Version]
+Signature = "$Windows NT$"
+
+[PEBuilder]
+Name = "WIM CD boot"
+
+; Pull in the binaries the contract points at (see README.md § Dependencies).
+[Update]
+depends = wimmf, firadisk, grub4dos
+
+; fltmgr.sys is a stock driver from the Windows source; wimmf/firadisk come from their own
+; plugins (see README.md § FltMgr).
+[SourceDisksFiles]
+fltmgr.sys = 4
+
+; --- FltMgr: boot-start filter manager + the Root\LEGACY_FLTMGR devnode (measured from a
+;     reference WinPE). See README.md § FltMgr. ---
+[SetupReg.AddReg]
+0x4,"ControlSet001\Services\fltmgr","Type",0x2
+0x4,"ControlSet001\Services\fltmgr","Start",0x0
+0x4,"ControlSet001\Services\fltmgr","ErrorControl",0x3
+0x4,"ControlSet001\Services\fltmgr","Tag",0x4
+0x4,"ControlSet001\Services\fltmgr","AttachWhenLoaded",0x0
+0x1,"ControlSet001\Services\fltmgr","Group","FSFilter Infrastructure"
+0x1,"ControlSet001\Services\fltmgr","DisplayName","FltMgr"
+0x1,"ControlSet001\Services\fltmgr","Description","File System Filter Manager Driver"
+0x2,"ControlSet001\Services\fltmgr","ImagePath","system32\drivers\fltmgr.sys"
+0x1,"ControlSet001\Services\fltmgr\Enum","0","Root\LEGACY_FLTMGR\0000"
+0x4,"ControlSet001\Services\fltmgr\Enum","Count",0x1
+0x4,"ControlSet001\Services\fltmgr\Enum","NextInstance",0x1
+0x4,"ControlSet001\Enum\Root\LEGACY_FLTMGR","NextInstance",0x1
+0x1,"ControlSet001\Enum\Root\LEGACY_FLTMGR\0000","Service","FltMgr"
+0x4,"ControlSet001\Enum\Root\LEGACY_FLTMGR\0000","Legacy",0x1
+0x4,"ControlSet001\Enum\Root\LEGACY_FLTMGR\0000","ConfigFlags",0x0
+0x1,"ControlSet001\Enum\Root\LEGACY_FLTMGR\0000","Class","LegacyDriver"
+0x1,"ControlSet001\Enum\Root\LEGACY_FLTMGR\0000","ClassGUID","{8ECC055D-047F-11D1-A537-0000F8753ED1}"
+0x1,"ControlSet001\Enum\Root\LEGACY_FLTMGR\0000","DeviceDesc","FltMgr"
+0x1,"ControlSet001\Enum\Root\LEGACY_FLTMGR\0000\Control","ActiveService","FltMgr"
+
+; --- wimmf overlay filter (Type=2, Start=0, DependOnService=fltmgr, altitude 161000 in the
+;     FSFilter Compression band). WimPath points at PE.WIM on the real CD. See README.md
+;     § wimmf and § WimPath (case-insensitive match + the CdRom0..9 suffix scan). ---
+0x4,"ControlSet001\Services\wimmf","Type",0x2
+0x4,"ControlSet001\Services\wimmf","Start",0x0
+0x4,"ControlSet001\Services\wimmf","ErrorControl",0x1
+0x1,"ControlSet001\Services\wimmf","Group","FSFilter Compression"
+0x7,"ControlSet001\Services\wimmf","DependOnService","fltmgr"
+0x1,"ControlSet001\Services\wimmf","DisplayName","WIM overlay minifilter"
+0x2,"ControlSet001\Services\wimmf","ImagePath","system32\DRIVERS\wimmf.sys"
+0x1,"ControlSet001\Services\wimmf","WimPath","\Device\CdRom0\PE.WIM"
+0x1,"ControlSet001\Services\wimmf\Instances","DefaultInstance","wimmf Instance"
+0x1,"ControlSet001\Services\wimmf\Instances\wimmf Instance","Altitude","161000"
+0x4,"ControlSet001\Services\wimmf\Instances\wimmf Instance","Flags",0x0
+
+; Boot-load fltmgr then wimmf via txtsetup, ahead of the session manager (see README.md
+; § Boot-load order). firadisk boot-loads itself through its own plugin.
+[SetValue]
+"txtsetup.sif","BusExtenders.Load","fltmgr","fltmgr.sys"
+"txtsetup.sif","BusExtenders.Load","wimmf","wimmf.sys"
