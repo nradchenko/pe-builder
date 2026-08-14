@@ -45,9 +45,16 @@ func newSourceCmd() *cobra.Command {
 func newSourceProbeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "probe <path>",
-		Short: "Detect a source's identity (build, arch, flavor)",
+		Short: "Detect a source's identity (build, arch, product type)",
 		Long: "Probe a Windows installation source (a directory or an .iso) and report\n" +
-			"its detected identity: build number, architecture, and flavor.",
+			"its detected identity: build number, architecture, and whether the media\n" +
+			"call themselves a workstation or a server product — the one thing that\n" +
+			"separates XP Professional x64 Edition from Server 2003 x64, which share\n" +
+			"both a build number and an architecture.\n\n" +
+			"The product type is named with the answer that produced it, because the\n" +
+			"media state it two ways and the second is a SKU number read against values\n" +
+			"measured on real media: a SKU nobody has measured settles on the\n" +
+			"workstation answer, and says so rather than passing for a read one.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			src, err := source.Open(args[0])
@@ -59,10 +66,50 @@ func newSourceProbeCmd() *cobra.Command {
 				return err
 			}
 
-			_, err = fmt.Fprintf(cmd.OutOrStdout(),
-				"Build:  %d\nArch:   %s\nFlavor: %s\n", id.Build, id.Arch, id.Flavor)
+			w := cmd.OutOrStdout()
+			if _, err := fmt.Fprintf(w, "Build:   %d\nArch:    %s\n", id.Build, id.Arch); err != nil {
+				return err
+			}
+			// The product type comes from the source's setup metadata, which probing
+			// itself does not read. A source that identifies but whose metadata will
+			// not parse still has a true build and architecture, so the missing answer
+			// is reported rather than failing the command.
+			lay, err := layout.Parse(src.Backing(), id)
+			if err != nil {
+				_, err = fmt.Fprintf(w, "Product: unknown       (%v)\n", err)
+				return err
+			}
+			_, err = fmt.Fprintf(w, "Product: %s\n", productLine(lay))
 			return err
 		},
+	}
+}
+
+// productLine renders the product-type verdict followed by the evidence that produced
+// it. Naming the evidence is the point: the two answers are not equally strong, and an
+// unmeasured SKU has to be visible as a fallback rather than as a stated answer.
+func productLine(lay *layout.Layout) string {
+	verdict := "workstation"
+	if lay.ServerProduct {
+		verdict = "server"
+	}
+
+	e := lay.ProductEvidence
+	switch {
+	case e.Answer == layout.ProductAnswerDeclared && e.Recognized:
+		return fmt.Sprintf("%-12s  (hivesys.inf declares %s)", verdict, e.Value)
+	// The media declared something this build cannot read, and had no SKU to fall back
+	// on. Reporting that as silence would credit the media with an answer they gave.
+	case e.Answer == layout.ProductAnswerDeclared:
+		return fmt.Sprintf("%-12s  (hivesys.inf declares %s, which is not a product type this build knows; defaulted)",
+			verdict, e.Value)
+	case e.Answer == layout.ProductAnswerSetupData && e.Recognized:
+		return fmt.Sprintf("%-12s  ([SetupData] ProductType = %s)", verdict, e.Value)
+	case e.Answer == layout.ProductAnswerSetupData:
+		return fmt.Sprintf("%-12s  ([SetupData] ProductType = %s, an unrecognized SKU; defaulted)",
+			verdict, e.Value)
+	default:
+		return fmt.Sprintf("%-12s  (the media state neither answer; defaulted)", verdict)
 	}
 }
 

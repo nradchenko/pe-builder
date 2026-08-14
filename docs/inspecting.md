@@ -11,7 +11,23 @@ or an `.iso`, and reads it the same way a build does.
 pebuild source probe win.iso
 ```
 
-Reports the media's build number, architecture, and flavor.
+Reports the media's build number, architecture, and product type — whether they call
+themselves a workstation or a server. The product type is the one thing separating
+XP Professional x64 Edition from Server 2003 x64, which share both a build number and
+an architecture, so it is read from the media's own setup metadata rather than inferred
+from either.
+
+The media state it two ways, and the line names which one answered:
+
+```
+Product: workstation   (hivesys.inf declares WinNt)
+Product: server        ([SetupData] ProductType = 1)
+```
+
+A source that declares no product type falls back to the SKU number in
+`txtsetup.sif`, which is read against values measured on real media. A SKU nobody has
+measured settles on the workstation answer and says so — `an unrecognized SKU;
+defaulted` — rather than passing for something the media stated.
 
 ## Extracting a file
 
@@ -211,7 +227,7 @@ manifest and plugin directories, and reports per field:
 pebuild version  v0.7.0
 engine content   sha256:fc1c3d43…  OK
 manifest         sha256:72b2f2a2…  OK
-source           winxp build 2600 (i386)  OK
+source           build 2600 (i386)  OK
 plugins          9 resolved  OK
 options          1 differ  CHANGED
   pebuild version: image built with v0.6.0, this is v0.7.0
