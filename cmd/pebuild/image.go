@@ -166,7 +166,16 @@ func openImage(target string) (source.Backing, error) {
 	if err != nil {
 		return nil, err
 	}
-	return src.Backing(), nil
+	b := src.Backing()
+	// A wim-layout image keeps its payload inside PE.wim; present it merged over the media root
+	// so the inspection commands read through it transparently. If the WIM cannot be read, fall
+	// back to the media-only backing — the guardrail then points the caller at PE.wim.
+	if isWIMLayoutImage(b) {
+		if merged, err := wimLayoutBacking(b); err == nil {
+			return merged, nil
+		}
+	}
+	return b, nil
 }
 
 // walkImage collects every file path in the image, in sorted order.
@@ -261,6 +270,13 @@ func printImageList(w io.Writer, b source.Backing, pattern string, long bool) er
 		return err
 	}
 	fmt.Fprintf(w, "\n%d file(s) matched.\n", n)
+	// On a wim-layout image the listing shows only the media root (the WIM, the boot core,
+	// the loader) — the Windows payload is inside the WIM. Say so when the caller listed
+	// everything or matched nothing, the two cases where the empty-looking result would
+	// otherwise read as "that is all there is".
+	if (pat == "" || n == 0) && wimPayloadOpaque(b) {
+		fmt.Fprintf(w, "\nNote: %s.\n", wimImageHint)
+	}
 	return nil
 }
 
@@ -283,6 +299,9 @@ func resolveImageName(b source.Backing, paths []string, name string) (string, er
 	}
 	switch len(hits) {
 	case 0:
+		if wimPayloadOpaque(b) {
+			return "", fmt.Errorf("no file %q in the image; %s", name, wimImageHint)
+		}
 		return "", fmt.Errorf("no file %q in the image", name)
 	case 1:
 		return hits[0], nil

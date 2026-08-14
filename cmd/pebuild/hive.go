@@ -204,6 +204,13 @@ func readHiveData(target, file, hiveName string, bare bool) (data []byte, from s
 		return nil, "", err
 	}
 	b := src.Backing()
+	// A wim-layout image keeps its hives inside PE.wim; read through it when possible so the
+	// hive lookup below finds them, falling back to the media-only backing otherwise.
+	if isWIMLayoutImage(b) {
+		if merged, err := wimLayoutBacking(b); err == nil {
+			b = merged
+		}
+	}
 
 	if file != "" {
 		p := strings.TrimPrefix(strings.ReplaceAll(file, `\`, "/"), "/")
@@ -229,6 +236,10 @@ func readHiveData(target, file, hiveName string, bare bool) (data []byte, from s
 			return data, path.Join(target, p), nil
 		}
 		tried = append(tried, p)
+	}
+	if wimPayloadOpaque(b) {
+		return nil, "", fmt.Errorf("no %s hive in %s (looked in %s); %s",
+			strings.ToUpper(hiveName), target, strings.Join(tried, ", "), wimImageHint)
 	}
 	return nil, "", fmt.Errorf("no %s hive in %s (looked in %s)",
 		strings.ToUpper(hiveName), target, strings.Join(tried, ", "))
