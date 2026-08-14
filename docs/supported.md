@@ -11,7 +11,8 @@ mounted directory or an `.iso`.
 
 | Source | Builds | Boots to `cmd.exe` | Explorer desktop | Luna theme | Wallpaper |
 |---|---|---|---|---|---|
-| **Windows XP SP3 (32-bit)** | yes | verified | verified | verified | verified |
+| **Windows XP Professional SP3 (32-bit)** | yes | verified | verified | verified | verified |
+| **Windows XP Home Edition SP3 (32-bit)** | yes | verified | verified | verified | verified |
 | **Windows XP Professional x64 Edition (SP2)** | yes | verified | verified | verified | no — see below |
 | **Windows Server 2003 R2 SP2 (32-bit)** | yes | verified | verified | verified | not at boot — see below |
 | **Windows Server 2003 R2 SP2 (x64)** | yes | verified | verified | verified | no — see below |
@@ -227,7 +228,7 @@ takes a DHCP address; without it no network stack is configured at all.
 
 | Source | Network |
 |---|---|
-| Windows XP SP3 (32-bit) | **verified** — installs TCP/IP, binds it to the adapter, leases an address, answers `ping` |
+| Windows XP Professional SP3 (32-bit) | **verified** — installs TCP/IP, binds it to the adapter, leases an address, answers `ping` |
 | Windows XP x64 / Server 2003 (build 3790, both architectures) | **does not work** — see below |
 
 **Verified** on an emulated **RTL8139** (`-device rtl8139`), which is the only adapter
