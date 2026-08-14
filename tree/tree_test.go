@@ -375,6 +375,62 @@ func TestWriteStaysInsideOutputTree(t *testing.T) {
 	}
 }
 
+// TestTargetName pins the output-name rule: lowercase by default (the tree convention),
+// upper-cased when the copy carries the uppercase attribute (bit 8) — the original plugin
+// format's flag for a file a real-mode reader looks up by an uppercase name on CD-boot media
+// the ISO stage does not re-case. A rename target is subject to the same casing.
+func TestTargetName(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		a    action.Action
+		in   string
+		want string
+	}{
+		{"default lowercases", action.Action{}, "CDLOAD.BIN", "cdload.bin"},
+		{"already lower stays", action.Action{}, "grldr", "grldr"},
+		{"uppercase attribute", action.Action{Uppercase: true}, "cdload.bin", "CDLOAD.BIN"},
+		{"uppercase single-letter name", action.Action{Uppercase: true}, "a", "A"},
+		{"rename is lowercased", action.Action{Rename: "Loader.Bin"}, "ignored", "loader.bin"},
+		{"rename is uppercased", action.Action{Rename: "loader.bin", Uppercase: true}, "ignored", "LOADER.BIN"},
+	} {
+		if got := targetName(tt.a, tt.in); got != tt.want {
+			t.Errorf("%s: targetName(%+v, %q) = %q, want %q", tt.name, tt.a, tt.in, got, tt.want)
+		}
+	}
+}
+
+// TestAssembleUppercase drives the uppercase attribute end to end: a copy with it set is
+// placed under the upper-cased name, a copy without it under the lowercase default — the
+// original format's attribute-8 behavior, for a file a real-mode reader looks up by an
+// uppercase name on CD, while a default copy (like grldr, which grub reads case-blind) stays
+// lowercase.
+func TestAssembleUppercase(t *testing.T) {
+	out := t.TempDir()
+	origins := map[string]fs.FS{
+		"boot": fstest.MapFS{
+			"cdload.bin": {Data: []byte("loader")},
+			"cdload.cfg": {Data: []byte("config")},
+			"grldr":      {Data: []byte("grub")},
+		},
+	}
+	acts := []action.Action{
+		{Kind: action.CopyFile, Src: "cdload.bin", Origin: "boot", Path: `media\boot`, FromRoot: true, Uppercase: true},
+		{Kind: action.CopyFile, Src: "cdload.cfg", Origin: "boot", Path: `media\boot`, FromRoot: true, Uppercase: true},
+		{Kind: action.CopyFile, Src: "grldr", Origin: "boot", Path: "media", FromRoot: true}, // default lowercase
+	}
+	res, err := Assemble(context.Background(), acts, testLayout(), testSource(t), testRoots(), origins, out, nil)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	want := []string{"media/boot/CDLOAD.BIN", "media/boot/CDLOAD.CFG", "media/grldr"}
+	if diff := cmp.Diff(want, res.Written); diff != "" {
+		t.Errorf("Written mismatch (-want +got):\n%s", diff)
+	}
+	assertFile(t, out, "media/boot/CDLOAD.BIN", []byte("loader"))
+	assertFile(t, out, "media/boot/CDLOAD.CFG", []byte("config"))
+	assertFile(t, out, "media/grldr", []byte("grub"))
+}
+
 func TestMkdir(t *testing.T) {
 	out := t.TempDir()
 	acts := []action.Action{

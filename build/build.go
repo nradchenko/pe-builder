@@ -45,6 +45,9 @@ type Report struct {
 	Skipped []string
 	// Hives lists the output-relative paths of the registry hives written.
 	Hives []string
+	// CoreMembers lists the output-relative paths of the pre-wimmf boot closure — the
+	// coreimg member set — computed only for the wim layout, empty otherwise.
+	CoreMembers []string
 	// ISOPath, ISOSize, and VolumeLabel describe the mastered image; ISOPath is empty
 	// when the target produced no media.
 	ISOPath     string
@@ -101,6 +104,12 @@ func Build(ctx context.Context, m *manifest.Manifest, opts ...Option) (*Report, 
 			return nil, fmt.Errorf("bootable output requires an iso source: %w", err)
 		}
 	}
+	// The WIM layout only has a media tail for the iso target; enforce the coupling here
+	// too (manifest.Validate also checks it) so a direct Build caller that skipped
+	// validation cannot silently produce a classic tree for a requested WIM layout.
+	if m.Layout == manifest.LayoutWIM && m.Output.Target != manifest.TargetISO {
+		return nil, fmt.Errorf("layout %q requires output.target %q", manifest.LayoutWIM, manifest.TargetISO)
+	}
 
 	selected, err := selectPlugins(m, id)
 	if err != nil {
@@ -122,7 +131,10 @@ func Build(ctx context.Context, m *manifest.Manifest, opts ...Option) (*Report, 
 	}
 	defer cleanupBuilds()
 
-	rep, err := assemble(ctx, src.Backing(), id, outDir, selected, o.cache)
+	// The WIM layout needs the pre-wimmf boot closure resolved to tree paths (for the coreimg
+	// it maps into RAM); compute it during assembly, where the actions and the indexed source
+	// are available.
+	rep, err := assemble(ctx, src.Backing(), id, outDir, selected, o.cache, m.Layout == manifest.LayoutWIM)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +162,14 @@ func Build(ctx context.Context, m *manifest.Manifest, opts ...Option) (*Report, 
 	// produce a broken image, and mastering consumes the tree, so leave it for
 	// inspection instead. The per-file failures already set a non-zero exit.
 	if m.Output.Target == manifest.TargetISO && len(rep.Errors) == 0 {
-		if err := emitISO(ctx, m, outDir, rep); err != nil {
+		// The layout picks the media tail: classic masters the tree onto a CDBOOT ISO; wim
+		// captures it into a WIM behind a grub4dos/coreimg chain that ships no Microsoft boot
+		// binary. Validation guarantees a WIM layout targets the iso, so both land here.
+		emit := emitISO
+		if m.Layout == manifest.LayoutWIM {
+			emit = emitWIMCDISO
+		}
+		if err := emit(ctx, m, outDir, rep); err != nil {
 			return nil, err
 		}
 		if !m.Build.KeepWork {
@@ -173,7 +192,10 @@ func Build(ctx context.Context, m *manifest.Manifest, opts ...Option) (*Report, 
 // source layout is available, so files.exclude can match a copy by its resolved output
 // path — and apply after the base layer, last-writer-wins. Their file origins let the
 // tree assembler read a file a plugin ships from the plugin rather than the source.
-func assemble(ctx context.Context, backing source.Backing, id source.Identity, outDir string, selected []plugin.Selected, cache *buildcache.Cache) (*Report, error) {
+// wantCore requests the pre-wimmf boot closure (the coreimg member set) be resolved and
+// stored in the report — needed only by the WIM media tail. It is computed here, where
+// the copy actions, source layout, and hive outputs the resolution needs are all in scope.
+func assemble(ctx context.Context, backing source.Backing, id source.Identity, outDir string, selected []plugin.Selected, cache *buildcache.Cache, wantCore bool) (*Report, error) {
 	t := time.Now()
 	l, err := layout.Parse(backing, id)
 	if err != nil {
@@ -253,9 +275,27 @@ func assemble(ctx context.Context, backing source.Backing, id source.Identity, o
 
 	// Copy the disc identity markers (WIN51*) and boot font from the source root to
 	// the tree root, where the loader looks for them to confirm the disc.
-	if err := copyIdentityMarkers(backing, outDir); err != nil {
+	markers, err := copyIdentityMarkers(backing, outDir)
+	if err != nil {
 		return nil, fmt.Errorf("copy identity markers: %w", err)
 	}
+
+	// Resolve the pre-wimmf boot closure to tree paths for the WIM media tail. It runs
+	// after the hives and the identity markers so both are available (the coreimg is itself
+	// the disc setupldr validates, so it must carry the markers and boot font), and reuses
+	// the already-indexed source, the assembled actions, and the written set.
+	if wantCore {
+		core, err := base.ComputeBootCore(pw, l, base.PinnedHAL(acts))
+		if err != nil {
+			return nil, fmt.Errorf("compute boot core: %w", err)
+		}
+		rep.CoreMembers = coreMemberPaths(core, acts, l, roots, res.Written, rep.Hives, markers)
+		if err := requireCoreEssentials(rep.CoreMembers); err != nil {
+			return nil, fmt.Errorf("boot core: %w", err)
+		}
+		slog.Info("resolved boot core", "members", len(rep.CoreMembers))
+	}
+
 	return rep, nil
 }
 
@@ -287,7 +327,27 @@ func needsMachineClasses(selected []plugin.Selected) bool {
 // warned about.
 func selectPlugins(m *manifest.Manifest, id source.Identity) ([]plugin.Selected, error) {
 	enabled := m.EnabledPlugins()
-	if len(enabled) == 0 {
+
+	enabledNames := make([]string, len(enabled))
+	for i, p := range enabled {
+		enabledNames[i] = p.Name
+	}
+	// The WIM layout implicitly enables the wim-cd-boot meta-plugin; its depends pull in the
+	// grub4dos loader, the firadisk reclaim driver, and the wimmf overlay through the usual
+	// transitive auto-enable. Seed it here unless the manifest already lists it, so a WIM build
+	// needs only `layout = "wim"` and not a hand-enabled plugin block.
+	if m.Layout == manifest.LayoutWIM {
+		// Reject the contradiction directly: an explicitly-disabled wim-cd-boot would otherwise
+		// reach Resolve as both required and disabled, whose generic "explicitly-disabled
+		// dependency" error hides the real cause.
+		if containsFold(m.DisabledPluginNames(), wimCDBootPlugin) {
+			return nil, fmt.Errorf("layout %q requires the %q plugin; remove its `enabled = false`", manifest.LayoutWIM, wimCDBootPlugin)
+		}
+		if !containsFold(enabledNames, wimCDBootPlugin) {
+			enabledNames = append(enabledNames, wimCDBootPlugin)
+		}
+	}
+	if len(enabledNames) == 0 {
 		return nil, nil
 	}
 
@@ -296,11 +356,6 @@ func selectPlugins(m *manifest.Manifest, id source.Identity) ([]plugin.Selected,
 		return nil, err
 	}
 	discovered, discErr := plugin.Discover(sp, plugin.TargetFor(id))
-
-	enabledNames := make([]string, len(enabled))
-	for i, p := range enabled {
-		enabledNames[i] = p.Name
-	}
 	// Resolve the enabled set into the full ordered build set: auto-enable the transitive
 	// depends closure, order dependencies before their dependents, and reject cycles,
 	// undiscoverable requirements, and explicitly-disabled dependencies.

@@ -102,7 +102,7 @@ func TestAssemblePipeline(t *testing.T) {
 	}
 
 	out := t.TempDir()
-	rep, err := assemble(context.Background(), backing, id, out, nil, nil)
+	rep, err := assemble(context.Background(), backing, id, out, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +176,7 @@ func TestAssembleWithPlugin(t *testing.T) {
 	}}
 
 	out := t.TempDir()
-	rep, err := assemble(context.Background(), backing, id, out, selected, nil)
+	rep, err := assemble(context.Background(), backing, id, out, selected, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,6 +253,21 @@ demo.exe=2,,1
 		t.Fatal(err)
 	}
 
+	// Stub the external plugins the built-in wim-cd-boot meta-plugin depends on, so its
+	// transitive closure resolves under layout=wim. A real WIM build installs these from
+	// the wimmf/firadisk/grub4dos packages; here only their identity (the directory name the
+	// `depends` list names) matters, so a bare enable-off .inf suffices.
+	for _, dep := range []string{"wimmf", "firadisk", "grub4dos"} {
+		ddir := filepath.Join(dir, dep)
+		if err := os.MkdirAll(ddir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		depInf := "[Version]\nSignature=\"$Windows NT$\"\n[PEBuilder]\nName=\"" + dep + "\"\nEnable=0\n"
+		if err := os.WriteFile(filepath.Join(ddir, dep+".inf"), []byte(depInf), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	// No enabled plugins: the base layer is the whole build.
 	if sel, err := selectPlugins(&manifest.Manifest{PluginsDir: dir}, source.Identity{Build: 2600}); err != nil || sel != nil {
 		t.Fatalf("no enabled plugins: sel=%v err=%v", sel, err)
@@ -277,6 +292,32 @@ demo.exe=2,,1
 	missing := &manifest.Manifest{PluginsDir: dir, Plugins: []manifest.Plugin{{Name: "ghost", Enabled: true}}}
 	if _, err := selectPlugins(missing, source.Identity{Build: 2600}); err == nil {
 		t.Error("enabled-but-absent plugin returned no error")
+	}
+
+	// The WIM layout implicitly enables the built-in wim-cd-boot meta-plugin, even with no
+	// manifest plugin block — so a WIM build needs only `layout = "wim"`.
+	wim := &manifest.Manifest{PluginsDir: dir, Layout: manifest.LayoutWIM}
+	wsel, err := selectPlugins(wim, source.Identity{Build: 2600})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, s := range wsel {
+		if strings.EqualFold(s.Plugin.Name, "wim-cd-boot") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("layout=wim selection %+v does not include the implicit wim-cd-boot plugin", wsel)
+	}
+
+	// Explicitly disabling wim-cd-boot under layout=wim is a contradiction and must fail
+	// with a clear message, not the resolver's generic disabled-dependency error.
+	conflict := &manifest.Manifest{PluginsDir: dir, Layout: manifest.LayoutWIM,
+		Plugins: []manifest.Plugin{{Name: "wim-cd-boot", Enabled: false}}}
+	_, err = selectPlugins(conflict, source.Identity{Build: 2600})
+	if err == nil || !strings.Contains(err.Error(), "requires the \"wim-cd-boot\" plugin") {
+		t.Fatalf("disabled wim-cd-boot under layout=wim: err = %v, want a clear requirement error", err)
 	}
 }
 
@@ -401,7 +442,7 @@ func TestAssembleBuiltPlugin(t *testing.T) {
 	defer cleanup()
 
 	out := t.TempDir()
-	rep, err := assemble(context.Background(), backing, id, out, selected, nil)
+	rep, err := assemble(context.Background(), backing, id, out, selected, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -677,7 +718,7 @@ func TestAssembleCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	rep, err := assemble(ctx, backing, id, t.TempDir(), nil, nil)
+	rep, err := assemble(ctx, backing, id, t.TempDir(), nil, nil, false)
 	if err == nil {
 		t.Fatalf("assemble with a cancelled context returned no error (rep=%+v)", rep)
 	}

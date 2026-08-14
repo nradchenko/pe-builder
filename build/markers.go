@@ -23,11 +23,15 @@ const bootFontName = "bootfont.bin"
 // confirm it is reading a genuine Windows disc; without them it stops and prompts
 // for the CD. The boot font is copied alongside them. These live at the disc root,
 // outside the system-root (I386) tree the file stage assembles.
-func copyIdentityMarkers(backing source.Backing, outDir string) error {
+// It returns the output-tree-relative paths it wrote (the root marker names), so a caller
+// that masters a separate bootable volume — the wim-cd coreimg, itself the disc setupldr
+// validates — can carry the same markers.
+func copyIdentityMarkers(backing source.Backing, outDir string) ([]string, error) {
 	entries, err := fs.ReadDir(backing, ".")
 	if err != nil {
-		return fmt.Errorf("read source root: %w", err)
+		return nil, fmt.Errorf("read source root: %w", err)
 	}
+	var written []string
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -38,13 +42,14 @@ func copyIdentityMarkers(backing source.Backing, outDir string) error {
 		}
 		data, err := fs.ReadFile(backing, name)
 		if err != nil {
-			return fmt.Errorf("read %s: %w", name, err)
+			return nil, fmt.Errorf("read %s: %w", name, err)
 		}
 		if err := os.WriteFile(filepath.Join(outDir, name), data, 0o644); err != nil {
-			return fmt.Errorf("write %s: %w", name, err)
+			return nil, fmt.Errorf("write %s: %w", name, err)
 		}
+		written = append(written, name)
 	}
-	return nil
+	return written, nil
 }
 
 // isIdentityMarker reports whether a source-root file is a disc-identity marker

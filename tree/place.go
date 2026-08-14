@@ -180,12 +180,18 @@ func readSource(src source.Backing, roots source.Roots, area source.Area, cabs *
 }
 
 // targetName is the file's output name: its rename target if the action renames it,
-// otherwise its canonical name. Casing is left as-is (see the package doc).
+// otherwise its canonical name. The name is lowercased (the tree's convention; the ISO
+// stage uppercases the whole tree for the boot reader) unless the copy sets the uppercase
+// attribute — which a file needs when a real-mode reader looks it up by an uppercase name
+// on media the ISO stage does not re-case, as the WIM boot chain's loader config does.
 func targetName(a action.Action, name string) string {
 	if a.Rename != "" {
-		return strings.ToLower(a.Rename)
+		name = a.Rename
 	}
-	return name
+	if a.Uppercase {
+		return strings.ToUpper(name)
+	}
+	return strings.ToLower(name)
 }
 
 // OutputPath returns the output-tree-relative (forward-slash) path a copy action

@@ -76,6 +76,20 @@ func (iso) Emit(ctx context.Context, treeDir string, opts Options) error {
 		return fmt.Errorf("iso: uppercase tree: %w", err)
 	}
 
+	return MasterElTorito(ctx, treeDir, opts, "/"+strings.ToUpper(boot.BootSectName))
+}
+
+// MasterElTorito masters workDir into an El Torito no-emulation bootable ISO at
+// opts.OutputPath, with bootFile (an on-disc absolute path) as the boot image. It is the
+// shared mastering step: the classic tail passes an uppercased tree and the CDBOOT sector;
+// the WIM tail passes its media tree and grldr's no-emulation image. Mastering consumes
+// workDir (go-diskfs walks and removes it). Names are written verbatim (UntranslatedFilenames)
+// in ECMA-119 §9.3 order, so a caller that needs uppercase on-disc identifiers must uppercase
+// workDir first.
+func MasterElTorito(ctx context.Context, workDir string, opts Options, bootFile string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(opts.OutputPath), 0o755); err != nil {
 		return fmt.Errorf("iso: create output dir: %w", err)
 	}
@@ -114,7 +128,7 @@ func (iso) Emit(ctx context.Context, treeDir string, opts Options) error {
 	fsys, err := disk.CreateFilesystem(godisk.FilesystemSpec{
 		Partition: 0,
 		FSType:    filesystem.TypeISO9660,
-		WorkDir:   treeDir,
+		WorkDir:   workDir,
 	})
 	if err != nil {
 		return fmt.Errorf("iso: create filesystem: %w", err)
@@ -129,7 +143,7 @@ func (iso) Emit(ctx context.Context, treeDir string, opts Options) error {
 	entry := &iso9660.ElToritoEntry{
 		Platform:     iso9660.BIOS,
 		Emulation:    iso9660.NoEmulation,
-		BootFile:     "/" + strings.ToUpper(boot.BootSectName),
+		BootFile:     bootFile,
 		HideBootFile: true,
 	}
 	entry.SetLoadSize(4)
@@ -143,7 +157,7 @@ func (iso) Emit(ctx context.Context, treeDir string, opts Options) error {
 		ElTorito:              et,
 		VolumeIdentifier:      opts.VolumeLabel,
 		UntranslatedFilenames: true, // verbatim long, mixed-case names (mkisofs -U); no 8.3, no ;1
-		SortDirectoryRecords:  true, // ECMA-119 §9.3 order, which SETUPLDR's reader requires
+		SortDirectoryRecords:  true, // ECMA-119 §9.3 order
 	}); err != nil {
 		return fmt.Errorf("iso: finalize: %w", err)
 	}
