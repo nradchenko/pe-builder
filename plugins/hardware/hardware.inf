@@ -12,7 +12,6 @@ Signature = "$Windows NT$"
 
 [PEBuilder]
 Name = "Hardware install"
-Enable = 0
 
 [Update]
 depends = startup

@@ -9,7 +9,6 @@ Signature = "$Windows NT$"
 
 [PEBuilder]
 Name = "Network tools"
-Enable = 0
 
 [Update]
 depends = hardware

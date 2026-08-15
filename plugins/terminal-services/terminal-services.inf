@@ -16,7 +16,6 @@ Signature = "$Windows NT$"
 
 [PEBuilder]
 Name = "Terminal services (session subsystem)"
-Enable = 0
 
 ; The suite bit that makes winsrv run the WinStation init at all — without it the stack below
 ; starts and has nothing to serve.

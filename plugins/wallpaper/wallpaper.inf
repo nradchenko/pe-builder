@@ -14,7 +14,6 @@ Signature = "$Windows NT$"
 
 [PEBuilder]
 Name = "Desktop wallpaper"
-Enable = 0
 
 ; explorer-shell = the desktop this decorates, and the process that reads these values.
 [Update]

@@ -9,8 +9,7 @@
 Signature = "$Windows NT$"
 
 [PEBuilder]
-Name   = "Press any key to boot from CD"
-Enable = 0
+Name = "Press any key to boot from CD"
 
 ; bootfix.bin is a standalone real-mode blob holding the prompt, the hard-disk check it
 ; is conditional on, and the wait; the CD boot sector loads it by name if it is there,

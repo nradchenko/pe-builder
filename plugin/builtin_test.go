@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"testing"
 
+	"github.com/nradchenko/pe-builder/inf"
 	"github.com/nradchenko/pe-builder/plugins"
 )
 
@@ -56,6 +57,55 @@ func TestBuiltinBuildCapablePluginsShipSource(t *testing.T) {
 		if !hasBuildSource(t, sub) {
 			t.Errorf("built-in %q declares [Build] but ships no source file beyond its .inf and "+
 				"Makefile; add its source to plugins/embed.go", name)
+		}
+	}
+}
+
+// TestBuiltinsDeclareNoEnable keeps [PEBuilder] Enable out of the plugins we ship.
+//
+// pebuild parses the key for the format's sake and acts on none of it: a build enables what
+// its manifest names, plus the depends closure of those. A built-in carrying Enable=1 would
+// state something untrue — poweroff carried one and was never enabled by default — and even
+// Enable=0 is a line that looks like it decides something. Our .inf files are what people
+// copy when writing their own, so the key stays out of them entirely. A foreign plugin may
+// declare whatever it likes; `plugins info` tells its author the declaration is inert.
+//
+// Checked on the raw section rather than through Plugin.DeclaredEnable, which cannot tell
+// an absent key from Enable=0 — the distinction this test exists to hold.
+func TestBuiltinsDeclareNoEnable(t *testing.T) {
+	dirs, err := fs.ReadDir(plugins.FS, ".")
+	if err != nil {
+		t.Fatalf("read embedded plugins: %v", err)
+	}
+	for _, dir := range dirs {
+		if !dir.IsDir() || !isPluginDir(plugins.FS, dir.Name()) {
+			continue
+		}
+		name := dir.Name()
+		sub, err := fs.Sub(plugins.FS, name)
+		if err != nil {
+			t.Fatalf("sub %q: %v", name, err)
+		}
+		entries, err := fs.ReadDir(sub, ".")
+		if err != nil {
+			t.Fatalf("read %q: %v", name, err)
+		}
+		for _, e := range entries {
+			if e.IsDir() || !isINF(e.Name()) {
+				continue
+			}
+			b, err := fs.ReadFile(sub, e.Name())
+			if err != nil {
+				t.Fatalf("read %s/%s: %v", name, e.Name(), err)
+			}
+			f, err := inf.Parse(b)
+			if err != nil {
+				t.Fatalf("parse %s/%s: %v", name, e.Name(), err)
+			}
+			if _, ok := sectionMap(f.Section("PEBuilder", 0))["enable"]; ok {
+				t.Errorf("%s/%s declares [PEBuilder] Enable, which nothing reads; drop the line "+
+					"— the manifest is what enables a plugin", name, e.Name())
+			}
 		}
 	}
 }

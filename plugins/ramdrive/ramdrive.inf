@@ -10,7 +10,6 @@ Signature = "$Windows NT$"
 
 [PEBuilder]
 Name = "RAM drive"
-Enable = 0
 
 ; Needs the partition/volume/mount-manager stack up (partmgr -> ftdisk -> volume ->
 ; mountmgr) so mountmgr can letter the registered volume interface.

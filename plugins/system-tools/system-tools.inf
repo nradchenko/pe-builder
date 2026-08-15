@@ -12,7 +12,6 @@ Signature = "$Windows NT$"
 
 [PEBuilder]
 Name = "System tools"
-Enable = 0
 
 [Update]
 depends = win32-gui

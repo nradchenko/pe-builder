@@ -15,8 +15,8 @@ plugin "poweroff" {
 }
 ```
 
-(The `.inf` declares `Enable = 1`, but that field is descriptive metadata — what a build contains is
-decided by the manifest alone, so a plugin no manifest names is not built.)
+(The manifest alone decides: a plugin no manifest names — directly, or as something it names
+depends on — is not built.)
 
 ## Why a tool is needed at all
 

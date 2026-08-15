@@ -14,7 +14,6 @@ Signature = "$Windows NT$"
 
 [PEBuilder]
 Name = "Startup run list"
-Enable = 0
 
 ; Self-test task — see README.md § Proving the walk. The value is the *stage* it joins,
 ; so "off" parks it in a stage nothing ever runs: it still appears in `perun --list`

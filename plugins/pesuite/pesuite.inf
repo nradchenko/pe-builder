@@ -14,7 +14,6 @@ Signature = "$Windows NT$"
 
 [PEBuilder]
 Name = "PE suite mask"
-Enable = 0
 
 ; Compiled from the bundled pesuite.c at build time rather than shipping a binary; MinGW-w64, no
 ; WDK. See README.md § Build — it names the proven toolchain and kernel versions. The driver is

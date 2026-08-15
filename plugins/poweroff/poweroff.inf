@@ -12,7 +12,6 @@ Signature = "$Windows NT$"
 
 [PEBuilder]
 Name = "poweroff"
-Enable = 1
 
 ; The same source on either architecture; only the toolchain differs, so the shared [Build]
 ; holds the output and each [Build.<arch>] names that architecture's compiler.

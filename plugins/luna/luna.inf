@@ -14,7 +14,6 @@ Signature = "$Windows NT$"
 
 [PEBuilder]
 Name = "Luna visual style"
-Enable = 0
 
 ; explorer-shell = the desktop this themes, the applier (peshell), and uxtheme.dll.
 ; terminal-services = the console session the theme server attaches to.

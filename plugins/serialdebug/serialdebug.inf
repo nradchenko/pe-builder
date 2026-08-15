@@ -8,8 +8,7 @@
 Signature = "$Windows NT$"
 
 [PEBuilder]
-Name   = "Kernel debugger on COM1"
-Enable = 0
+Name = "Kernel debugger on COM1"
 
 ; The loader options are SET, not appended, so each architecture restates the base layer's
 ; whole string plus the debug flags — the HAL differs per architecture. TestSerialDebugMatchesBase

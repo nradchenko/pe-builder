@@ -17,7 +17,6 @@ Signature = "$Windows NT$"
 
 [PEBuilder]
 Name = "Network UI"
-Enable = 0
 
 ; explorer-shell = the desktop this appears on, and the shell that registers the COM servers named
 ; below and loads shell service objects at start-up. hardware = the run-time pass that configures
