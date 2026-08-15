@@ -28,8 +28,13 @@ looks for plugins, in order:
 4. the plugins built into pebuild.
 
 A more specific location shadows a less specific one, and a build applies only the
-plugins your manifest **enables**. (The `plugins list`/`info` commands additionally
-look in `./plugins`, so a plugin you install with `--local` shows up there.)
+plugins your manifest **enables**, plus the plugins those depend on. (The `plugins
+list`/`info` commands additionally look in `./plugins`, so a plugin you install with
+`--local` shows up there.)
+
+Nothing else turns a plugin on. In particular, `[PEBuilder] Enable = 1` in a plugin's
+own `.inf` — a key of the original tool's format, which pebuild accepts and ignores —
+does not enable it; only the manifest does.
 
 **Enable a plugin** in the manifest with a `plugin` block:
 
@@ -94,7 +99,6 @@ Signature = "$Windows NT$"          ; required
 
 [PEBuilder]
 Name   = "My Tool"
-Enable = 1
 
 [SourceDisksFiles]
 ; file = directoryID[, renamedTo][, attribute]   (2 = system32)

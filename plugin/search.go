@@ -75,6 +75,12 @@ func (sp SearchPath) List() []Available {
 // a plugin's [Build] command is never picked up implicitly.
 const LocalPluginsDir = "plugins"
 
+// LocalSourceLabel is the search-path label LocalPluginsDir is added under, and is what
+// a caller matches on to tell that tier apart — the CLI warns that a build will not
+// resolve from it. Exported so that relabelling the tier moves both, rather than leaving
+// a caller comparing against a literal that no longer occurs.
+const LocalSourceLabel = "local"
+
 // DefaultSearchPath assembles the plugin search path a build resolves from, in
 // precedence order: the project plugins_dir (projectDir, if set), the
 // PEBUILD_PLUGIN_PATH entries, the per-user global dir, and the embedded built-ins.
@@ -106,7 +112,7 @@ func searchPath(projectDir string, includeLocal bool) (SearchPath, error) {
 	}
 	if includeLocal && projectDir != LocalPluginsDir {
 		// Lenient: a missing ./plugins is simply not a source (unlike an explicit dir).
-		sp = append(sp, DirSource{Root: LocalPluginsDir, Label: "local"})
+		sp = append(sp, DirSource{Root: LocalPluginsDir, Label: LocalSourceLabel})
 	}
 	for _, d := range envDirs() {
 		if err := validateDir(d); err != nil {

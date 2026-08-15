@@ -1,6 +1,6 @@
 Name:    sample
 Display: Sample Plugin ("demo")
-Enabled: true
+Enable:  true
 Help:    sample.htm
 Config:  samplecfg.exe @PluginFile@
 Update:  id=sample version=2.0.1 url=http://example.invalid/check depends=[ramdisk base] parent=core

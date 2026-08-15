@@ -132,11 +132,18 @@ func newPluginsInfoCmd() *cobra.Command {
 // ./plugins implicitly.
 func printLocalNote(w io.Writer, avail []plugin.Available) {
 	for _, a := range avail {
-		if a.Source.Name() == "local" {
-			fmt.Fprintf(w, "\nNote: %s/ is shown for convenience; a build uses these only if its manifest's plugins_dir points here.\n", plugin.LocalPluginsDir)
+		if a.Source.Name() == plugin.LocalSourceLabel {
+			printLocalDirNote(w)
 			return
 		}
 	}
+}
+
+// printLocalDirNote states the caveat itself, so `info` carries it for a single plugin
+// exactly as `list` does for a listing — the two commands search ./plugins, and a build
+// does not.
+func printLocalDirNote(w io.Writer) {
+	fmt.Fprintf(w, "\nNote: %s/ is shown for convenience; a build uses these only if its manifest's plugins_dir points here.\n", plugin.LocalPluginsDir)
 }
 
 func printAvailable(w io.Writer, avail []plugin.Available) {
@@ -182,7 +189,6 @@ func printPluginInfo(w io.Writer, p *plugin.Plugin, source string) {
 	fmt.Fprintf(w, "Name:    %s\n", p.Name)
 	fmt.Fprintf(w, "Source:  %s\n", source)
 	fmt.Fprintf(w, "Display: %s\n", p.Display)
-	fmt.Fprintf(w, "Enabled: %v\n", p.Enabled)
 	if p.Help != "" {
 		fmt.Fprintf(w, "Help:    %s\n", p.Help)
 	}
@@ -202,6 +208,14 @@ func printPluginInfo(w io.Writer, p *plugin.Plugin, source string) {
 		}
 		fmt.Fprintln(w)
 	}
+	// Enable=1 only. Enable=0 is just as inert, but it agrees with what happens, so it
+	// misleads no one about their own plugin; only a declaration the engine contradicts
+	// is worth interrupting for. Reporting every line pebuild does not act on — Enable=0,
+	// Help, Config — is a plugin linter's job rather than this one note's.
+	if p.DeclaredEnable {
+		fmt.Fprintf(w, "Note:    this plugin declares Enable=1, which pebuild does not read.\n"+
+			"         Enable it in the manifest: plugin %q { enabled = true }\n", p.Name)
+	}
 
 	printPluginOptions(w, p.Options)
 
@@ -220,4 +234,10 @@ func printPluginInfo(w io.Writer, p *plugin.Plugin, source string) {
 		fmt.Fprintf(tw, "  %s\t%d\n", k, counts[action.Kind(k)])
 	}
 	tw.Flush()
+
+	// Last, so it is the line left on screen: naming this plugin in a manifest is not
+	// enough if it lives in ./plugins, which only these commands search.
+	if source == plugin.LocalSourceLabel {
+		printLocalDirNote(w)
+	}
 }

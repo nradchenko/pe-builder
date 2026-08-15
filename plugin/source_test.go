@@ -224,7 +224,7 @@ func TestManagementSearchPathLocalTier(t *testing.T) {
 	for _, s := range mgmt {
 		labels = append(labels, s.Name())
 	}
-	if want := []string{"local", "global", BuiltinLabel}; !reflect.DeepEqual(labels, want) {
+	if want := []string{LocalSourceLabel, "global", BuiltinLabel}; !reflect.DeepEqual(labels, want) {
 		t.Errorf("management path = %v, want %v", labels, want)
 	}
 }

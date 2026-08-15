@@ -69,8 +69,8 @@ func TestResolveDefaultEnableIgnored(t *testing.T) {
 	// The dependency's own [PEBuilder] Enable is false (dep() leaves it zero); it is
 	// still pulled in because a dependent needs it.
 	runtime := dep("win32-gui", "")
-	if runtime.Enabled() {
-		t.Fatal("test setup: win32-gui should default to Enable=false")
+	if runtime.Main().DeclaredEnable {
+		t.Fatal("test setup: win32-gui should declare Enable=false")
 	}
 	disc := []*Discovered{dep("notepad", "", "win32-gui"), runtime}
 	got := resolve(t, disc, []string{"notepad"}, nil)

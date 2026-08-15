@@ -41,13 +41,6 @@ func (d *Discovered) Main() *Plugin {
 	return d.Units[0]
 }
 
-// Enabled reports the plugin's default enabled state, taken from the main unit's
-// [PEBuilder] Enable. The manifest's plugin block overrides this at selection time.
-func (d *Discovered) Enabled() bool {
-	m := d.Main()
-	return m != nil && m.Enabled
-}
-
 // Update returns the main unit's [Update] section (id/depends/parent).
 func (d *Discovered) Update() Update {
 	m := d.Main()

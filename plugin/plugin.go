@@ -25,8 +25,13 @@ type Plugin struct {
 	Name string
 	// Display is the [PEBuilder] Name= value shown in the plugin dialog.
 	Display string
-	// Enabled is the default enabled state ([PEBuilder] Enable=, default false).
-	Enabled bool
+	// DeclaredEnable is the [PEBuilder] Enable= value (default false). It is what the
+	// plugin *declares*, and the engine does not act on it: a build enables the plugins
+	// its manifest names, plus the depends closure of those, and nothing else. It is
+	// parsed because this type models the INF, and read only to tell the author of a
+	// plugin that declares Enable=1 that it does nothing (`pebuild plugins info`). Our
+	// own plugins do not carry the key at all — see TestBuiltinsDeclareNoEnable.
+	DeclaredEnable bool
 	// Help is the [PEBuilder] Help= document filename, if any.
 	Help string
 	// Config is the [PEBuilder] Config= configurator command line, if any.
@@ -108,7 +113,7 @@ func Parse(name string, f *inf.File, t Target) (*Plugin, error) {
 	p.Help = pb["help"]
 	p.Config = pb["config"]
 	if v, ok := pb["enable"]; ok {
-		p.Enabled = strings.TrimSpace(v) == "1"
+		p.DeclaredEnable = strings.TrimSpace(v) == "1"
 	}
 
 	p.Update = parseUpdate(f, t.Build)

@@ -83,13 +83,17 @@ func TestDiscoverProvenanceAndMetadata(t *testing.T) {
 	if alpha.Source != "test" {
 		t.Errorf("alpha source = %q, want test", alpha.Source)
 	}
-	if !alpha.Enabled() {
-		t.Error("alpha should be enabled by default (Enable=1)")
+	// Enable= is parsed but never acted on (see Plugin.DeclaredEnable). Pinned here
+	// because `pebuild plugins info` reads the parsed value to tell the author of a
+	// plugin declaring Enable=1 that it does nothing: misparse it and that note either
+	// goes missing or appears on a plugin that never declared it.
+	if !alpha.Main().DeclaredEnable {
+		t.Error("alpha: DeclaredEnable = false, want true (its .inf declares Enable=1)")
 	}
 
 	late := byName["z_late"]
-	if late.Enabled() {
-		t.Error("z_late should be disabled by default (Enable=0)")
+	if late.Main().DeclaredEnable {
+		t.Error("z_late: DeclaredEnable = true, want false (its .inf declares Enable=0)")
 	}
 	if late.Update().Parent != "alpha" {
 		t.Errorf("z_late parent = %q, want alpha", late.Update().Parent)

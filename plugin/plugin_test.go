@@ -21,7 +21,7 @@ func renderPlugin(p *Plugin) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Name:    %s\n", p.Name)
 	fmt.Fprintf(&b, "Display: %s\n", p.Display)
-	fmt.Fprintf(&b, "Enabled: %v\n", p.Enabled)
+	fmt.Fprintf(&b, "Enable:  %v\n", p.DeclaredEnable)
 	fmt.Fprintf(&b, "Help:    %s\n", p.Help)
 	fmt.Fprintf(&b, "Config:  %s\n", p.Config)
 	if p.Update.Present {
@@ -96,8 +96,8 @@ func TestEnableDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Enabled {
-		t.Error("Enabled = true with no Enable= key, want false")
+	if p.DeclaredEnable {
+		t.Error("DeclaredEnable = true with no Enable= key, want false")
 	}
 	if p.Display != "X" {
 		t.Errorf("Display = %q, want X", p.Display)
