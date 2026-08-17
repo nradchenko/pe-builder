@@ -57,94 +57,61 @@ produces, and for the hardware an image expects.
 
 ## Status
 
-Early development. A build produces a bootable PE that reaches an interactive
-`cmd.exe`, with the console locale — code pages, fonts, and keyboard — taken from the
-source's own locale. The plugin subsystem is wired up: builds apply the plugins a
-manifest enables, and pebuild ships a set of built-ins. As early proofs of concept, the
-`explorer-shell` plugin boots to a minimal **Windows Explorer desktop** — Start menu,
-taskbar, and Control Panel — self-contained from CD alone, with a writable RAM-backed
-profile and no attached disk, and the `luna` plugin themes that desktop with the familiar
-XP **"Luna" visual style**. Enabling either auto-enables the supporting plugins it needs.
-A `poweroff` command ships as a built-in plugin, compiled from source at build time; enable
-it in your manifest like any other. A build takes a few seconds and produces an ISO of
-roughly 44 MB for the bare `cmd.exe` image up to ~63 MB for the themed desktop. See
-[`docs/plugins/`](docs/plugins/) to use or write plugins.
+A build runs in a few seconds and produces an ISO of roughly 44 MB for a bare `cmd.exe` image
+up to ~63 MB for the themed desktop. The x64 path is newer and more experimental than the
+well-worn 32-bit one, so expect more rough edges. Images are developed and tested in **QEMU**;
+booting on physical hardware is untested.
 
-**Networking** is experimental and works on 32-bit XP sources only: enable the `hardware` and
-`network-tools` plugins and a PE configures itself at boot and picks up a DHCP address. Tested
-with an emulated RTL8139 under QEMU — see [`docs/supported.md`](docs/supported.md).
-
-**64-bit sources.** Both 32-bit and x64 sources are supported, and either reaches the same
-set of images — from a `cmd.exe` prompt up to the themed Explorer desktop. The x64 path is
-newer and more experimental, so expect more rough edges;
-[`docs/supported.md`](docs/supported.md) has the detail.
-
-Images are developed and tested in **QEMU**; booting on physical hardware is untested.
+See [`docs/supported.md`](docs/supported.md) for what each source produces and the hardware it
+expects, and [`docs/plugins/`](docs/plugins/) to use or write plugins.
 
 ## Quick start
 
-You need Go and a supported Windows installation source (an `.iso` or an extracted
-directory). A desktop image also needs the MinGW-w64 cross-compiler.
-Point the example manifest at your source and build:
+You need a supported Windows installation source (an `.iso` or an extracted directory). A
+desktop image also needs the MinGW-w64 cross-compiler.
 
 > **Platforms.** Linux is the primary, tested platform. Windows is tested too — all image
 > types build and boot, with some environment setup — and macOS is experimental (it builds,
 > but is not yet run). See [`docs/install.md`](docs/install.md) for per-platform setup.
 
-```sh
-go build -o pebuild ./cmd/pebuild
+1. **Get `pebuild`.** Download the prebuilt binary for your OS from the
+   [releases page](https://github.com/nradchenko/pe-builder/releases), and put it on your
+   `PATH`. Or, with Go installed, build it from source:
 
-# edit source.path in examples/luna.hcl to your Windows media, then:
-./pebuild build examples/luna.hcl
+   ```sh
+   go install github.com/nradchenko/pe-builder/cmd/pebuild@latest
+   ```
 
-# boot the result in QEMU:
-./pebuild run examples/luna.hcl
-```
+2. **Grab a manifest and point it at your Windows media.** Save
+   [`examples/luna.hcl`](examples/luna.hcl) (the themed desktop) and set `source.path` to your
+   `.iso` or extracted source directory.
 
-`run` boots an image that `build` already produced — it never builds one itself. Give it
-the manifest, and it boots the image that manifest writes; give it an `.iso`, and it boots
-that. It reads the image to pick the emulator and machine for it, so the same command
-works for a 32- or 64-bit image; [`docs/supported.md`](docs/supported.md) spells out the
-QEMU line it amounts to, if you would rather type it yourself.
+3. **Build the image.**
 
-That boots to a **Windows Explorer desktop** — Start menu, taskbar, Control Panel — with the
-familiar XP **"Luna"** look, self-contained from CD with no attached disk. Enabling `luna` is
-all it takes; its supporting plugins are pulled in automatically:
+   ```sh
+   pebuild build luna.hcl
+   ```
 
-```hcl
-plugin "luna" {
-  enabled = true
-}
-```
+4. **Boot it in QEMU.**
 
-For the same desktop in the classic (Windows 2000) look, enable `explorer-shell` instead — the
-plugin `luna` themes ([`examples/explorer-shell.hcl`](examples/explorer-shell.hcl)):
+   ```sh
+   pebuild run luna.hcl
+   ```
 
-```hcl
-plugin "explorer-shell" {
-  enabled = true
-}
-```
+   `run` boots the image the manifest produced — it never builds one — and reads the image to
+   choose the emulator and machine, so the same command works for a 32- or 64-bit image.
 
-Add `wallpaper` for the XP desktop wallpaper, on either look — it brings the components that
-paint one, so it adds roughly 4 MB to the ISO and stays opt-in:
+This builds the themed XP **"Luna"** desktop. Point `build`/`run` at a different manifest for
+another image:
 
-```hcl
-plugin "wallpaper" {
-  enabled = true
-}
-```
+- [`examples/minimal.hcl`](examples/minimal.hcl) — a bare interactive `cmd.exe` (needs no
+  cross-compiler).
+- [`examples/explorer-shell.hcl`](examples/explorer-shell.hcl) — the desktop in the classic
+  Windows 2000 look.
 
-With no plugins at all ([`examples/minimal.hcl`](examples/minimal.hcl)) the ISO boots to an
-interactive `cmd.exe`, and needs no cross-compiler.
-
-Rebuilding from the same source is faster after the first run: pebuild caches the files it
-decompresses out of the source's large driver cabinets under `~/.cache/pe-builder` and reuses
-them on later builds, so iterating on plugins and settings doesn't repeat the expensive
-extraction each time. Pass `--no-cache` to skip it, `PEBUILD_CACHE_DIR` to relocate the cache,
-or `PEBUILD_NO_CACHE=1` to disable it.
-
-This is early, fast-moving work — details change commit to commit.
+Each manifest lists the plugins it enables; see [`docs/plugins/`](docs/plugins/) to add more
+(wallpaper, games, networking, and the rest). Rebuilds from the same source reuse a
+decompression cache under `~/.cache/pe-builder`, so iterating on a manifest stays fast.
 
 ### Booting from a WIM (experimental)
 
