@@ -113,6 +113,9 @@ Each manifest lists the plugins it enables; see [`docs/plugins/`](docs/plugins/)
 (wallpaper, games, networking, and the rest). Rebuilds from the same source reuse a
 decompression cache under `~/.cache/pe-builder`, so iterating on a manifest stays fast.
 
+Both `pebuild` and `pewalk` support shell completion (bash, zsh, fish, PowerShell) — see
+[shell completion](docs/install.md#shell-completion) to enable it.
+
 ### Booting from a WIM (experimental)
 
 By default a build masters the file tree straight onto the ISO as loose files. Setting

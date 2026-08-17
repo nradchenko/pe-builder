@@ -104,3 +104,21 @@ brew install mingw-w64
 The same Makefile assumption that bites on Windows (the hardcoded Debian DDK path) very likely
 applies here too, since Homebrew keeps its headers elsewhere again — expect to need the same
 kind of workaround until the Makefile fix lands. Reports welcome.
+
+## Shell completion
+
+`pebuild` and `pewalk` both generate completion scripts for **bash**, **zsh**, **fish**, and
+**PowerShell**. To enable completion for your current shell session (bash shown):
+
+```sh
+source <(pebuild completion bash)
+source <(pewalk completion bash)
+```
+
+Each tool's `completion` sub-command prints its own setup instructions for the chosen shell —
+the per-session form, the permanent-install path (which varies by shell and OS), and any
+prerequisite (bash needs the `bash-completion` package installed):
+
+```sh
+pebuild completion bash --help     # or: zsh, fish, powershell
+```
