@@ -2,17 +2,31 @@
 
 An open-source, cross-platform tool for building bootable
 [**Windows PE**](https://en.wikipedia.org/wiki/Windows_Preinstallation_Environment)
-environments — a Windows **live CD** — from a Windows installation source. A modern,
-Linux-first revival of the ideas behind the classic, discontinued
+environments — a Windows **live CD** — from a **Windows XP or Server 2003** installation
+source. A modern, Linux-first revival of the ideas behind the classic, discontinued
 [**Bart's PE Builder**](https://en.wikipedia.org/wiki/BartPE).
 
 ![A Windows XP live desktop built with pe-builder: the Luna visual style, the modern Start
 menu, About Windows showing Service Pack 3, and the CD drive's properties — all running from a
 ~68 MB CD with no attached disk.](docs/images/desktop.png)
 
-> **Status: early development.** A build already produces a bootable PE — an interactive
-> `cmd.exe`, a Windows Explorer desktop, or that desktop with the XP **"Luna" visual style**
-> (all early proofs of concept). Tagged releases, with prebuilt binaries, are on the
+## What it can do
+
+- **Build a bootable PE from Windows XP or Server 2003** — 32- or 64-bit sources alike.
+- **Boot to a full XP desktop** — the Explorer shell with the **"Luna" visual style**, running
+  entirely from the CD with no attached disk.
+- **Self-configuring networking** — a PE installs its own devices and picks up a DHCP address at
+  boot (32-bit XP sources today).
+- **Compact WIM boot** — an optional `wim` layout packs the whole image into a compressed `.wim`
+  for a markedly smaller ISO.
+- **Extend it with plugins** — a plugin system in the spirit of BartPE's (a similar, though not
+  drop-in, format), with built-ins for the shell, networking, games and utilities.
+- **Localized to the source** — the console and desktop follow the source's own code pages, fonts
+  and keyboard, down to double-byte locales like **Simplified Chinese**.
+- **Runs on any host OS** — build on Linux, Windows or macOS.
+
+> **Status: early development.** The images above are early proofs of concept. Tagged releases,
+> with prebuilt binaries, are on the
 > [releases page](https://github.com/nradchenko/pe-builder/releases); formats, commands, and
 > structure may still change between them.
 
