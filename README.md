@@ -157,6 +157,12 @@ reports where each module lives, flagging any the source lacks. See
 See [`docs/`](docs/README.md) for the full index — installation, supported sources, the
 inspection tools, the WIM layout, plugins, and the Bart's PE Builder reference.
 
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for how to get started, the
+conventions, and how AI-assisted contributions are handled. To report a security problem, follow
+[SECURITY.md](SECURITY.md) rather than filing a public issue.
+
 ## License
 
 Copyright © 2026 Nikita Radchenko
