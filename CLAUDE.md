@@ -157,7 +157,9 @@ PE dependencies.
   source is reused instead of re-running a full LZX folder decode. Enabled by default
   (`~/.cache/pe-builder`); `--no-cache`, `PEBUILD_NO_CACHE`, and `PEBUILD_CACHE_DIR` control
   it. A nil cache is a valid disabled cache, so a stage holds one unconditionally.
-- `plugins/` — the built-in plugins bundled with pebuild (embedded via `go:embed`). Three kinds:
+- `plugins/` — the built-in plugins bundled with pebuild (embedded via `go:embed`, so an
+  edit to one needs a rebuilt binary — or `go run ./cmd/pebuild` — before it takes effect;
+  a stale binary silently builds with the old copy). Three kinds:
   **build-capable** (ships source + a `[Build]` declaration compiled by the pre-pass, not a prebuilt
   binary — `poweroff`, `ramdrive`, `pesuite`, `explorer-shell`, `hardware`, `startup`),
   **closure-computed** (a `[Closure]` seed instead of a hand file list — `win32-gui`, `system-tools`,

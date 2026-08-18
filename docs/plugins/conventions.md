@@ -31,6 +31,11 @@ own file header is the whole story.
 The README is repository documentation, not a bundled file — `plugins/embed.go` embeds only what a
 build needs, so a README is never added to the embed list.
 
+That embedding has a consequence while you work on a built-in plugin: its `.inf` and sources are
+compiled into `pebuild` itself, so a binary built before your edit keeps using the old copy and says
+nothing about it. Rebuild after each change, or iterate with `go run ./cmd/pebuild` — see
+[Editing a built-in plugin or the base layer](../../CONTRIBUTING.md#editing-a-built-in-plugin-or-the-base-layer).
+
 ## Copyright headers
 
 Every file in a plugin opens with a copyright line and an SPDX identifier — the `.inf`, the
