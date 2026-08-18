@@ -71,6 +71,28 @@ the registry the early boot needs. **Everything else lives in the WIM** and is r
 wimmf once it attaches. That is what keeps the boot core small and the whole payload in one
 compressed file.
 
+### If you know Linux live CDs
+
+This is the same shape as a Linux live CD (the way Debian Live, Ubuntu's casper, or archiso
+boot), with Windows parts in the roles:
+
+| Linux live CD | `wim` layout |
+|---|---|
+| Bootloader loads the kernel and an **initrd** into RAM | grub4dos maps the **boot core** (`coreimg.gz`) into RAM |
+| initrd carries *just enough* drivers to reach the real root | the boot core carries only the boot-start drivers and registry |
+| Root filesystem is a compressed **squashfs**, read on demand | the payload is the compressed **`PE.WIM`**, read on demand |
+
+As on a live CD, the image itself is read-only; the writable scratch and profile space comes from
+a RAM disk, not from writing back to the WIM.
+
+Two differences are worth naming, since the parallel isn't exact. Linux pivots onto the new root
+and discards the initrd; Windows keeps the boot core and makes the rest of the tree *appear*
+through a filesystem filter driver (wimmf) — closer to `overlayfs` than to `switch_root`. And that
+filter is a read overlay, not a union mount: it serves files out of the read-only WIM but does not
+copy writes back up, so writes land on the separate RAM disk rather than transparently across the
+whole tree. If none of those names mean anything to you, ignore this section; the five steps above
+are the whole story.
+
 ## What you need
 
 - **A Windows installation source** you are licensed to use — a directory or ISO. See the
