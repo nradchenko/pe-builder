@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -171,9 +172,16 @@ func openImage(target string) (source.Backing, error) {
 	// so the inspection commands read through it transparently. If the WIM cannot be read, fall
 	// back to the media-only backing — the guardrail then points the caller at PE.wim.
 	if isWIMLayoutImage(b) {
-		if merged, err := wimLayoutBacking(b); err == nil {
+		merged, err := wimLayoutBacking(b)
+		if err == nil {
 			return merged, nil
 		}
+		// The fallback is deliberate — the media-root files stay readable — but the reason
+		// the payload could not be read is the only thing that distinguishes a truncated
+		// WIM from one this reader does not understand, and it is lost here otherwise. The
+		// callers report the failure without it, so -v is what recovers the cause.
+		slog.Debug("wim payload unreadable, reading media root only",
+			"image", target, "wim", wimImageFile, "err", err)
 	}
 	return b, nil
 }

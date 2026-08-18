@@ -233,13 +233,26 @@ func isImage(path string) (bool, error) {
 // A built PE cannot be probed the way a source can — the files Probe reads a version
 // from are decompressed and moved during the build — so the architecture comes from
 // the folder layout the build preserved.
+//
+// The image is opened the way the inspection commands open one, which is what makes
+// this work for either layout: a wim-layout image keeps its tree inside PE.wim and its
+// media root carries no architecture folder at all, so the folder is only visible
+// through the payload openImage merges over that root. Reading the image the same way
+// `image ls` does also keeps the two commands from disagreeing about what a built image
+// is, which is how a wim image ended up bootable by hand but rejected here.
 func imageArch(iso string) (string, error) {
-	src, err := source.Open(iso)
+	b, err := openImage(iso)
 	if err != nil {
 		return "", fmt.Errorf("read %s: %w", iso, err)
 	}
-	arch, ok := source.DetectArch(src.Backing())
+	arch, ok := source.DetectArch(b)
 	if !ok {
+		// A wim-layout image whose payload could not be read has no folder to find,
+		// and saying it has none would blame the image for what is a reader failure.
+		if wimPayloadOpaque(b) {
+			return "", fmt.Errorf("%s is a WIM-layout image whose payload (%s) could not be read, so the emulator to boot it with is unknown",
+				iso, wimImageFile)
+		}
 		return "", fmt.Errorf("%s has no %s folder, so it is not a built PE image",
 			iso, strings.Join(source.ArchFolders(), " or "))
 	}

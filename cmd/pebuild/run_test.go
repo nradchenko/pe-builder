@@ -4,12 +4,14 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	wim "github.com/nradchenko/go-wim"
 	"github.com/nradchenko/pe-builder/source"
 )
 
@@ -324,5 +326,89 @@ func writeFakeISO(t *testing.T, path string) {
 	copy(buf[isoDescriptorOffset:], isoDescriptorID)
 	if err := os.WriteFile(path, buf, 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestImageArchClassicLayout covers the layout that always worked: a built tree whose
+// architecture folder sits at the image root. amd64 is the case worth pinning — x64
+// media carries an i386 folder too (the real-mode boot chain), so a detector that
+// stopped at the first folder it found would call an x64 image i386 and boot it on a
+// 32-bit CPU.
+func TestImageArchClassicLayout(t *testing.T) {
+	for _, want := range []string{source.ArchI386, source.ArchAMD64} {
+		t.Run(want, func(t *testing.T) {
+			dir := t.TempDir()
+			writeTreeFile(t, dir, want+"/system32/ntoskrnl.exe", "KERNEL")
+			if want == source.ArchAMD64 {
+				writeTreeFile(t, dir, "i386/ntdetect.com", "BOOT")
+			}
+			got, err := imageArch(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != want {
+				t.Errorf("imageArch = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// TestImageArchWIMLayout is the gap this covers: a wim-layout image carries no
+// architecture folder on its media root — the tree is sealed inside PE.wim — so the
+// architecture is only visible by reading through the payload. Without that, run
+// refused an image build had just written.
+func TestImageArchWIMLayout(t *testing.T) {
+	tree := t.TempDir()
+	writeTreeFile(t, tree, "i386/system32/ntoskrnl.exe", "KERNEL")
+
+	dir := t.TempDir()
+	if err := wim.CaptureDir(context.Background(), tree, filepath.Join(dir, wimImageFile),
+		wim.ImageInfo{Name: "PE", Boot: true},
+		wim.Options{Security: wim.UniformSecurity(minimalSecurityDescriptor())}); err != nil {
+		t.Fatalf("CaptureDir: %v", err)
+	}
+	// The media-root files a wim-layout image carries beside the payload. None of them
+	// names an architecture, which is the point.
+	writeTreeFile(t, dir, "grldr", "loader")
+	writeTreeFile(t, dir, "coreimg.gz", "gz")
+	writeTreeFile(t, dir, "menu.lst", "menu")
+
+	got, err := imageArch(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != source.ArchI386 {
+		t.Errorf("imageArch = %q, want %q", got, source.ArchI386)
+	}
+}
+
+// A wim-layout image whose payload cannot be read must be reported as that, not as an
+// image with no architecture folder: the folder is missing because the reader failed,
+// and the old message blamed the image for it.
+func TestImageArchUnreadableWIM(t *testing.T) {
+	dir := t.TempDir()
+	writeTreeFile(t, dir, wimImageFile, "not a WIM at all")
+	writeTreeFile(t, dir, "grldr", "loader")
+
+	_, err := imageArch(dir)
+	if err == nil {
+		t.Fatal("imageArch on an unreadable payload returned no error")
+	}
+	if !strings.Contains(err.Error(), wimImageFile) {
+		t.Errorf("error = %v, want it to name %s", err, wimImageFile)
+	}
+}
+
+// An image that is neither layout keeps the message it had: it is not a built PE.
+func TestImageArchNotAnImage(t *testing.T) {
+	dir := t.TempDir()
+	writeTreeFile(t, dir, "readme.txt", "nothing to boot")
+
+	_, err := imageArch(dir)
+	if err == nil {
+		t.Fatal("imageArch on a directory that is not an image returned no error")
+	}
+	if !strings.Contains(err.Error(), "not a built PE image") {
+		t.Errorf("error = %v, want it to say the directory is not a built PE image", err)
 	}
 }
