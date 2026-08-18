@@ -111,12 +111,15 @@ func TestPrintVerification(t *testing.T) {
 		want2   string
 		notWant string
 	}{{
-		name: "match",
+		// The verdict enumerates the fields it compared, and takes them from the
+		// verification rather than restating them, so a field added to or dropped from
+		// Verify cannot leave the line claiming a comparison that did not happen.
+		name: "match names the fields it compared",
 		fields: []build.Field{
 			{Name: "engine content", Value: "sha256:aa", Status: build.OK},
 			{Name: "manifest", Value: "sha256:bb", Status: build.OK},
 		},
-		want: "MATCH:",
+		want: "MATCH: same build inputs — engine content and manifest.",
 	}, {
 		// A digest that differs has no per-item detail of its own, so the recorded value
 		// has to be printed: "not the current one" cannot be acted on, while the digest
@@ -140,14 +143,39 @@ func TestPrintVerification(t *testing.T) {
 		notWant: "MISMATCH:",
 	}, {
 		// An informational field never decides the verdict: a dirty version string with
-		// identical engine content is the same build.
-		name: "informational difference alone still matches",
+		// identical engine content is the same build. It is still reported, because the
+		// engine hash covers embedded content and not engine code — a differing version
+		// is the readiest sign that a different engine produced the image, and a row with
+		// a blank status column is too easy to skim past to carry that on its own.
+		name: "informational difference is noted but still matches",
 		fields: []build.Field{
 			{Name: "pebuild version", Value: "v0.5.0-dirty", Recorded: "v0.5.0", Informational: true},
 			{Name: "engine content", Value: "sha256:aa", Status: build.OK},
 		},
-		want:    "MATCH:",
+		want:    "pebuild version: image built with v0.5.0, this is v0.5.0-dirty",
+		want2:   "MATCH:",
 		notWant: "MISMATCH:",
+	}, {
+		// The note is about a difference, not about the field being informational: an
+		// image built by the very pebuild running the check must not be told so twice.
+		name: "an informational field that agrees is not noted",
+		fields: []build.Field{
+			{Name: "pebuild version", Value: "v0.5.0", Recorded: "v0.5.0", Informational: true},
+			{Name: "engine content", Value: "sha256:aa", Status: build.OK},
+		},
+		want:    "MATCH:",
+		notWant: "image built with",
+	}, {
+		// An ungraded field decides nothing, so the verdict must not list it among what
+		// it compared — the enumeration is a claim, and naming a field that carries no
+		// verdict would overstate the check by exactly one input.
+		name: "the verdict does not claim an ungraded field",
+		fields: []build.Field{
+			{Name: "pebuild version", Value: "v0.5.0", Informational: true},
+			{Name: "engine content", Value: "sha256:aa", Status: build.OK},
+		},
+		want:    "MATCH: same build inputs — engine content.",
+		notWant: "pebuild version.",
 	}}
 
 	for _, tc := range cases {

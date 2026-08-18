@@ -21,10 +21,12 @@ import (
 func newVerifyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "verify <image> [manifest.hcl]",
-		Short: "Check whether an image was built by this pebuild from a manifest",
-		Long: "Read the build receipt an image carries and recompute every field it records\n" +
+		Short: "Check an image's recorded build inputs against a manifest",
+		Long: "Read the build receipt an image carries and recompute the inputs it records\n" +
 			"from the current pebuild, manifest and plugin directories, reporting which of\n" +
 			"engine, manifest, source, plugin set or options differs.\n\n" +
+			"It compares a build's inputs; it does not prove that the pebuild you have now\n" +
+			"would produce a byte-identical image.\n\n" +
 			"<image> is a mastered .iso or a built file tree. The manifest is the second\n" +
 			"argument, else pebuild.hcl in the current directory; with no manifest to be\n" +
 			"found the receipt is simply printed.\n\n" +
@@ -137,11 +139,21 @@ func printVerification(w io.Writer, v *build.Verification, manifestPath string) 
 	}
 
 	for _, f := range v.Fields {
+		switch {
+		// An ungraded field that differs still says something worth acting on: a pebuild
+		// version other than the one the image records is the readiest sign that a
+		// different engine built it, and on a release build it is the only one, since the
+		// engine hash covers embedded content rather than engine code. Its row carries no
+		// verdict, so without this the difference shows as a blank status column and is
+		// the easiest thing here to skim past. It stays a note — Match() must not turn on
+		// it, or a dirty version string alone would fail an otherwise identical build.
+		case f.Informational && f.Recorded != "" && f.Recorded != f.Value:
+			fmt.Fprintf(w, "  %s: image built with %s, this is %s\n", f.Name, f.Recorded, f.Value)
 		// What the image claims, for a field that differs and has no per-item detail of
 		// its own (engine content, manifest — both single opaque digests). Without it the
 		// report says only that the value is not the current one, which cannot be acted
 		// on: the recorded digest is what identifies the build that did produce it.
-		if f.Status == build.Changed && len(f.Detail) == 0 && f.Recorded != "" {
+		case f.Status == build.Changed && len(f.Detail) == 0 && f.Recorded != "":
 			fmt.Fprintf(w, "  %s: built with %s\n", f.Name, f.Recorded)
 		}
 		for _, d := range f.Detail {
@@ -156,14 +168,41 @@ func printVerification(w io.Writer, v *build.Verification, manifestPath string) 
 		// than the comparison.
 		fmt.Fprintf(w, "Tainted: %s\n", v.Recorded.TaintLine())
 	}
+	// The verdict names the inputs it compared rather than claiming the image was built
+	// by this pebuild, which is more than was checked: the comparison is of a build's
+	// recorded inputs, and it is not evidence that the binary in hand would reproduce the
+	// image. Enumerating them is what keeps that honest — a reader who knows what was
+	// compared can see for themselves what was not.
 	switch {
 	case v.Match():
-		fmt.Fprintln(w, "MATCH: this image was built by this pebuild from this manifest.")
+		if names := comparedFields(v); names != "" {
+			fmt.Fprintf(w, "MATCH: same build inputs — %s.\n", names)
+			break
+		}
+		fmt.Fprintln(w, "MATCH: same build inputs as recorded.")
 	case anyUnknown(v):
 		fmt.Fprintln(w, "INCOMPLETE: some inputs could not be checked; see UNKNOWN above.")
 	default:
-		fmt.Fprintln(w, "MISMATCH: the image was not built by this pebuild from this manifest.")
+		fmt.Fprintln(w, "MISMATCH: this image was built from different inputs; see CHANGED above.")
 	}
+}
+
+// comparedFields names the graded fields as "a, b and c", read out of the verification
+// rather than restated in the verdict: a field added to or dropped from Verify would
+// otherwise leave that line claiming a comparison that did not happen, which is the exact
+// overclaim the wording exists to remove. An ungraded field decides nothing and so is not
+// named. The result is empty when nothing was graded, which the caller words around.
+func comparedFields(v *build.Verification) string {
+	var names []string
+	for _, f := range v.Fields {
+		if !f.Informational {
+			names = append(names, f.Name)
+		}
+	}
+	if len(names) < 2 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
 }
 
 // anyUnknown reports whether a non-match is (only) because something could not be

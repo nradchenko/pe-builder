@@ -147,6 +147,11 @@ name the file actually has on the media).
 
 ## What an image was built from
 
+`verify` answers one question: what was this image built from, and is that still
+what this manifest and this pebuild describe? It compares a build's *inputs* —
+which is what an image on disk can be held against — and says which of them have
+moved since.
+
 ```sh
 # does this ISO match the manifest and the pebuild I have now?
 pebuild verify out/pe.iso examples/luna.hcl
@@ -168,17 +173,22 @@ forms `hive dump` accepts — recomputes each field from the current binary,
 manifest and plugin directories, and reports per field:
 
 ```
-pebuild version  v0.5.0
+pebuild version  v0.7.0
 engine content   sha256:fc1c3d43…  OK
 manifest         sha256:72b2f2a2…  OK
 source           winxp build 2600 (i386)  OK
 plugins          9 resolved  OK
 options          1 differ  CHANGED
+  pebuild version: image built with v0.6.0, this is v0.7.0
   options: explorer-shell.bpp: built with "32", now "16"
+
+MISMATCH: this image was built from different inputs; see CHANGED above.
 ```
 
 A field that matches shows its current value (`options  explorer-shell.bpp=32 (+7 more)`);
 one that differs shows how many differ, and each difference is named underneath.
+The closing verdict names the inputs it compared, so what it did **not** compare
+is visible from the line itself.
 
 It exits non-zero on a mismatch, so a script can gate on it. Three outcomes are
 kept apart deliberately: a **mismatch**, an input that **could not be checked**
@@ -194,22 +204,22 @@ hash instead.
 
 The version line is reported without a verdict. A version string flags a dirty
 tree but does not characterize it — two different sets of uncommitted edits give
-the same string — so a differing version alone does not fail the check.
+the same string — so a differing version alone does not fail the check. It is
+still called out beneath the table (`image built with v0.6.0, this is v0.7.0`),
+because on a release build it is the readiest sign that a different engine
+produced the image.
 
-### What the check does not cover
+### The scope of a match
 
-The engine hash covers pebuild's embedded *content* — the base layer and the
-built-in plugins — not the Go code of the engine itself. Those embedded files are
-what a build's output most directly follows from, and they are what changes when
-a plugin or the base layer is edited. But a change to engine code alone (`hive/`,
-`tree/`, `layout/`) does not move the hash.
+A match is over the inputs the receipt records. The engine hash covers pebuild's
+embedded *content* — the base layer and the built-in plugins, which is what a
+build's output most directly follows from — and not the Go code of the engine
+itself, so a change confined to `hive/`, `tree/` or `layout/` does not move it.
+On a release build that shows up from the other side, in the version and commit
+the binary is stamped with; the version note above is where you see it.
 
-For a release build that is covered from the other side: the version and commit
-the binary is stamped with change with the code. In a development tree it is a
-real gap — edit engine code, rebuild an unstamped `pebuild` (whose version stays
-`dev`), and `verify` will report `MATCH` for an image the current code would no
-longer produce byte for byte. Rebuild the image if you have changed engine code
-and need certainty; `verify` answers "same inputs", not "same compiler output".
+So `verify` answers "same inputs", not "same compiler output". If you have
+changed engine code and need certainty about the image, rebuild it.
 
 ### Build taint
 

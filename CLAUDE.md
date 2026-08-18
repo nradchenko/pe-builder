@@ -29,10 +29,14 @@ PE dependencies.
   with the `serialdebug` plugin needs to be debuggable — that plugin turns the kernel debugger
   on, and a debug image booted with no debugger attached suppresses its own output rather than
   producing any. `verify` answers the question an
-  image on disk otherwise cannot — was this built by the pebuild I have now, from this
-  manifest? — by reading the receipt the image carries and recomputing every field from
+  image on disk otherwise cannot — what was this built from, and is that still what this
+  manifest and this pebuild describe? — by reading the receipt the image carries and
+  recomputing the inputs it records from
   the current binary, manifest and plugin directories, naming which of engine, manifest,
-  source, plugin set or options differs. With no manifest to be found it just prints the
+  source, plugin set or options differs. It is a provenance report over a build's *inputs*,
+  not evidence that the binary in hand would reproduce the image, and its verdict line names
+  what it compared so the boundary is visible where the answer is. With no manifest to be
+  found it just prints the
   receipt, so it stays useful away from the tree that built the image. It exits non-zero
   on a mismatch, and keeps three outcomes apart that are easy to conflate: a mismatch, an
   input that could not be checked, and an image carrying no receipt at all.
