@@ -219,6 +219,7 @@ machine presents. The two architectures differ only in the CPU:
 | Input | PS/2 keyboard and mouse, or USB HID | same |
 | Storage | IDE/ATAPI CD-ROM | same |
 | Memory | 128 MB minimum for a desktop image, less for `cmd.exe`; tested at 512 MB | tested at 512 MB |
+| Power (ACPI) | an ACPI machine (QEMU's default) — the CPU idles only where an `ACPI\Processor` devnode exists; a non-ACPI *Standard PC* HAL leaves it spinning at 100% | same |
 
 `run` boots with 512 MB and `--ram <MB>` sets it.
 
