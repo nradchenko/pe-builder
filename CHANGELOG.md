@@ -5,6 +5,103 @@ All notable changes to pe-builder are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-08-18
+
+The WIM boot release. A build can now pack its whole file tree into a compressed **`.wim`**
+image and boot it from a small RAM-mapped core behind a **fully distributable** grub4dos chain —
+a markedly smaller ISO that ships **no Microsoft boot binary**. **Simplified Chinese** joins the
+buildable sources and **Windows XP Home Edition** is verified. The themed desktop can show an
+**account picture in the Start menu**, and `pebuild run` now drives a **USB tablet by default**
+for a seamless, grab-free mouse.
+
+### Added
+
+- **An experimental `wim` ISO layout.** Setting `layout = "wim"` packs the file tree into a
+  compressed Windows Imaging (`.wim`) image the running OS reads on demand, behind a fully
+  distributable grub4dos chain that maps a small boot core into RAM as a CD — so the image is
+  markedly smaller than the loose-file layout and ships no Microsoft boot binary. It requires
+  an ISO target and three out-of-tree plugins installed with `pebuild plugins add` — `wimmf`,
+  `firadisk`, `grub4dos` — which the built-in `wim-cd-boot` plugin wires in. Boots to the Luna
+  desktop; verified on XP SP3 (32-bit), XP x64, and Server 2003 (both architectures). The `.wim`
+  is written by the native `go-wim` library, so building one needs no `wimlib`.
+- **`image` and `hive` read through a `wim`-layout image's `PE.wim`.** `image ls`/`extract`
+  and `hive dump` see the payload tree and registry hives sealed inside the WIM exactly as
+  they do a classic image, decoding only what a listing or extract touches.
+- **A working PE from a Simplified Chinese source.** A build now stages the code-page (NLS)
+  tables and console font a source's `txtsetup.sif` names whether or not its keyboard layout is
+  one pe-builder recognizes, so a non-US-English source no longer silently falls back to the
+  US-English tables. A double-byte (DBCS) source additionally gets the CJK fonts it needs and the
+  input-context handler (`msctfime.ime`) the shell loads by name — without which such a desktop
+  deadlocked when a dialog returned focus (seen on Simplified and Traditional Chinese and Japanese
+  alike). Simplified Chinese renders throughout the desktop and console; it cannot yet be *typed*,
+  as no input method is wired up.
+- **Windows XP Home Edition is a verified source** — console images reach `cmd.exe` and desktop
+  images reach the Explorer shell, the Luna visual style and the XP wallpaper, exactly as
+  Professional does. An edition is not a separate kind of source: the media differ only in the
+  product SKU their setup metadata states.
+- **The Start menu can show an account picture**, via `luna`'s new **`logon_type` option** (`0`,
+  classic, by default), which selects XP's Welcome-screen shell mode. A PE logs nobody on, so no
+  logon screen ever appears; what the mode changes is only what the shell draws: a different Turn
+  Off dialog, and — the reason to want it — the **account picture in the Start menu's header**,
+  the tile beside the user name, using one of the source's own account
+  bitmaps. `luna` names the bitmap and `peshell` copies it to where Explorer looks, under the name
+  the running account actually has. The tile needs a visual style either way, since Explorer draws
+  it only on a themed panel; a desktop without one is unchanged. Clicking the tile does nothing: it
+  opens the User Accounts applet, which manages accounts against a SAM this PE leaves empty.
+
+### Changed
+
+- **The "press any key to boot from CD" prompt is now the opt-in `boot-prompt` plugin**, no
+  longer staged in every image. **Breaking for existing manifests:** an image shows the prompt
+  only if it enables `boot-prompt`. (The prompt appears only on a machine whose first disk has an
+  active partition, so a diskless VM boots straight in either way.)
+- **`pebuild run` gives the guest a USB tablet by default**, so the cursor crosses between host
+  and guest window with no grab and the mouse wheel works. Every image drives it with no
+  plugin — the USB HID stack comes from the source's own text-setup boot configuration, which
+  the base layer already loads. The `--usb-tablet` flag is gone, replaced by `--ps2-mouse` for
+  the plain PS/2 machine.
+- **A plugin's `[PEBuilder] Enable` field is no longer presented as selection state.** Selection
+  has always come from the manifest and the `depends` closure; `plugins info` no longer prints a
+  misleading "Enabled:" line and the plugin-writing guide no longer suggests `Enable = 1`. The
+  field is still parsed, and the built-in plugins drop it.
+- **`pebuild verify` states what it actually compared.** Its verdict now lists the receipt fields
+  it checked instead of claiming outright that the image was "built by this pebuild" — the engine
+  hash covers pebuild's embedded content, not its Go code, so an identical receipt is not proof
+  the binary in hand would rebuild the image byte-for-byte, and the help text now says so. A
+  differing pebuild version prints as a note beneath the table rather than an easily-missed blank
+  row.
+
+### Fixed
+
+- **The desktop puts the user profile on the RAM volume, not on an attached disk.** `peshell`
+  took the first writable drive letter, and a WDM ramdisk reports the same drive type as a real
+  disk — so booting with a scratch disk attached quietly put the profile, `All Users` and `TEMP`
+  on it, persisting user data past the boot. It now looks for the RAM volume first (by the
+  `PE RAMDISK` label the `ramdrive` plugin writes) and falls back to any writable volume only if
+  it is absent, so a build without `ramdrive` still boots. Which volume it chose, and by which
+  pass, is now reported to the kernel debugger.
+
+- **`pebuild run`'s USB tablet works at all.** It was added as a bare device, but the machine
+  has no USB controller, so QEMU refused it and the guest never started. The tablet now
+  brings an EHCI controller with it.
+
+- **Consumer XP editions are no longer branded a server.** The build read `txtsetup.sif`'s
+  product SKU as a plain workstation-or-server flag (`!= 0`), so every non-Professional consumer
+  XP — Home Edition included — wrote `ProductType = ServerNT` and drew the stale pre-release
+  *server* splash banner. Product type now comes from what the source's `hivesys.inf` declares,
+  falling back to the SKU only for media that declare none.
+
+- **The desktop is brought up only once per boot.** Nothing stopped `peshell` — the boot's
+  `Setup\CmdLine` program — from being run again from the desktop it produced, where it would
+  redo the whole sequence: re-register the shell COM servers, rebuild the Start menu, reapply the
+  visual style, and start a second Explorer over the first. The first instance now holds a named
+  mutex; later ones report that the shell is already running and exit.
+
+- **A source whose SKU ships no Group Policy editor now builds.** `gptext.dll`, the Group Policy
+  Object Editor's MMC snap-in, was a required seed — yet nothing in a PE can load it (no
+  `mmc.exe`, no `gpedit`, no registration), so it was ~199 KB of dead weight that also failed the
+  build outright on any source lacking the file. It is no longer seeded.
+
 ## [0.6.0] - 2026-08-07
 
 The networking and provenance release. A built PE now **configures its own hardware and reaches
@@ -460,6 +557,7 @@ build runs in about 4 seconds and produces a roughly 45 MB ISO.
 - Targets Windows XP sources; other source flavors and output targets are planned.
 - No plugin system yet — a build is the base layer only.
 
+[0.7.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.7.0
 [0.6.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.6.0
 [0.5.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.5.0
 [0.4.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.4.0
