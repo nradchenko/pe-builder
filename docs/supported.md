@@ -20,10 +20,10 @@ mounted directory or an `.iso`.
 | Windows 2000 and earlier | **rejected** | — | — | — | — |
 | Windows Fundamentals for Legacy PCs | **out of scope** | — | — | — | — |
 
-The 32-bit XP path is verified against both English and Russian volume-licence media, which
-behave identically apart from one Active Setup component present only on some locales. A
-build's language comes from the source; see [Source language](#source-language) for what is
-verified in which language.
+The 32-bit XP path is verified in several languages, which behave identically apart from one
+Active Setup component present only on some locales. A build's language comes from the source;
+see [Source language](#source-language) for which languages those are and what is verified in
+each.
 
 **Service-pack floor.** A source must be at least XP SP3 (`5.1.2600.5512`, the revision SP3
 media ships `ntdll` at); anything older is refused when the source is probed. SP3 was the
@@ -48,8 +48,8 @@ would mean a WIM reader and a second, image-based source model.
 
 Any source builds and boots regardless of language, and reaches whatever desktop its edition
 supports — that is the matrix above, not a language property. What language decides is whether
-the source's **own script** appears: Cyrillic, Japanese kana, Chinese characters. Latin text
-always renders, because the base a build starts from is US-English. Where a script is not
+the source's **own script** appears: Cyrillic, Arabic, Japanese kana, Chinese characters. Latin
+text always renders, because the base a build starts from is US-English. Where a script is not
 configured, its characters come out as empty boxes:
 
 ```
@@ -61,9 +61,26 @@ configured, its characters come out as empty boxes:
 |---|---|---|
 | English (1252) | — Latin only | — Latin only |
 | Russian (1251) | verified | verified |
+| Arabic (1256, right-to-left) | verified — unjoined, see below | verified |
 | Simplified Chinese (936, DBCS) | verified | verified |
 | Japanese (932, DBCS) | not configured | not configured |
 | Traditional Chinese (950, DBCS) | not configured | not configured |
+
+Arabic is verified from XP Professional SP3 32-bit media. It renders its script in windows with
+nothing staged for it — a single-byte locale needs no font of its own, because the UI fonts the
+source already ships carry the script. Its console renders Arabic too, in Courier New, which the
+source itself names as the fixed-pitch face for the script; the base's Lucida Console has no
+Arabic glyphs.
+
+**Console Arabic is unjoined.** The Windows console does no complex-script shaping, so it draws
+isolated letterforms in logical order rather than the connected, right-to-left text the same
+string gets in a window. That is how the console behaves on a full Windows install too, not
+something the build introduces — but it does mean console Arabic is legible rather than
+comfortable.
+
+An Arabic build also comes out **mirrored** — Start button on the right, menus and dialogs
+right-aligned. That is the right-to-left layout the source's own resources describe; the build
+does nothing to arrange it.
 
 Simplified Chinese is verified from XP SP3 and Server 2003 R2 SP2 volume-licence media, the
 latter on both architectures. Japanese and Traditional Chinese build and boot, but no font or

@@ -75,23 +75,37 @@ var localeFonts = map[string][]localeFont{
 		{file: "svgafix.fon"},
 		{file: "svgasys.fon"},
 	},
+	// Arabic needs only a console face, and only the TrueType one: its own locale pass
+	// (font.inf's [font.cp720.reg.96]) leaves OEMFONT.FON as the US-English vgaoem.fon,
+	// so the raster console can never draw the script and there is no Arabic OEM raster
+	// font on the media to point it at. Courier New is the fixed-pitch face the source
+	// itself names for the script — intl.inf substitutes "Courier New (Arabic)" at the
+	// Arabic charset with it. No name: the source's own hivesft.inf already registers
+	// Courier New, so the fold brings the registration in and only the file is missing —
+	// the base seeds just the raster Courier (coure.fon).
+	"00000401": {
+		{file: "cour.ttf"},
+	},
 }
 
 // localeConsole is a locale's console font selection: the face its code page needs, and
 // the point height to ask for.
 type localeConsole struct {
-	codePage string // code page the face serves, e.g. 936
-	face     string // face name, e.g. 新宋体 (NSimSun), simsun.ttc's fixed-pitch face
-	height   uint32 // cell height in points, the high word of Console FontSize
+	codePage   string // code page the face serves, e.g. 936
+	face       string // face name, e.g. 新宋体 (NSimSun), simsun.ttc's fixed-pitch face
+	height     uint32 // cell height in points, the high word of Console FontSize
+	singleByte bool   // the code page is single-byte (see consoleActions for what that changes)
 }
 
-// localeConsoles maps a locale's KLID to its console font. A DBCS locale needs one
-// stated: the raster console font the base seeds carries no glyphs for the script, and
-// while the locale's own bitmap font (see localeFonts) is staged and named by
-// GRE_Initialize, nothing selects it for the console. Both halves of the TrueType path
-// are set here — the face is added to the system list keyed by code page, and the
-// default user's console is pointed at it, because the source's hivedef.inf ships
-// FaceName empty and FontFamily zero, which leaves the console on the raster font.
+// localeConsoles maps a locale's KLID to its console font. A locale needs one stated
+// whenever no face the base seeds can draw its script — every DBCS locale, and a
+// single-byte one like Arabic whose script the base's Latin Lucida Console lacks. The
+// raster console font the base seeds carries no glyphs for the script either, and while
+// a locale's own bitmap font (see localeFonts) is staged and named by GRE_Initialize,
+// nothing selects it for the console. Both halves of the TrueType path are set here —
+// the face is added to the system list keyed by code page, and the default user's
+// console is pointed at it, because the source's hivedef.inf ships FaceName empty and
+// FontFamily zero, which leaves the console on the raster font.
 //
 // Neither value appears in the source's own hive INFs, and that is not evidence they are
 // unneeded: Windows setup has a locale pass, which a PE never runs, that writes state no
@@ -102,6 +116,11 @@ var localeConsoles = map[string]localeConsole{
 	// Height 16 rather than the 12 a Latin console uses: the face is full-width, and a
 	// shorter cell leaves the glyphs stretched and narrow.
 	"00000804": {codePage: "936", face: "新宋体", height: 16},
+	// Keyed by the OEM code page the console runs in (720), not the ANSI one (1256).
+	// Height 16 rather than the 12 a Latin console uses: the console draws Arabic
+	// unjoined, so the reader is picking letters apart by their dots, which a taller
+	// cell makes legible.
+	"00000401": {codePage: "720", face: "Courier New", height: 16, singleByte: true},
 }
 
 // localeActions applies the source's locale on top of the US-English base.
@@ -204,11 +223,22 @@ func nlsActions(l *layout.Layout) []action.Action {
 	return out
 }
 
+// trueTypeFontKey is the system's list of faces the console may use. Entries named for a
+// code page serve that code page; entries named "0", "00", "000" and so on are the
+// general list, which is what the console consults for a single-byte code page. base.inf
+// seeds "0" with Lucida Console, so a locale adding to the general list takes "00".
+const trueTypeFontKey = `Microsoft\Windows NT\CurrentVersion\Console\TrueTypeFont`
+
 // consoleActions points the console at a face that can draw the locale's code page:
-// it adds the face to the system list keyed by the code page, then selects it for the
-// default user. FontFamily 0x36 (FF_MODERN | TMPF_TRUETYPE) is what marks the selection
-// as a TrueType face rather than the raster default, and FontSize carries the cell
-// height in its high word.
+// it adds the face to the system list, then selects it for the default user. FontFamily
+// 0x36 (FF_MODERN | TMPF_TRUETYPE) is what marks the selection as a TrueType face rather
+// than the raster default, and FontSize carries the cell height in its high word.
+//
+// A single-byte locale is listed twice, under its code page and in the general list. The
+// code-page-keyed name alone is what a DBCS locale needs, and it was not enough for
+// Arabic: the console rejected the selection and fell back to the raster font, which maps
+// bytes through its own CP437 glyphs and so drew the locale's text as another script's
+// characters even with the right code page active.
 func consoleActions(klid string) []action.Action {
 	c, ok := localeConsoles[klid]
 	if !ok {
@@ -217,14 +247,19 @@ func consoleActions(klid string) []action.Action {
 	const (
 		trueTypeFamily = 0x36
 		normalWeight   = 400
+		// The general-list slot after the "0" base.inf seeds.
+		generalListSlot = "00"
 	)
-	return []action.Action{
-		localeReg(action.HiveSoftware, `Microsoft\Windows NT\CurrentVersion\Console\TrueTypeFont`, c.codePage, c.face),
+	out := []action.Action{localeReg(action.HiveSoftware, trueTypeFontKey, c.codePage, c.face)}
+	if c.singleByte {
+		out = append(out, localeReg(action.HiveSoftware, trueTypeFontKey, generalListSlot, c.face))
+	}
+	return append(out,
 		localeReg(action.HiveDefault, "Console", "FaceName", c.face),
 		localeDword(action.HiveDefault, "Console", "FontFamily", trueTypeFamily),
 		localeDword(action.HiveDefault, "Console", "FontWeight", normalWeight),
 		localeDword(action.HiveDefault, "Console", "FontSize", c.height<<16),
-	}
+	)
 }
 
 // preloadActions resets the default user's preloaded keyboard layouts to what this build

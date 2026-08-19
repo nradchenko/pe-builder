@@ -128,6 +128,46 @@ func TestLocaleActionsSharedCodepage(t *testing.T) {
 	}
 }
 
+// TestLocaleActionsConsoleFaceWithoutKeyboard covers a single-byte locale that needs a
+// console face but no keyboard: Arabic states distinct ANSI and OEM code pages, and its
+// console is keyed by the OEM one. Its KLID is absent from the keyboard table, so the
+// layout stays US — the face and the keyboard are independent. The values are the real
+// ones read from Arabic XP Professional SP3 media, not invented ones.
+func TestLocaleActionsConsoleFaceWithoutKeyboard(t *testing.T) {
+	l := fixtureLayout()
+	l.NLS = layout.NLS{
+		AnsiCodepageFile: "c_1256.nls",
+		AnsiCodepage:     "1256",
+		OemCodepageFile:  "c_720.nls",
+		OemCodepage:      "720",
+		OemAlternates:    []layout.CodePage{{File: "c_850.nls", Number: "850"}},
+		OemHalFont:       "vgaoem.fon",
+		LangID:           "0401",
+	}
+	got := localeActions(l)
+	want := []action.Action{
+		{Kind: action.CopyFile, Src: "c_1256.nls"},
+		localeReg(action.HiveSystem, `ControlSet001\Control\Nls\CodePage`, "1256", "c_1256.nls"),
+		{Kind: action.CopyFile, Src: "c_720.nls"},
+		localeReg(action.HiveSystem, `ControlSet001\Control\Nls\CodePage`, "720", "c_720.nls"),
+		{Kind: action.CopyFile, Src: "c_850.nls"},
+		localeReg(action.HiveSystem, `ControlSet001\Control\Nls\CodePage`, "850", "c_850.nls"),
+		{Kind: action.CopyFile, Src: "vgaoem.fon", DirID: "2"},
+		{Kind: action.CopyFile, Src: "cour.ttf"},
+		localeReg(action.HiveSoftware, `Microsoft\Windows NT\CurrentVersion\Console\TrueTypeFont`, "720", "Courier New"),
+		localeReg(action.HiveSoftware, `Microsoft\Windows NT\CurrentVersion\Console\TrueTypeFont`, "00", "Courier New"),
+		localeReg(action.HiveDefault, "Console", "FaceName", "Courier New"),
+		localeDword(action.HiveDefault, "Console", "FontFamily", 0x36),
+		localeDword(action.HiveDefault, "Console", "FontWeight", 400),
+		localeDword(action.HiveDefault, "Console", "FontSize", 16<<16),
+		{Kind: action.DelReg, Hive: action.HiveDefault, Subkey: `Keyboard Layout\Preload`},
+		localeReg(action.HiveDefault, `Keyboard Layout\Preload`, "1", "00000409"),
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("localeActions for a console face without a keyboard mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestDriverActions(t *testing.T) {
 	got := driverActions(fixtureLayout())
 	want := []action.Action{
