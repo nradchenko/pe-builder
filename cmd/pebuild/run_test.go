@@ -286,7 +286,7 @@ func TestResolveImageManifestErrors(t *testing.T) {
 		t.Errorf("error = %v, want it to point at building the image", err)
 	}
 
-	none := write("none.hcl", src+"output {\n  target = \"none\"\n  path = \"\"\n}\n")
+	none := write("none.hcl", src+"output {\n  target = \"none\"\n}\n")
 	if _, err := resolveImage(none); err == nil {
 		t.Error("resolveImage on a target that builds no media returned no error")
 	} else if !strings.Contains(err.Error(), "nothing to boot") {

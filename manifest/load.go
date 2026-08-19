@@ -33,8 +33,12 @@ type rawSource struct {
 }
 
 type rawOutput struct {
-	Target      string `hcl:"target,optional"`
-	Path        string `hcl:"path"`
+	Target string `hcl:"target,optional"`
+	// Path is optional in the schema because it is required only for a target that
+	// writes a file; Validate is what enforces it per target. Declaring it required
+	// here would reject a legitimate "none"-target manifest during decode, before
+	// Validate ever runs.
+	Path        string `hcl:"path,optional"`
 	VolumeLabel string `hcl:"volume_label,optional"`
 }
 

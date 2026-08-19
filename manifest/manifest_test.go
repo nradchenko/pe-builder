@@ -159,6 +159,32 @@ func TestDecodeFingerprints(t *testing.T) {
 	}
 }
 
+// TestDecodeOutputPathOptional covers the decode layer specifically: whether output.path
+// is required is a per-target rule Validate owns, so the schema must let an empty one
+// through. A test that only exercised Validate on a hand-built Manifest would pass while
+// the decode rejected the same manifest, which is exactly how this once regressed.
+func TestDecodeOutputPathOptional(t *testing.T) {
+	got, err := Decode([]byte("source { path = \"/x\" }\noutput { target = \"none\" }\n"), "none.hcl")
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if got.Output.Path != "" {
+		t.Errorf("Output.Path = %q, want empty", got.Output.Path)
+	}
+	if err := Validate(got); err != nil {
+		t.Errorf("Validate: %v", err)
+	}
+
+	// The same manifest on the iso target is what Validate must still reject.
+	iso, err := Decode([]byte("source { path = \"/x\" }\noutput { target = \"iso\" }\n"), "iso.hcl")
+	if err != nil {
+		t.Fatalf("Decode iso: %v", err)
+	}
+	if err := Validate(iso); err == nil || !strings.Contains(err.Error(), "output.path is required for the iso target") {
+		t.Errorf("Validate = %v, want the iso-target path error", err)
+	}
+}
+
 func TestDecodeSyntaxError(t *testing.T) {
 	if _, err := Decode([]byte("source { path = }"), "bad.hcl"); err == nil {
 		t.Fatal("expected a decode error, got nil")

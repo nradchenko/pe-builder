@@ -5,8 +5,8 @@
 # enabled. For a manifest to actually build from, start with minimal.hcl (a bare cmd.exe
 # image) or luna.hcl (the themed desktop) and add only what you need.
 #
-# Optional fields are shown with their default. Everything except source.path and
-# output.path can be omitted.
+# Optional fields are shown with their default. Only source.path is always required;
+# output.path is required for the "iso" target, and everything else can be omitted.
 
 # --- The Windows installation source ------------------------------------------------------
 source {
@@ -20,7 +20,8 @@ source {
 
 # --- What the build produces ---------------------------------------------------------------
 output {
-  # Required. Where the image is written.
+  # Where the image is written. Required for the "iso" target; the "none" target writes
+  # no file, so it takes no path — its tree lands in build.work_dir below.
   path = "./out/pe.iso"
 
   # Output target. "iso" masters a bootable ISO; "none" assembles the file tree and stops,
