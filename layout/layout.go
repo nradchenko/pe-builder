@@ -104,9 +104,23 @@ type Layout struct {
 // language ID that identifies the locale.
 type NLS struct {
 	AnsiCodepageFile string // ANSI code-page table, e.g. c_1251.nls
+	AnsiCodepage     string // ANSI code-page number the table serves, e.g. 1251
 	OemCodepageFile  string // OEM code-page table, e.g. c_866.nls
-	OemHalFont       string // OEM console/HAL raster font, e.g. vga866.fon
-	LangID           string // language ID from the Unicode case table, e.g. 0419
+	OemCodepage      string // OEM code-page number the table serves, e.g. 866
+	// OemAlternates holds the further OEM pairs the [nls] line names beyond the
+	// locale's own, which is the one above: Russian media state 866 then 437, Arabic
+	// 720 then 850. They are not what the locale runs in, but the source installs them
+	// alongside it, so a build that means to offer them has to ship and name them too.
+	OemAlternates []CodePage
+	OemHalFont    string // OEM console/HAL raster font, e.g. vga866.fon
+	LangID        string // language ID from the Unicode case table, e.g. 0419
+}
+
+// CodePage is one code-page table a source names: the file holding it and the number
+// it serves.
+type CodePage struct {
+	File   string // table file, e.g. c_437.nls
+	Number string // the code page it serves, e.g. 437
 }
 
 // KLID returns the source locale's keyboard-layout ID — the eight-hex-digit
@@ -282,16 +296,30 @@ func isProductOptions(p string) bool {
 		strings.EqualFold(parts[2], "Control") && strings.EqualFold(parts[3], "ProductOptions")
 }
 
-// readNLS fills NLS from txtsetup.sif's [nls] section: the ANSI/OEM code-page table
-// files (field 0 of each entry) and OEM console font, and the language ID carried as
-// the second field of the Unicode case table entry.
+// readNLS fills NLS from txtsetup.sif's [nls] section: the ANSI/OEM code-page tables,
+// each stated as a file and the number it serves (fields 0 and 1), the OEM console
+// font, and the language ID carried as the second field of the Unicode case table
+// entry.
 func (l *Layout) readNLS(f *inf.File, build int) {
 	for _, ln := range f.Section("nls", build) {
 		switch {
 		case strings.EqualFold(ln.Key, "AnsiCodepage"):
 			l.NLS.AnsiCodepageFile = strings.TrimSpace(ln.Field(0))
+			l.NLS.AnsiCodepage = strings.TrimSpace(ln.Field(1))
 		case strings.EqualFold(ln.Key, "OemCodepage"):
 			l.NLS.OemCodepageFile = strings.TrimSpace(ln.Field(0))
+			l.NLS.OemCodepage = strings.TrimSpace(ln.Field(1))
+			// Any further file/number pairs on the same line are alternates the source
+			// installs beside the locale's own (Arabic states 720 then 850); the first
+			// pair above is the one the locale runs in.
+			for i := 2; ; i += 2 {
+				file := strings.TrimSpace(ln.Field(i))
+				number := strings.TrimSpace(ln.Field(i + 1))
+				if file == "" || number == "" {
+					break
+				}
+				l.NLS.OemAlternates = append(l.NLS.OemAlternates, CodePage{File: file, Number: number})
+			}
 		case strings.EqualFold(ln.Key, "OemHalFont"):
 			l.NLS.OemHalFont = strings.TrimSpace(ln.Field(0))
 		case strings.EqualFold(ln.Key, "UnicodeCasetable"):

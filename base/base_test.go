@@ -32,7 +32,10 @@ func fixtureLayout() *layout.Layout {
 		},
 		NLS: layout.NLS{
 			AnsiCodepageFile: "c_1251.nls",
+			AnsiCodepage:     "1251",
 			OemCodepageFile:  "c_866.nls",
+			OemCodepage:      "866",
+			OemAlternates:    []layout.CodePage{{File: "c_437.nls", Number: "437"}},
 			OemHalFont:       "vga866.fon",
 			LangID:           "0419",
 		},
@@ -43,7 +46,11 @@ func TestLocaleActions(t *testing.T) {
 	got := localeActions(fixtureLayout())
 	want := []action.Action{
 		{Kind: action.CopyFile, Src: "c_1251.nls"},
+		localeReg(action.HiveSystem, `ControlSet001\Control\Nls\CodePage`, "1251", "c_1251.nls"),
 		{Kind: action.CopyFile, Src: "c_866.nls"},
+		localeReg(action.HiveSystem, `ControlSet001\Control\Nls\CodePage`, "866", "c_866.nls"),
+		{Kind: action.CopyFile, Src: "c_437.nls"},
+		localeReg(action.HiveSystem, `ControlSet001\Control\Nls\CodePage`, "437", "c_437.nls"),
 		{Kind: action.CopyFile, Src: "vga866.fon", DirID: "2"},
 		{Kind: action.DelReg, Hive: action.HiveDefault, Subkey: `Keyboard Layout\Preload`},
 		localeReg(action.HiveDefault, `Keyboard Layout\Preload`, "1", "00000409"),
@@ -67,7 +74,11 @@ func TestLocaleActionsUnknownKeyboard(t *testing.T) {
 	got := localeActions(l)
 	want := []action.Action{
 		{Kind: action.CopyFile, Src: "c_1251.nls"},
+		localeReg(action.HiveSystem, `ControlSet001\Control\Nls\CodePage`, "1251", "c_1251.nls"),
 		{Kind: action.CopyFile, Src: "c_866.nls"},
+		localeReg(action.HiveSystem, `ControlSet001\Control\Nls\CodePage`, "866", "c_866.nls"),
+		{Kind: action.CopyFile, Src: "c_437.nls"},
+		localeReg(action.HiveSystem, `ControlSet001\Control\Nls\CodePage`, "437", "c_437.nls"),
 		{Kind: action.CopyFile, Src: "vga866.fon", DirID: "2"},
 		{Kind: action.DelReg, Hive: action.HiveDefault, Subkey: `Keyboard Layout\Preload`},
 		localeReg(action.HiveDefault, `Keyboard Layout\Preload`, "1", "00000409"),
@@ -85,13 +96,16 @@ func TestLocaleActionsSharedCodepage(t *testing.T) {
 	l := fixtureLayout()
 	l.NLS = layout.NLS{
 		AnsiCodepageFile: "c_936.nls",
+		AnsiCodepage:     "936",
 		OemCodepageFile:  "c_936.nls",
+		OemCodepage:      "936",
 		OemHalFont:       "vgaoem.fon",
 		LangID:           "0804",
 	}
 	got := localeActions(l)
 	want := []action.Action{
 		{Kind: action.CopyFile, Src: "c_936.nls"},
+		localeReg(action.HiveSystem, `ControlSet001\Control\Nls\CodePage`, "936", "c_936.nls"),
 		{Kind: action.CopyFile, Src: "vgaoem.fon", DirID: "2"},
 		{Kind: action.CopyFile, Src: "simsun.ttc"},
 		localeReg(action.HiveSoftware, `Microsoft\Windows NT\CurrentVersion\Fonts`, "SimSun & NSimSun (TrueType)", "simsun.ttc"),

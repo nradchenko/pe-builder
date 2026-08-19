@@ -305,7 +305,11 @@ copy atapi.sys dir="" rename="" area=system flags=optional
 copy ntfs.sys dir="" rename="" area=system flags=optional
 copy fastfat.sys dir="" rename="" area=system flags=optional
 copy c_1251.nls dir="" rename="" area=system flags=-
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Nls\\CodePage" value="1251" data="c_1251.nls"
 copy c_866.nls dir="" rename="" area=system flags=-
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Nls\\CodePage" value="866" data="c_866.nls"
+copy c_437.nls dir="" rename="" area=system flags=-
+addreg hive=system type=0x1 subkey="ControlSet001\\Control\\Nls\\CodePage" value="437" data="c_437.nls"
 copy vga866.fon dir="2" rename="" area=system flags=-
 delreg hive=default subkey="Keyboard Layout\\Preload" value=""
 addreg hive=default type=0x1 subkey="Keyboard Layout\\Preload" value="1" data="00000409"

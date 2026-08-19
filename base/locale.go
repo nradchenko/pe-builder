@@ -107,11 +107,12 @@ var localeConsoles = map[string]localeConsole{
 // localeActions applies the source's locale on top of the US-English base.
 //
 // The code-page tables and OEM console font the source's own txtsetup.sif [nls]
-// section names are staged unconditionally, because that staging *is* how the locale
-// takes effect: the kernel resolves the console and ANSI code pages from the NLS
-// tables present, not from the registry, which base.inf deliberately leaves as text
-// setup ships it. Gating them on the keyboard table would silently leave a source
-// whose keyboard is unlisted with the English tables under a non-English locale.
+// section names are staged unconditionally, along with the registry entries naming each
+// table by the number it serves — a table present but unnamed cannot be loaded, so both
+// halves are how the locale takes effect. Gating them on the keyboard table would
+// silently leave a source whose keyboard is unlisted with the English tables under a
+// non-English locale. Which code page is *selected* (ACP/OEMCP) is a separate thing
+// this does not set, and base.inf still leaves as text setup ships it.
 //
 // The keyboard layer needs a layout DLL this build can name, so it — and only it — is
 // gated on the table. A source with no [nls] language, or one not yet listed, keeps the
@@ -146,19 +147,56 @@ func fontActions(klid string) []action.Action {
 	return out
 }
 
+// codePageKey is where the registry maps a code-page number to the table file that
+// serves it. A table that is staged but not named here cannot be loaded.
+const codePageKey = `ControlSet001\Control\Nls\CodePage`
+
 // nlsActions stages the code-page tables (directory resolved from the source layout)
-// and the OEM console font (system32) that the source names for itself. A locale may
-// name one table for both code pages — Simplified Chinese names c_936.nls as ANSI and
-// OEM alike — so each distinct name is staged once.
+// and the OEM console font (system32) that the source names for itself, then registers
+// each table under the number it serves. A locale may name one table for both code
+// pages — Simplified Chinese names c_936.nls as ANSI and OEM alike — so each distinct
+// name is staged and registered once. The OEM alternates a source names beside its own
+// page are handled the same way: leaving one staged but unnamed, or named but unstaged,
+// is the same unloadable state as leaving out the locale's own. An alternate the neutral
+// base already seeds (Russian's 437) is copied twice — this cannot see what base staged —
+// but the assembler overwrites with identical bytes, so only the write is wasted.
+//
+// Registering is not redundant with the hive fold. The source's hivesys.inf names only
+// its *ANSI* table (Arabic media state 1256 = c_1256.nls) and leaves every other slot,
+// its own OEM one included, present but empty — 720 = "". Windows fills the OEM slot in
+// the locale pass a PE never runs (intl.inf's [nls.cpinstall.720]). Left empty, the
+// staged table cannot be resolved and the console falls back to a built-in code page, so
+// its text comes out as the wrong script. This bites every
+// locale whose OEM code page differs from its ANSI one, so it is derived from the
+// source's [nls] rather than listed per locale; where the two agree, the hive fold has
+// already written the same value and this repeats it harmlessly.
 func nlsActions(l *layout.Layout) []action.Action {
 	var out []action.Action
-	staged := map[string]bool{}
-	for _, name := range []string{l.NLS.AnsiCodepageFile, l.NLS.OemCodepageFile} {
-		if name == "" || staged[name] {
+	// The two are deduplicated separately and must be: a locale naming one table for
+	// both code pages needs it staged once, but were the registration keyed on the file
+	// too, a table named under two different numbers would leave the second number
+	// unregistered — the very failure this registers to avoid.
+	stagedFiles := map[string]bool{}
+	registered := map[string]bool{}
+	pages := []layout.CodePage{
+		{File: l.NLS.AnsiCodepageFile, Number: l.NLS.AnsiCodepage},
+		{File: l.NLS.OemCodepageFile, Number: l.NLS.OemCodepage},
+	}
+	pages = append(pages, l.NLS.OemAlternates...)
+	for _, cp := range pages {
+		if cp.File == "" {
 			continue
 		}
-		staged[name] = true
-		out = append(out, action.Action{Kind: action.CopyFile, Src: name})
+		if !stagedFiles[cp.File] {
+			stagedFiles[cp.File] = true
+			out = append(out, action.Action{Kind: action.CopyFile, Src: cp.File})
+		}
+		// A source that names a table but no number for it still gets the file; there
+		// is nothing to key the registration on.
+		if cp.Number != "" && !registered[cp.Number] {
+			registered[cp.Number] = true
+			out = append(out, localeReg(action.HiveSystem, codePageKey, cp.Number, cp.File))
+		}
 	}
 	if l.NLS.OemHalFont != "" {
 		out = append(out, action.Action{Kind: action.CopyFile, Src: l.NLS.OemHalFont, DirID: system32DirID})
