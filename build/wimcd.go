@@ -164,7 +164,9 @@ func emitWIMCDISO(ctx context.Context, m *manifest.Manifest, treeDir string, rep
 		OutputPath:  m.Output.Path,
 		VolumeLabel: m.Output.VolumeLabel,
 	}, bootFile); err != nil {
-		_ = os.Remove(m.Output.Path)
+		// A failed master never wrote the output path (the target renames only a
+		// complete image onto it), so deleting it would destroy a good earlier ISO —
+		// the classic tail explains this in full at its own MasterElTorito call.
 		return err
 	}
 
