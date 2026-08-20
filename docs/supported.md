@@ -171,7 +171,12 @@ debugging — and any theory resting on something amd64-specific is already fals
 | Target | Status |
 |---|---|
 | Bootable ISO (El Torito, no-emulation) | supported |
+| File tree only (`target = "none"`, no media) | supported |
 | USB image | not implemented |
+
+The `none` target stops after assembling the file tree and building the hives, for
+inspecting what a manifest produces without mastering an image; see
+[`manifest.md`](manifest.md).
 
 ### ISO layout
 

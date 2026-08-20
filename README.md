@@ -110,7 +110,8 @@ another image:
   Windows 2000 look.
 
 Each manifest lists the plugins it enables; see [`docs/plugins/`](docs/plugins/) to add more
-(wallpaper, games, networking, and the rest). Rebuilds from the same source reuse a
+(wallpaper, games, networking, and the rest), and [`docs/manifest.md`](docs/manifest.md) for
+what every block and field in a manifest does. Rebuilds from the same source reuse a
 decompression cache under `~/.cache/pe-builder`, so iterating on a manifest stays fast.
 
 Both `pebuild` and `pewalk` support shell completion (bash, zsh, fish, PowerShell) — see
@@ -158,7 +159,8 @@ reports where each module lives, flagging any the source lacks. See
 ## Documentation
 
 See [`docs/`](docs/README.md) for the full index — installation, supported sources, the
-inspection tools, the WIM layout, plugins, and the Bart's PE Builder reference.
+build manifest, the inspection tools, the WIM layout, plugins, and the Bart's PE Builder
+reference.
 
 ## Contributing
 

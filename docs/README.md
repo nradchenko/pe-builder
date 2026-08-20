@@ -2,6 +2,8 @@
 
 - [`install.md`](install.md) — building on each platform (Linux, Windows, macOS)
   and the toolchain a desktop image needs.
+- [`manifest.md`](manifest.md) — the build manifest: every block and field, what
+  each one defaults to, and what the output targets and layouts produce.
 - [`supported.md`](supported.md) — which Windows sources are supported and what
   each one produces, the output targets, and the hardware an image expects.
 - [`inspecting.md`](inspecting.md) — inspecting a source or a build:

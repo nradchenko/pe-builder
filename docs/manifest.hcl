@@ -1,12 +1,23 @@
-# pe-builder manifest — every block and field, annotated.
+# pe-builder manifest — the field catalogue: every block and field, annotated.
 #
-# This one is a reference to read, not a starting point to run: it sets things most builds
-# should leave at their defaults, and its plugin block edits a plugin you may not have
-# enabled. For a manifest to actually build from, start with minimal.hcl (a bare cmd.exe
-# image) or luna.hcl (the themed desktop) and add only what you need.
+# This is a reference to read, not a starting point to run. It sets things most builds
+# should leave alone, and its plugin blocks edit plugins you may not have enabled. To
+# build from, start with ../examples/minimal.hcl (a bare cmd.exe image) or
+# ../examples/luna.hcl (the themed desktop) and add only what you need.
 #
-# Optional fields are shown with their default. Only source.path is always required;
-# output.path is required for the "iso" target, and everything else can be omitted.
+# Optional fields are shown with their default, so the value beside each name is what
+# you get by leaving it out — except where a comment says otherwise, which it does for
+# the two whose default is not a value that can be written down (build.work_dir and
+# plugins_dir). Only source.path is always required; output.path is required for the
+# "iso" target, and everything else can be omitted.
+#
+# Paths here are relative to the directory you run pebuild from, not to this file.
+#
+# This file is the *what*: names, valid values, defaults. For the *why* — which fields
+# are required for which target, how they interact, and what a schema cannot state —
+# read manifest.md beside it. Being a valid manifest is what keeps this file honest: the
+# test suite parses it, so a field renamed or removed in the engine makes it fail to
+# decode rather than leaving it describing something that no longer exists.
 
 # --- The Windows installation source ------------------------------------------------------
 source {
@@ -32,9 +43,16 @@ output {
   volume_label = "PEBUILDER"
 }
 
+# How the ISO is assembled. "classic" masters the file tree straight onto the media; "wim"
+# packs it into a compressed .wim read on demand at run time — a much smaller image, at the
+# cost of three out-of-tree plugins and experimental status. It is orthogonal to output.target:
+# both produce an ISO, and "wim" requires the "iso" target. See docs/wim-boot.md.
+layout = "classic" # classic | wim
+
 # --- How the build runs --------------------------------------------------------------------
 build {
-  # Scratch directory for the assembled tree.
+  # Scratch directory for the assembled tree. Shown as an example, not a default: left
+  # out, the build uses a fresh temp directory.
   work_dir = "./.work"
 
   # Keep the work directory after a successful build, for inspection. Note that with this on,
@@ -49,7 +67,8 @@ build {
 }
 
 # Where to look for plugins beyond the built-in ones. Each plugin is a directory containing
-# an .inf.
+# an .inf. Shown as an example, not a default: there is none, and naming a directory that
+# does not exist fails the build rather than being skipped, so set this only if you have one.
 plugins_dir = "./plugins"
 
 # --- Plugins --------------------------------------------------------------------------------
@@ -94,7 +113,8 @@ plugin "accessories" {
     exclude = ["i386/system32/mspaint.exe"]
 
     # Files to add from outside the source. `from` is a path on the build host, relative to
-    # the manifest; `to` is a path in the output tree.
+    # the directory you run pebuild from (as every path here is); `to` is a path in the
+    # output tree.
     inject = [
       { from = "./local/notes.txt", to = "i386/system32/notes.txt" },
     ]
@@ -108,7 +128,7 @@ plugin "accessories" {
       "HKLM\\SOFTWARE\\pe-builder\\StartMenu\\Character Map" = "%SystemRoot%\\system32\\charmap.exe"
     }
 
-    # Registry values or keys to remove, by the same path form.
+    # Registry values to remove, by the same path form.
     delete = [
       "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\EnableBalloonTips",
     ]

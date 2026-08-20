@@ -279,27 +279,41 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-// TestExampleManifestsAreValid loads and validates every shipped example. It globs rather
-// than naming them so an example that is added or renamed is covered without touching this
-// test — and so a broken one cannot ship unnoticed.
-func TestExampleManifestsAreValid(t *testing.T) {
-	paths, err := filepath.Glob("../examples/*.hcl")
-	if err != nil {
-		t.Fatalf("glob examples: %v", err)
-	}
-	if len(paths) == 0 {
-		t.Fatal("no examples found — the glob or the directory moved")
-	}
-	for _, p := range paths {
-		t.Run(filepath.Base(p), func(t *testing.T) {
-			m, err := Load(p)
-			if err != nil {
-				t.Fatalf("Load: %v", err)
-			}
-			if err := Validate(m); err != nil {
-				t.Fatalf("Validate: %v", err)
-			}
-		})
+// TestShippedManifestsAreValid loads and validates every manifest the repository ships:
+// the runnable examples, and the field catalogue in docs/, which is written as a manifest
+// precisely so it can be parsed. That is what keeps the catalogue honest — a field renamed
+// or removed in the schema makes it fail to decode ("An argument named ... is not expected
+// here") instead of leaving it quietly describing a field that no longer exists. A prose
+// document has no such property, which is why the catalogue is HCL at all.
+//
+// It globs rather than naming files, so one that is added or renamed is covered without
+// touching this test. Note the limit: decoding catches a field that went away, never one
+// that was added and documented nowhere.
+func TestShippedManifestsAreValid(t *testing.T) {
+	// Checked per pattern, not over the combined set: a single total would still pass if
+	// docs/ lost its catalogue while examples/ kept its files, which is the exact drift
+	// this guards.
+	for _, pat := range []string{"../examples/*.hcl", "../docs/*.hcl"} {
+		paths, err := filepath.Glob(pat)
+		if err != nil {
+			t.Fatalf("glob %s: %v", pat, err)
+		}
+		if len(paths) == 0 {
+			t.Fatalf("no manifests matched %s — the glob or the directory moved", pat)
+		}
+		for _, p := range paths {
+			// Named by directory and file: the two trees may hold the same base name.
+			label := filepath.Join(filepath.Base(filepath.Dir(p)), filepath.Base(p))
+			t.Run(label, func(t *testing.T) {
+				m, err := Load(p)
+				if err != nil {
+					t.Fatalf("Load: %v", err)
+				}
+				if err := Validate(m); err != nil {
+					t.Fatalf("Validate: %v", err)
+				}
+			})
+		}
 	}
 }
 
