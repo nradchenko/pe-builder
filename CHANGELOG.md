@@ -5,6 +5,63 @@ All notable changes to pe-builder are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [0.7.1] - 2026-08-23
+
+### Added
+
+- **Arabic is a verified source language.** A build from Arabic XP Professional SP3 32-bit media
+  reaches the Luna desktop and renders Arabic throughout its windows with nothing staged for it,
+  a single-byte locale needing no font of its own — and comes out **mirrored**, the right-to-left
+  layout following from the source.
+- **An Arabic build renders its script in the console.** The console drew the locale's own bytes
+  as another script's characters, because it ran on the raster font, whose glyphs are CP437. An
+  Arabic build now stages Courier New — the fixed-pitch face the source's own `intl.inf` names
+  for the script — and registers it both under OEM code page 720 and in the console's general
+  face list, which is what a *single-byte* code page is selected from; the code-page-keyed name
+  alone is the double-byte mechanism and left the console on the raster font. The raster path
+  cannot serve Arabic at all: the medium's own code-page-720 pass leaves that font as the
+  US-English file. Console Arabic is unjoined, as it is on a full Windows install, because the
+  console does no complex-script shaping.
+- **A manifest reference, in two halves.** [`docs/manifest.hcl`](docs/manifest.hcl) is the
+  field catalogue — every block and field, its valid values, and each optional one shown at
+  its default — written as a manifest so it reads beside an editor.
+  [`docs/manifest.md`](docs/manifest.md) is what a schema cannot state: which fields are
+  required for which target, how the output targets and ISO layouts differ, that every path
+  is relative to where you run `pebuild` rather than to the manifest, where plugins are
+  resolved from, and what a manifest can do that taints a build. `examples/reference.hcl`
+  **moves to `docs/manifest.hcl`** — it was never an example, and `examples/` now holds only
+  manifests you can build from. It also gains the `layout` field it was missing, and two of
+  its notes were wrong: `inject`'s `from` resolves against the current directory, not the
+  manifest's, and `registry.delete` removes a value rather than a key.
+
+### Fixed
+
+- **A failed `wim` build no longer deletes the ISO an earlier one produced.** When mastering
+  failed, the WIM media path removed the output file — but mastering writes to a scratch file
+  beside it and renames only a complete image on, so the failed build had never written there.
+  The file it deleted was the previous, working ISO. The classic layout never did this.
+- **A locale whose OEM code page differs from its ANSI one now loads its OEM table.** The
+  table file was staged but never registered under the number it serves, because a source's
+  `hivesys.inf` names only its *ANSI* table and leaves every other slot present but empty —
+  an Arabic source folds in `720 = ""`. Windows fills that slot in a locale pass a PE never
+  runs, so the staged table could not be resolved and the console fell back to a built-in code
+  page, rendering the locale's own bytes as another script's characters. Both tables are now
+  registered from what the source's `[nls]` section declares. A locale naming one table for
+  both code pages — Simplified Chinese — was never affected, which is why its console worked.
+- **A `none`-target manifest no longer needs a dummy `output.path`.** The target writes no
+  file, so it has no path to give — but the schema declared `output.path` required, and the
+  manifest was rejected during decode ("The argument `path` is required") before the check
+  that makes the field conditional could run. The path is now required only for a target that
+  writes one, which is what the `iso` target's own error has always said.
+- **`pebuild run` boots a `wim`-layout image.** It read an image's architecture from the
+  `i386`/`amd64` folder at the media root, which a `wim` image does not have — its tree is
+  sealed inside `PE.wim` — so `run` rejected an image `build` had just written as "not a built
+  PE image". It now reads the image the way `image` and `hive` do, through the WIM, and picks
+  the emulator from what it finds inside. The image itself always booted; only `run`'s
+  detection did not.
+
 ## [0.7.0] - 2026-08-18
 
 The WIM boot release. A build can now pack its whole file tree into a compressed **`.wim`**
@@ -557,6 +614,8 @@ build runs in about 4 seconds and produces a roughly 45 MB ISO.
 - Targets Windows XP sources; other source flavors and output targets are planned.
 - No plugin system yet — a build is the base layer only.
 
+[Unreleased]: https://github.com/nradchenko/pe-builder/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/nradchenko/pe-builder/releases/tag/v0.7.1
 [0.7.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.7.0
 [0.6.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.6.0
 [0.5.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.5.0
