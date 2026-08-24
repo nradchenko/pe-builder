@@ -12,9 +12,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nradchenko/pe-builder/build"
-	"github.com/nradchenko/pe-builder/manifest"
-	"github.com/nradchenko/pe-builder/receipt"
+	"github.com/nradchenko/pe-builder/internal/build"
+	"github.com/nradchenko/pe-builder/internal/manifest"
+	"github.com/nradchenko/pe-builder/internal/receipt"
 	"github.com/nradchenko/pe-builder/source"
 )
 

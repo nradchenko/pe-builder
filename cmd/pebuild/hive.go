@@ -91,7 +91,7 @@ func newHiveDumpCmd() *cobra.Command {
 //
 // SYSTEM is the one that is not where its name suggests. A build writes it to
 // system32\setupreg.hiv, because in /minint mode the loader loads setupreg.hiv as the
-// SYSTEM hive and never consults config\SYSTEM (see build/hives.go); a Windows
+// SYSTEM hive and never consults config\SYSTEM (see internal/build/hives.go); a Windows
 // installation source carries its own skeletal setupreg.hiv at the root of the system
 // root. So SYSTEM probes both, and config\SYSTEM last for a target that does have an
 // installed-Windows layout. SETUPREG is a spelling of the same hive, kept because

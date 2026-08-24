@@ -214,7 +214,7 @@ produced the image.
 A match is over the inputs the receipt records. The engine hash covers pebuild's
 embedded *content* — the base layer and the built-in plugins, which is what a
 build's output most directly follows from — and not the Go code of the engine
-itself, so a change confined to `hive/`, `tree/` or `layout/` does not move it.
+itself, so a change confined to `hive/`, `internal/tree/` or `layout/` does not move it.
 On a release build that shows up from the other side, in the version and commit
 the binary is stamped with; the version note above is where you see it.
 

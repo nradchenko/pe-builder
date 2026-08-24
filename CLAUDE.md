@@ -42,12 +42,20 @@ PE dependencies.
   input that could not be checked, and an image carrying no receipt at all.
 - `cmd/pewalk/` — the `pewalk` command: an "ldd for PE" that computes and renders the
   import closure of a Windows binary against a source (cobra).
-- Engine packages, roughly in pipeline order:
-  - `manifest/` — the HCL build manifest (load + validate). Its `layout` switch picks how
+- Engine packages, roughly in pipeline order. Most sit under `internal/`, which is
+  deliberate: they are the engine's mechanics, and being importable from outside was a
+  consequence of the layout rather than a promise anyone made. The handful still at the
+  repository root — `source/`, `layout/`, `compress/`, `inf/`, `hive/`, `pewalk/` — are the
+  ones that read or describe Windows media and could stand on their own, so they are left
+  where a decision to split them out would be cheap. `hive` is the one exception worth
+  knowing: its `Hives.Apply` takes an `internal/action` type, so that method is not callable
+  from outside the module. That resolves when the `regf` half is split off and the builder
+  half joins the rest under `internal/`.
+  - `internal/manifest/` — the HCL build manifest (load + validate). Its `layout` switch picks how
     the ISO is assembled: `classic` (the default) masters the file tree directly; `wim`
     packs the tree into a compressed `.wim` behind a fully distributable grub4dos chain that
     maps a small boot-core image (`coreimg`) into RAM as a CD and boots it with an unmodified
-    loader, so it ships no Microsoft boot binary (see `build/` and the `wim-cd-boot` plugin
+    loader, so it ships no Microsoft boot binary (see `internal/build/` and the `wim-cd-boot` plugin
     below). The `wim` layout requires an ISO target.
   - `source/` — read a Windows installation source (directory or ISO) and probe its
     identity (build number, architecture, flavor). It also owns the source's *areas*:
@@ -74,13 +82,13 @@ PE dependencies.
     which are otherwise the same build number and architecture — from the product type
     the media's own `hivesys.inf` declares, falling back for a source that declares none
     to the SKU in `txtsetup.sif`'s `[SetupData] ProductType`.
-  - `action/` — the build action IR (copy-file, mkdir, registry, text-edit) that the
+  - `internal/action/` — the build action IR (copy-file, mkdir, registry, text-edit) that the
     base layer and plugins compile to. A copy or mkdir carries the source area it
     works in (see `source/`); a copy is read from and written to the same area, so it
     is one property of the action rather than two.
-  - `inifile/` — apply the text/INI edit actions (e.g. the `txtsetup.sif` boot edits)
+  - `internal/inifile/` — apply the text/INI edit actions (e.g. the `txtsetup.sif` boot edits)
     to files in the assembled tree.
-  - `plugin/` — plugin discovery, parsing, dependency resolution (auto-enable the
+  - `internal/plugin/` — plugin discovery, parsing, dependency resolution (auto-enable the
     transitive `depends` closure and order it deps-first), evaluation into actions, the
     `[Build]` pre-pass that compiles a build-capable plugin's payload from source (in a copy
     of the plugin's own directory, into which the engine also materializes the build support
@@ -95,7 +103,7 @@ PE dependencies.
     the `.<arch>` section suffix that scopes entries to one architecture (read alongside the
     unsuffixed section, as a `.BuildNo` variant is), and installing plugins from
     `.cab`/`.zip` archives (`plugins add`).
-  - `base/` — the clean-room base layer: a hand-curated seed and registry/boot edits in
+  - `internal/base/` — the clean-room base layer: a hand-curated seed and registry/boot edits in
     `base.inf`, the boot-driver and locale derivation from the source, and the
     `pewalk`-based import-closure scanner that computes the import-derivable half of the
     boot file set from the source's own PE dependency graph (so it is not hand-listed).
@@ -107,7 +115,7 @@ PE dependencies.
     matches on a device ID rather than on a registry path the build would have to predict —
     that is how the processor driver reaches the CPU that ACPI enumerates at boot, and it is
     what lets the CPU idle rather than spin, since a PE runs no driver-install pass.
-  - `tree/` — assemble the output file tree (resolve → decompress → place).
+  - `internal/tree/` — assemble the output file tree (resolve → decompress → place).
   - `hive/` — build the Windows registry hives (pure-Go `regf` read/write). The SYSTEM hive
     starts from the source's text-setup `setupreg.hiv` and then has the source's `hivesys.inf`
     (the full GUI-mode system config) folded onto it — mapping `CurrentControlSet` to the real
@@ -116,10 +124,10 @@ PE dependencies.
     has the standard config it needs to start the Win32 services. SOFTWARE and DEFAULT are built
     from `hivesft.inf`/`hivedef.inf`, and the shell build grafts the machine classes from
     `hivecls.inf` into SOFTWARE\Classes.
-  - `target/` — output targets (e.g. a bootable ISO). The El Torito no-emulation
+  - `internal/target/` — output targets (e.g. a bootable ISO). The El Torito no-emulation
     mastering both ISO layouts share is factored into one `MasterElTorito` the classic
     and WIM tails call.
-  - `receipt/` — the record a build leaves inside the image it produced (`pebuild.txt` at
+  - `internal/receipt/` — the record a build leaves inside the image it produced (`pebuild.txt` at
     the tree root, `PEBUILD.TXT` once the ISO stage uppercases the tree, so a booted PE can
     `type` it). It describes the build's *inputs* — the engine content hash, the manifest
     digest, the source fingerprint, and the fully resolved plugin set with the option values
@@ -132,16 +140,16 @@ PE dependencies.
     that decides what may run). The engine hash covers what is `go:embed`ed rather than the
     executable, whose bytes change on every link; a plugin pebuild does not embed carries its
     own content hash instead.
-  - `build/` — the orchestrator that wires the pipeline together. Its media tail branches
+  - `internal/build/` — the orchestrator that wires the pipeline together. Its media tail branches
     on the manifest `layout`: the classic path masters the assembled tree; the `wim` path
-    (`build/wimcd.go`, `emitWIMCDISO`) instead masters the pre-wimmf boot closure into a
+    (`internal/build/wimcd.go`, `emitWIMCDISO`) instead masters the pre-wimmf boot closure into a
     gzipped bootable `coreimg` (`internal/coreimg`), packs the tree into a `.wim`
     (the external `go-wim` library, with the XP security descriptor and version policy supplied
-    by `build/wimsecurity.go`), relocates the boot chain a boot-chain plugin staged into a reserved
+    by `internal/build/wimsecurity.go`), relocates the boot chain a boot-chain plugin staged into a reserved
     subtree to the media root, and writes the grub4dos `menu.lst` that maps the coreimg into
     RAM as a CD — a chain that ships no Microsoft boot binary. The closure is resolved to tree
-    paths during assembly (`build/coreimg.go`, `coreMemberPaths`, from `base.ComputeBootCore`);
-    `build/wimmedia.go` holds the media helpers the tail shares.
+    paths during assembly (`internal/build/coreimg.go`, `coreMemberPaths`, from `base.ComputeBootCore`);
+    `internal/build/wimmedia.go` holds the media helpers the tail shares.
 - `pewalk/` — the "ldd for PE" library: computes the transitive PE import closure
   (static + delay imports, or static-only for a boot-necessary set) of a binary against a
   source, resolving each imported module
@@ -149,7 +157,7 @@ PE dependencies.
   cabinet-packed forms) and reporting missing modules as flagged red herrings. Renders
   the closure as text, Graphviz DOT, or JSON. Backs both `cmd/pewalk` and the durable
   import-walk scanners.
-- `buildcache/` — a small, generic on-disk cache (namespace + caller-supplied key →
+- `internal/buildcache/` — a small, generic on-disk cache (namespace + caller-supplied key →
   bytes) shared by build stages that recompute deterministic artifacts from an unchanging
   source. Its current use is decompressed driver-cabinet members (keyed by a fingerprint
   of the cabinet's directory region plus the member name), which both the import-closure
@@ -195,7 +203,8 @@ PE dependencies.
     overlay needs, and `depends` on the out-of-tree plugins that carry the binaries — `wimmf` (the
     overlay filter that reads the tree out of the WIM), `firadisk` (reclaims the grub4dos-mapped RAM as
     a disk), and `grub4dos` (the loader) — which the user installs from packages.
-- `internal/` — support packages: `golden` (golden-file test helper), `repo` (resolves a
+- `internal/` — the engine packages listed above live here, alongside these support
+  packages: `golden` (golden-file test helper), `repo` (resolves a
   path inside the repository for a test that reads a file the tree ships — a plugin's
   `.inf`, the manifest catalogue, the source ISO under `testdata/` — by walking up to this
   module's `go.mod` rather than counting `../`, so a package that moves deeper does not
@@ -214,7 +223,7 @@ PE dependencies.
   `iso` target's mastering recipe). The `.wim` itself is written by the external `go-wim` library
   rather than an in-tree package or `wimlib`; the build's own policy that library needs — the XP
   security descriptor every file carries and the Windows version stamped into the image — lives in
-  `build/wimsecurity.go` and is handed to it as options.
+  `internal/build/wimsecurity.go` and is handed to it as options.
 - `scripts/` — repository tooling. `gen-licenses.sh` (+ its template) regenerates the
   committed `THIRD-PARTY-LICENSES` notice from the binaries' transitive dependency closure
   via `go-licenses`; run it through `make licenses`.

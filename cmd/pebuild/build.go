@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nradchenko/pe-builder/build"
-	"github.com/nradchenko/pe-builder/buildcache"
+	"github.com/nradchenko/pe-builder/internal/build"
+	"github.com/nradchenko/pe-builder/internal/buildcache"
 )
 
 func newBuildCmd() *cobra.Command {

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nradchenko/pe-builder/action"
 	"github.com/nradchenko/pe-builder/inf"
+	"github.com/nradchenko/pe-builder/internal/action"
 )
 
 // Apply overlays the registry actions in acts onto the base hives, in order, so

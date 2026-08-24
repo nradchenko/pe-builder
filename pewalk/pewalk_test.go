@@ -14,8 +14,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/nradchenko/pe-builder/buildcache"
 	"github.com/nradchenko/pe-builder/compress"
+	"github.com/nradchenko/pe-builder/internal/buildcache"
 	"github.com/nradchenko/pe-builder/internal/golden"
 	"github.com/nradchenko/pe-builder/source"
 )

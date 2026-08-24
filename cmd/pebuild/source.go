@@ -17,13 +17,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nradchenko/pe-builder/action"
 	"github.com/nradchenko/pe-builder/compress"
 	"github.com/nradchenko/pe-builder/inf"
+	"github.com/nradchenko/pe-builder/internal/action"
+	"github.com/nradchenko/pe-builder/internal/tree"
 	"github.com/nradchenko/pe-builder/layout"
 	"github.com/nradchenko/pe-builder/pewalk"
 	"github.com/nradchenko/pe-builder/source"
-	"github.com/nradchenko/pe-builder/tree"
 )
 
 func newSourceCmd() *cobra.Command {

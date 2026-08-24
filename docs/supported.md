@@ -311,7 +311,7 @@ These apply to any build. Gaps specific to the Server 2003 codebase are under
   *runtime* hive would settle it.
 - **Task Manager shows unreadable characters in its User Name column,** for every process
   except *System Idle Process*. The cause is not established; the leading suspicion is that a
-  PE ships empty SAM and SECURITY hives (deliberately — see the note in `build/hives.go`), so
+  PE ships empty SAM and SECURITY hives (deliberately — see the note in `internal/build/hives.go`), so
   there is no account database to resolve a process owner against. Cosmetic: only that column
   is affected, and the rest of Task Manager works.
 

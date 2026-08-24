@@ -38,7 +38,7 @@ order compression filters, which is where an image-backing overlay belongs.
 `WimPath` tells `wimmf` where the WIM is: `\Device\CdRom0\PE.WIM`. Two things about that value:
 
 - **Case.** The wim-cd tail writes the file to the media root verbatim as `PE.wim`
-  (`build/wimcd.go`, `wimCDImageName`) — the outer ISO is mastered without the uppercasing the
+  (`internal/build/wimcd.go`, `wimCDImageName`) — the outer ISO is mastered without the uppercasing the
   loose-file `iso` target does. The uppercase `PE.WIM` here still resolves it because cdfs and
   `wimmf` match the path case-insensitively.
 - **Drive number.** `CdRom0` is a hint, not a hard requirement. `wimmf` resolves the actual CD

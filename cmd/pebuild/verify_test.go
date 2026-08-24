@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nradchenko/pe-builder/build"
-	"github.com/nradchenko/pe-builder/receipt"
+	"github.com/nradchenko/pe-builder/internal/build"
+	"github.com/nradchenko/pe-builder/internal/receipt"
 )
 
 func testReceipt() *receipt.Receipt {

@@ -14,8 +14,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nradchenko/pe-builder/action"
-	"github.com/nradchenko/pe-builder/plugin"
+	"github.com/nradchenko/pe-builder/internal/action"
+	"github.com/nradchenko/pe-builder/internal/plugin"
 )
 
 func newPluginsCmd() *cobra.Command {

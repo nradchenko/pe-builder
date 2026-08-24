@@ -22,9 +22,9 @@ platform note in the [README](../README.md#quick-start).
 ### Editing a built-in plugin or the base layer
 
 The built-in plugins and the base layer are compiled *into* the binary (`plugins/embed.go`
-and `base/base.go` embed them with `go:embed`), so a `pebuild` you built earlier keeps
+and `internal/base/base.go` embed them with `go:embed`), so a `pebuild` you built earlier keeps
 building from the copy it was compiled with. Edit `plugins/<name>/<name>.inf` or
-`base/base.inf`, run a stale binary, and the build quietly uses the old file — nothing
+`internal/base/base.inf`, run a stale binary, and the build quietly uses the old file — nothing
 reports it, and the resulting image looks like your change simply had no effect.
 
 Rebuild after every such edit, or iterate with `go run`, which recompiles and re-embeds

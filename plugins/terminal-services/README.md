@@ -115,4 +115,4 @@ this plugin has to provide.
 by *file name* (`Image Path = rsaenh.dll`) — so nothing points at it that an import scan could
 follow, and without it `CryptAcquireContext` fails, the licensing init returns
 `STATUS_UNSUCCESSFUL`, and `ServiceMain` bails. That file is staged by the **base layer** (which is
-where the registration comes from); see `base/base.inf`. This plugin depends on it being there.
+where the registration comes from); see `internal/base/base.inf`. This plugin depends on it being there.

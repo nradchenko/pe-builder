@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nradchenko/pe-builder/internal/buildinfo"
-	"github.com/nradchenko/pe-builder/manifest"
+	"github.com/nradchenko/pe-builder/internal/manifest"
 )
 
 // newRootCmd builds the full command tree. It is a constructor so tests can

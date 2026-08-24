@@ -24,8 +24,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nradchenko/pe-builder/boot"
-	"github.com/nradchenko/pe-builder/target"
+	"github.com/nradchenko/pe-builder/internal/boot"
+	"github.com/nradchenko/pe-builder/internal/target"
 )
 
 // Options configures the coreimg build.

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nradchenko/pe-builder/manifest"
+	"github.com/nradchenko/pe-builder/internal/manifest"
 )
 
 // TestPrintSummaryOutputLine covers how the summary reports what a build produces.

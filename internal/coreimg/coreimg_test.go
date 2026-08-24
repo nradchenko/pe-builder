@@ -16,8 +16,8 @@ import (
 	"testing"
 
 	diskfs "github.com/diskfs/go-diskfs"
-	"github.com/nradchenko/pe-builder/boot"
-	"github.com/nradchenko/pe-builder/target"
+	"github.com/nradchenko/pe-builder/internal/boot"
+	"github.com/nradchenko/pe-builder/internal/target"
 )
 
 // bootImage is a recognizable 2 KB stand-in for the source's CDBOOT sector — the El Torito

@@ -6,7 +6,7 @@ package hive
 import (
 	"testing"
 
-	"github.com/nradchenko/pe-builder/action"
+	"github.com/nradchenko/pe-builder/internal/action"
 )
 
 // newHives returns a set of empty hives for exercising Apply.

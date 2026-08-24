@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nradchenko/pe-builder/plugin"
+	"github.com/nradchenko/pe-builder/internal/plugin"
 )
 
 // TestPrintPluginOptions covers what `plugins info` reports about a plugin's
