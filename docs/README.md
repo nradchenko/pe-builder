@@ -19,3 +19,12 @@
   the original Bart's PE Builder: its build process, the complete plugin `.inf`
   format, conventions, and internals. This is the foundation the implementation is
   built on.
+
+The project's own policies:
+
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to get started, the conventions a
+  change is expected to follow, and how AI-assisted contributions are handled.
+- [`SECURITY.md`](SECURITY.md) — reporting a vulnerability privately, and what
+  is in scope for a tool that assembles an image from media you supply.
+- [`DISCLAIMER.md`](DISCLAIMER.md) — the full affiliation, trademark, and
+  fitness-for-use notice the README summarizes.

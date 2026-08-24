@@ -164,9 +164,9 @@ reference.
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for how to get started, the
+Contributions are welcome — see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for how to get started, the
 conventions, and how AI-assisted contributions are handled. To report a security problem, follow
-[SECURITY.md](SECURITY.md) rather than filing a public issue.
+[SECURITY.md](docs/SECURITY.md) rather than filing a public issue.
 
 ## License
 
@@ -189,4 +189,4 @@ run it in an isolated environment, ideally an offline VM, and never as a working
 You supply your own licensed Windows source — this project ships no Microsoft files. It
 is an experiment for enthusiasts, not a supported product.
 
-See [DISCLAIMER.md](DISCLAIMER.md) for the full text.
+See [DISCLAIMER.md](docs/DISCLAIMER.md) for the full text.

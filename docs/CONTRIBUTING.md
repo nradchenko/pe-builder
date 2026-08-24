@@ -17,7 +17,7 @@ go vet ./...
 
 Testing against a real Windows source needs media you supply; those tests skip when it is
 absent (see the test files for how they locate it). pe-builder is developed on Linux — see the
-platform note in the [README](README.md#quick-start).
+platform note in the [README](../README.md#quick-start).
 
 ### Editing a built-in plugin or the base layer
 
@@ -59,7 +59,7 @@ code.
 
 ## Licensing
 
-pe-builder is licensed under Apache-2.0 (see [`LICENSE`](LICENSE)). By submitting a
+pe-builder is licensed under Apache-2.0 (see [`LICENSE`](../LICENSE)). By submitting a
 contribution, you agree it is provided under the same license.
 
 There is no CLA and no copyright assignment: **your contribution stays yours**. New files you
@@ -73,7 +73,7 @@ write should carry your own name and the year you wrote them, above the SPDX ide
 — in whatever comment syntax the file uses. When you change a file someone else wrote, leave its
 existing header as it is, and please don't add yourself to `NOTICE`: that file lists the
 attributions everyone redistributing pe-builder is obliged to reproduce, not the people who have
-contributed. Plugin authors: [`docs/plugins/conventions.md`](docs/plugins/conventions.md#copyright-headers)
+contributed. Plugin authors: [`docs/plugins/conventions.md`](plugins/conventions.md#copyright-headers)
 says the same in more detail.
 
 ## Reporting bugs and asking for features

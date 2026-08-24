@@ -53,4 +53,4 @@ files and bundles no plugin binaries; it only operates on inputs you supply.
 pe-builder is built on and inspired by software that is end-of-life and long abandoned. It
 exists as an experiment: bringing a historical Windows build process to a modern Go stack.
 It is a hobby project for enthusiasts and retrocomputing — not a supported product, with no
-warranty and no guarantee of fitness for any purpose (see [LICENSE](LICENSE)).
+warranty and no guarantee of fitness for any purpose (see [LICENSE](../LICENSE)).
