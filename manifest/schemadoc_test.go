@@ -12,11 +12,16 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+
+	"github.com/nradchenko/pe-builder/internal/repo"
 )
 
 // cataloguePath is the field catalogue: docs/manifest.hcl, a valid manifest that shows
 // every block and field with each optional one at its default.
-const cataloguePath = "../docs/manifest.hcl"
+func cataloguePath(t testing.TB) string {
+	t.Helper()
+	return repo.Path(t, "docs", "manifest.hcl")
+}
 
 // TestCatalogueDocumentsEverySchemaField fails when a field the schema accepts is named
 // nowhere in the catalogue. It closes the half of the drift problem that decoding cannot
@@ -38,7 +43,7 @@ func TestCatalogueDocumentsEverySchemaField(t *testing.T) {
 	}
 	sort.Strings(missing)
 	for _, n := range missing {
-		t.Errorf("the schema accepts %q, but the catalogue never mentions it — document it in %s", n, cataloguePath)
+		t.Errorf("the schema accepts %q, but the catalogue never mentions it — document it in %s", n, cataloguePath(t))
 	}
 }
 
@@ -121,13 +126,14 @@ func ctyNames(t reflect.Type, prefix string) []string {
 func catalogueNames(t *testing.T) map[string]bool {
 	t.Helper()
 
-	f, diags := hclparse.NewParser().ParseHCLFile(cataloguePath)
+	path := cataloguePath(t)
+	f, diags := hclparse.NewParser().ParseHCLFile(path)
 	if diags.HasErrors() {
-		t.Fatalf("parse %s: %v", cataloguePath, diags)
+		t.Fatalf("parse %s: %v", path, diags)
 	}
 	body, ok := f.Body.(*hclsyntax.Body)
 	if !ok {
-		t.Fatalf("%s is not native HCL syntax, so its AST cannot be walked", cataloguePath)
+		t.Fatalf("%s is not native HCL syntax, so its AST cannot be walked", path)
 	}
 
 	out := make(map[string]bool)

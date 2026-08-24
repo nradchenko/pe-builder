@@ -9,6 +9,7 @@ import (
 
 	"github.com/nradchenko/pe-builder/action"
 	"github.com/nradchenko/pe-builder/inf"
+	"github.com/nradchenko/pe-builder/internal/repo"
 	"github.com/nradchenko/pe-builder/plugin"
 	"github.com/nradchenko/pe-builder/source"
 )
@@ -16,7 +17,10 @@ import (
 // bootPromptINF is the plugin that stages the "press any key to boot from CD" file. Read by
 // path rather than embedded because it belongs to another package; a failure to read it means
 // the plugin moved or was removed, not that the base layer is broken.
-const bootPromptINF = "../plugins/boot-prompt/boot-prompt.inf"
+func bootPromptINF(t testing.TB) string {
+	t.Helper()
+	return repo.Path(t, "plugins", "boot-prompt", "boot-prompt.inf")
+}
 
 // bootfixFile is the file the whole prompt consists of.
 const bootfixFile = "bootfix.bin"
@@ -50,14 +54,15 @@ func TestBootPromptIsNotInBase(t *testing.T) {
 //
 // Optional is the other half: a source that does not carry the file must still build.
 func TestBootPromptStagesToTheBootArea(t *testing.T) {
-	b, err := os.ReadFile(bootPromptINF)
+	path := bootPromptINF(t)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read %s: %v\n(this test pins that plugin's staging; if it was renamed or "+
-			"removed, update or delete this test)", bootPromptINF, err)
+			"removed, update or delete this test)", path, err)
 	}
 	f, err := inf.Parse(b)
 	if err != nil {
-		t.Fatalf("parse %s: %v", bootPromptINF, err)
+		t.Fatalf("parse %s: %v", path, err)
 	}
 
 	for _, arch := range []string{"i386", "amd64"} {

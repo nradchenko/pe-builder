@@ -5,7 +5,6 @@ package layout
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,12 +14,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/nradchenko/pe-builder/internal/golden"
+	"github.com/nradchenko/pe-builder/internal/repo"
 	"github.com/nradchenko/pe-builder/source"
 )
-
-// testISO is the real XP source ISO symlinked under testdata/iso for local runs. Tests
-// needing it skip when it is absent (e.g. CI), keeping the suite hermetic.
-const testISO = "../testdata/iso/ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso"
 
 // syntheticTxtsetup is a trimmed txtsetup.sif exercising the directory table, files
 // with varying empty fields (so the target-directory index must be read positionally),
@@ -165,10 +161,7 @@ func TestCompressedName(t *testing.T) {
 // TestParseRealSource parses the real XP SP3 metadata and asserts a stable summary
 // (directory count, a spread of resolutions, driver-class sizes) via a golden file.
 func TestParseRealSource(t *testing.T) {
-	if _, err := os.Stat(testISO); err != nil {
-		t.Skip("real source ISO not present under testdata/iso; skipping")
-	}
-	src, err := source.Open(testISO)
+	src, err := source.Open(repo.SourceISO(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,10 +299,7 @@ func TestReadProductType(t *testing.T) {
 // TestRealSourceIsWorkstation pins the real XP source through the whole parse path, so the
 // synthetic cases above cannot drift from what actual media says.
 func TestRealSourceIsWorkstation(t *testing.T) {
-	if _, err := os.Stat(testISO); err != nil {
-		t.Skip("real source ISO not present under testdata/iso; skipping")
-	}
-	src, err := source.Open(testISO)
+	src, err := source.Open(repo.SourceISO(t))
 	if err != nil {
 		t.Fatal(err)
 	}

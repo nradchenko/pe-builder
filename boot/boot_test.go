@@ -9,18 +9,18 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/nradchenko/pe-builder/internal/repo"
 	"github.com/nradchenko/pe-builder/source"
 )
 
-const testISO = "../testdata/iso/ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso"
-
-// openISO opens the test ISO as an io.ReaderAt for the boot-image parser, or
-// skips the test when it is absent.
+// openISO opens the real source ISO as an io.ReaderAt for the boot-image parser.
+// repo.SourceISO skips the test when the ISO is absent, so anything left for this
+// function to report is a present-but-unreadable file, which is a failure.
 func openISO(t *testing.T) *os.File {
 	t.Helper()
-	f, err := os.Open(testISO)
+	f, err := os.Open(repo.SourceISO(t))
 	if err != nil {
-		t.Skip("real source ISO not present under testdata/iso; skipping")
+		t.Fatalf("open source ISO: %v", err)
 	}
 	t.Cleanup(func() { f.Close() })
 	return f

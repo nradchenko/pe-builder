@@ -8,28 +8,21 @@
 package inf_test
 
 import (
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/nradchenko/pe-builder/compress"
 	"github.com/nradchenko/pe-builder/inf"
+	"github.com/nradchenko/pe-builder/internal/repo"
 	"github.com/nradchenko/pe-builder/layout"
 	"github.com/nradchenko/pe-builder/source"
 )
-
-// testISO is the real XP source ISO symlinked under testdata/iso for local runs. Tests
-// needing it skip when it is absent (e.g. CI), keeping the suite hermetic.
-const testISO = "../testdata/iso/ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso"
 
 // The directives whose value is a list of section names, lowercased as Line.Key is not.
 var sectionListKeys = []string{"addreg", "delreg", "bitreg", "ini2reg", "needs"}
 
 func TestAdaptNetworkComponentOnRealINF(t *testing.T) {
-	if _, err := os.Stat(testISO); err != nil {
-		t.Skip("real source ISO not present under testdata/iso; skipping")
-	}
-	src, err := source.Open(testISO)
+	src, err := source.Open(repo.SourceISO(t))
 	if err != nil {
 		t.Fatalf("open source: %v", err)
 	}

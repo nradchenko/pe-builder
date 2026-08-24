@@ -4,19 +4,13 @@
 package source
 
 import (
-	"os"
 	"testing"
+
+	"github.com/nradchenko/pe-builder/internal/repo"
 )
 
-// testISO is the real XP source ISO symlinked under testdata/iso for local runs. Tests
-// that need it skip when it is absent (e.g. CI).
-const testISO = "../testdata/iso/ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso"
-
 func TestProbeISO(t *testing.T) {
-	if _, err := os.Stat(testISO); err != nil {
-		t.Skip("real source ISO not present under testdata/iso; skipping")
-	}
-	src, err := Open(testISO)
+	src, err := Open(repo.SourceISO(t))
 	if err != nil {
 		t.Fatal(err)
 	}

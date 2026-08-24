@@ -4,11 +4,15 @@
 package manifest
 
 import (
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/nradchenko/pe-builder/internal/repo"
 )
 
 func TestDecodeFull(t *testing.T) {
@@ -290,22 +294,26 @@ func TestValidate(t *testing.T) {
 // touching this test. Note the limit: decoding catches a field that went away, never one
 // that was added and documented nowhere.
 func TestShippedManifestsAreValid(t *testing.T) {
-	// Checked per pattern, not over the combined set: a single total would still pass if
+	// Checked per directory, not over the combined set: a single total would still pass if
 	// docs/ lost its catalogue while examples/ kept its files, which is the exact drift
 	// this guards.
-	for _, pat := range []string{"../examples/*.hcl", "../docs/*.hcl"} {
-		paths, err := filepath.Glob(pat)
+	for _, dir := range []string{"examples", "docs"} {
+		// Matched against the directory rather than against a full path: the checkout's
+		// own location would otherwise be part of the pattern, where a "[" or a "*" in
+		// some parent's name is a metacharacter and would match nothing.
+		root := repo.Path(t, dir)
+		names, err := fs.Glob(os.DirFS(root), "*.hcl")
 		if err != nil {
-			t.Fatalf("glob %s: %v", pat, err)
+			t.Fatalf("glob %s: %v", root, err)
 		}
-		if len(paths) == 0 {
-			t.Fatalf("no manifests matched %s — the glob or the directory moved", pat)
+		if len(names) == 0 {
+			t.Fatalf("no manifests under %s — the directory moved or was emptied", root)
 		}
-		for _, p := range paths {
+		for _, name := range names {
 			// Named by directory and file: the two trees may hold the same base name.
-			label := filepath.Join(filepath.Base(filepath.Dir(p)), filepath.Base(p))
+			label := filepath.Join(dir, name)
 			t.Run(label, func(t *testing.T) {
-				m, err := Load(p)
+				m, err := Load(filepath.Join(root, name))
 				if err != nil {
 					t.Fatalf("Load: %v", err)
 				}

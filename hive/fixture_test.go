@@ -5,25 +5,18 @@ package hive
 
 import (
 	"io/fs"
-	"os"
 	"testing"
 
+	"github.com/nradchenko/pe-builder/internal/repo"
 	"github.com/nradchenko/pe-builder/source"
 )
 
-// testISO is the real XP SP3 source ISO symlinked under testdata/iso for local runs.
-// The Microsoft hive material (setupreg.hiv, hive*.inf) is never committed, so
-// tests that need it read it from this ISO and skip when it is absent (e.g. CI).
-const testISO = "../testdata/iso/ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso"
-
-// sourceBacking opens the test ISO as a source backing, skipping the test when
-// the ISO is not present.
+// sourceBacking opens the real source ISO as a source backing. The Microsoft hive
+// material (setupreg.hiv, hive*.inf) is never committed, so the tests that need it read
+// it from that ISO and skip when it is absent (e.g. CI).
 func sourceBacking(t *testing.T) source.Backing {
 	t.Helper()
-	if _, err := os.Stat(testISO); err != nil {
-		t.Skip("real source ISO not present under testdata/iso; skipping")
-	}
-	src, err := source.Open(testISO)
+	src, err := source.Open(repo.SourceISO(t))
 	if err != nil {
 		t.Fatalf("open source ISO: %v", err)
 	}

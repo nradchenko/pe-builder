@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/nradchenko/pe-builder/action"
+	"github.com/nradchenko/pe-builder/internal/repo"
 	"github.com/nradchenko/pe-builder/layout"
 	"github.com/nradchenko/pe-builder/pewalk"
 	"github.com/nradchenko/pe-builder/source"
@@ -25,7 +26,7 @@ func realSource(t *testing.T) (source.Backing, source.Identity, *layout.Layout, 
 	t.Helper()
 	path := os.Getenv("PEBUILD_TEST_SOURCE")
 	if path == "" {
-		cache := filepath.Join("..", "testdata", "iso", "ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso")
+		cache := repo.SourceISOPath(t)
 		if _, err := os.Stat(cache); err == nil {
 			path = cache
 		}

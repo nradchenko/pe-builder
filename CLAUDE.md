@@ -192,7 +192,12 @@ PE dependencies.
     overlay needs, and `depends` on the out-of-tree plugins that carry the binaries — `wimmf` (the
     overlay filter that reads the tree out of the WIM), `firadisk` (reclaims the grub4dos-mapped RAM as
     a disk), and `grub4dos` (the loader) — which the user installs from packages.
-- `internal/` — support packages: `golden` (golden-file test helper), `buildinfo`
+- `internal/` — support packages: `golden` (golden-file test helper), `repo` (resolves a
+  path inside the repository for a test that reads a file the tree ships — a plugin's
+  `.inf`, the manifest catalogue, the source ISO under `testdata/` — by walking up to this
+  module's `go.mod` rather than counting `../`, so a package that moves deeper does not
+  leave its test quietly skipping; reach for it instead of writing a relative path),
+  `buildinfo`
   (version metadata, plus the product/author/copyright a plugin's binaries stamp into their
   Windows version resource — passed to a plugin's build in the environment so the several
   binaries cannot disagree about who wrote them or under what licence, along with the version

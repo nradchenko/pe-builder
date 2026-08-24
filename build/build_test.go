@@ -20,6 +20,7 @@ import (
 	"github.com/nradchenko/pe-builder/hive"
 	"github.com/nradchenko/pe-builder/internal/enginehash"
 	"github.com/nradchenko/pe-builder/internal/golden"
+	"github.com/nradchenko/pe-builder/internal/repo"
 	"github.com/nradchenko/pe-builder/layout"
 	"github.com/nradchenko/pe-builder/manifest"
 	"github.com/nradchenko/pe-builder/plugin"
@@ -36,8 +37,6 @@ Signature = "$Windows NT$"
 
 [AddReg]
 `
-
-const testISO = "../testdata/iso/ru_windows_xp_professional_with_service_pack_3_x86_cd_vl_x14-74146.iso"
 
 // syntheticMeta is minimal source metadata: a directory table and a couple of Load
 // classes, enough for layout.Parse to place files and derive drivers.
@@ -462,9 +461,7 @@ func TestAssembleBuiltPlugin(t *testing.T) {
 // and diff the assembled tree (sorted path + size) against a committed golden listing.
 // It skips when the source ISO is absent, keeping CI hermetic.
 func TestBuildRealSource(t *testing.T) {
-	if _, err := os.Stat(testISO); err != nil {
-		t.Skip("real source ISO not present under testdata/iso; skipping")
-	}
+	testISO := repo.SourceISO(t)
 	out := t.TempDir()
 	m := &manifest.Manifest{
 		Source: manifest.Source{Path: testISO, Type: "auto"},
@@ -518,9 +515,7 @@ func readReceipt(t *testing.T, treeDir string) *receipt.Receipt {
 // win32-gui computes the shared GUI runtime from the source's own import graph, so the
 // seed roots and their static dependencies all land in the tree — none hand-listed.
 func TestBuildWin32GUIClosure(t *testing.T) {
-	if _, err := os.Stat(testISO); err != nil {
-		t.Skip("real source ISO not present under testdata/iso; skipping")
-	}
+	testISO := repo.SourceISO(t)
 	out := t.TempDir()
 	m := &manifest.Manifest{
 		Source:  manifest.Source{Path: testISO, Type: "auto"},
@@ -562,9 +557,7 @@ func TestBuildWin32GUIClosure(t *testing.T) {
 // carries the boot chain — the loader at \I386, txtsetup.sif switched to /minint, and
 // the SYSTEM hive — all readable back through the ISO.
 func TestBuildISO(t *testing.T) {
-	if _, err := os.Stat(testISO); err != nil {
-		t.Skip("real source ISO not present under testdata/iso; skipping")
-	}
+	testISO := repo.SourceISO(t)
 	out := filepath.Join(t.TempDir(), "rescue.iso")
 	m := &manifest.Manifest{
 		Source: manifest.Source{Path: testISO, Type: "auto"},
@@ -641,9 +634,7 @@ func TestBuildISO(t *testing.T) {
 // TestBuildNone checks that the none target produces a complete PE tree — boot
 // configuration applied (txtsetup.sif /minint, startnet.cmd) — but no media.
 func TestBuildNone(t *testing.T) {
-	if _, err := os.Stat(testISO); err != nil {
-		t.Skip("real source ISO not present under testdata/iso; skipping")
-	}
+	testISO := repo.SourceISO(t)
 	out := filepath.Join(t.TempDir(), "tree")
 	m := &manifest.Manifest{
 		Source: manifest.Source{Path: testISO, Type: "auto"},
@@ -673,9 +664,7 @@ func TestBuildNone(t *testing.T) {
 // TestBuildISOKeepWork checks that with keep_work the ISO is mastered from a clone,
 // leaving the work tree intact.
 func TestBuildISOKeepWork(t *testing.T) {
-	if _, err := os.Stat(testISO); err != nil {
-		t.Skip("real source ISO not present under testdata/iso; skipping")
-	}
+	testISO := repo.SourceISO(t)
 	tree := filepath.Join(t.TempDir(), "tree")
 	out := filepath.Join(t.TempDir(), "rescue.iso")
 	m := &manifest.Manifest{

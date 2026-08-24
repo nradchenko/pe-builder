@@ -8,12 +8,17 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/nradchenko/pe-builder/internal/repo"
 )
 
 // serialDebugINF is the plugin whose loader options must track this package's base.inf. It is
 // read by path rather than embedded because it belongs to another package; a failure to read it
 // means the plugin moved or was removed, not that the base layer is broken.
-const serialDebugINF = "../plugins/serialdebug/serialdebug.inf"
+func serialDebugINF(t testing.TB) string {
+	t.Helper()
+	return repo.Path(t, "plugins", "serialdebug", "serialdebug.inf")
+}
 
 // debugSuffix is what the serialdebug plugin adds to the base layer's loader options.
 const debugSuffix = " /debug /debugport=com1 /baudrate=115200"
@@ -70,7 +75,7 @@ func loaderOptions(t *testing.T, path string) map[string]string {
 // plugins/serialdebug/serialdebug.inf; the fix is never to relax the comparison.
 func TestSerialDebugMatchesBase(t *testing.T) {
 	baseOpts := loaderOptions(t, "base.inf")
-	pluginOpts := loaderOptions(t, serialDebugINF)
+	pluginOpts := loaderOptions(t, serialDebugINF(t))
 
 	if len(baseOpts) == 0 {
 		t.Fatal("no osloadoptions found in base.inf — has the line or its quoting changed?")
