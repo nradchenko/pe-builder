@@ -31,7 +31,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/nradchenko/pe-builder/buildcache"
 	"github.com/nradchenko/pe-builder/compress"
 )
 
@@ -90,8 +89,10 @@ type Source struct {
 	// re-decoded (a full LZX folder decode) here.
 	cabFP map[string]string
 	// cache is the shared on-disk store of extracted cabinet members. It is nil
-	// (disabled) unless the caller passes WithCache; a nil cache always misses.
-	cache *buildcache.Cache
+	// (disabled) unless the caller passes WithCache, and every use is guarded on that:
+	// unlike a concrete *buildcache.Cache, whose methods are nil-receiver-safe, an
+	// unset interface would panic rather than simply miss.
+	cache Cache
 	// warnings records non-fatal indexing problems (e.g. an unreadable cabinet
 	// whose members were skipped), for the caller to surface.
 	warnings []string
@@ -134,10 +135,27 @@ func (m *parsedModule) imports(includeDelay bool) []string {
 // Option configures a Source at Open time.
 type Option func(*Source)
 
+// Cache is the on-disk store of extracted cabinet members a caller may attach with
+// WithCache. It is named as an interface rather than as the engine's concrete cache type
+// so that pewalk — the package most likely to be used on its own — keeps its exported
+// signatures to types a caller can name.
+type Cache interface {
+	// Get returns the bytes stored under (namespace, key), and whether one was present.
+	Get(namespace, key string) ([]byte, bool)
+	// Put stores data under (namespace, key), replacing any existing entry.
+	Put(namespace, key string, data []byte)
+}
+
 // WithCache attaches a shared on-disk cache of extracted cabinet members, so a
 // member decompressed on an earlier build of the same source is reused instead of
-// decoded again. A nil cache leaves caching off; the standalone CLI passes none.
-func WithCache(c *buildcache.Cache) Option {
+// decoded again. Omitting the option, or passing an untyped nil, leaves caching off; the
+// standalone CLI passes none.
+//
+// Note what a typed nil does, since Cache is an interface: a nil pointer of an
+// implementing type is a non-nil Cache, so it is attached and its methods are called on a
+// nil receiver. An implementation that can be handed to WithCache that way must tolerate
+// one, as the engine's own cache does.
+func WithCache(c Cache) Option {
 	return func(s *Source) { s.cache = c }
 }
 
@@ -456,7 +474,7 @@ func (s *Source) readFile(p string) ([]byte, Origin, error) {
 func (s *Source) readCabMember(cabPath, name string) ([]byte, Origin, error) {
 	origin := Origin{Kind: OriginCab, Path: cabPath}
 	key := s.cabCacheKey(cabPath, name)
-	if key != "" {
+	if key != "" && s.cache != nil {
 		if data, ok := s.cache.Get(compress.CabinetCacheNamespace, key); ok {
 			return data, origin, nil
 		}
@@ -473,7 +491,7 @@ func (s *Source) readCabMember(cabPath, name string) ([]byte, Origin, error) {
 	if err != nil {
 		return nil, Origin{}, fmt.Errorf("extract %s from %s: %w", name, cabPath, err)
 	}
-	if key != "" {
+	if key != "" && s.cache != nil {
 		s.cache.Put(compress.CabinetCacheNamespace, key, data)
 	}
 	return data, origin, nil

@@ -156,7 +156,10 @@ PE dependencies.
   walk and the tree assembler consult so a member decoded on an earlier build of the same
   source is reused instead of re-running a full LZX folder decode. Enabled by default
   (`~/.cache/pe-builder`); `--no-cache`, `PEBUILD_NO_CACHE`, and `PEBUILD_CACHE_DIR` control
-  it. A nil cache is a valid disabled cache, so a stage holds one unconditionally.
+  it. A nil `*Cache` is a valid disabled cache, so a stage holds one unconditionally —
+  but `pewalk` takes the cache as its own two-method interface rather than this type, so
+  that its exported signatures name nothing a caller outside the engine cannot; there an
+  unattached cache is a nil *interface* and each use is guarded explicitly.
 - `plugins/` — the built-in plugins bundled with pebuild (embedded via `go:embed`, so an
   edit to one needs a rebuilt binary — or `go run ./cmd/pebuild` — before it takes effect;
   a stale binary silently builds with the old copy). Three kinds:

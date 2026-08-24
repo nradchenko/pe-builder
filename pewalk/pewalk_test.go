@@ -31,6 +31,54 @@ func cabMemberKey(t *testing.T, cab []byte, name string) string {
 	return compress.Fingerprint(cab[:n]) + ":" + name
 }
 
+// The engine's cache, pinned at compile time as one this package accepts. It is
+// belt-and-braces rather than the only guard — build passes a *buildcache.Cache straight
+// into WithCache, so a drift in its method set already fails that build. This states the
+// constraint beside the interface it belongs to, where it survives that caller changing.
+var _ Cache = (*buildcache.Cache)(nil)
+
+// TestCabMemberReadWithoutCache covers the Source no caller attached a cache to — the
+// standalone CLI's case. Cache is an interface, so an unattached cache is a nil interface
+// and an unguarded call would panic here rather than simply miss, which is how the
+// concrete cache behaved.
+func TestCabMemberReadWithoutCache(t *testing.T) {
+	want := bytes.Repeat([]byte{0xCC}, 400)
+	cab := writeCabinet([]cabMember{{name: "cabmod.dll", data: want}})
+
+	s, err := Open(fstest.MapFS{"i386/drivers.cab": {Data: cab}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := s.Read("cabmod.dll")
+	if err != nil {
+		t.Fatalf("read with no cache attached: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("cabmod.dll: got %d bytes, want %d", len(got), len(want))
+	}
+}
+
+// TestCabMemberReadWithNilCache covers WithCache handed an explicit nil. It is a separate
+// case from the one above: this leaves a non-nil interface holding a nil pointer, which a
+// plain s.cache != nil guard does not catch, so the methods behind it must stay
+// nil-receiver-safe.
+func TestCabMemberReadWithNilCache(t *testing.T) {
+	want := bytes.Repeat([]byte{0xDD}, 400)
+	cab := writeCabinet([]cabMember{{name: "cabmod.dll", data: want}})
+
+	s, err := Open(fstest.MapFS{"i386/drivers.cab": {Data: cab}}, WithCache((*buildcache.Cache)(nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := s.Read("cabmod.dll")
+	if err != nil {
+		t.Fatalf("read with a nil cache: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("cabmod.dll: got %d bytes, want %d", len(got), len(want))
+	}
+}
+
 // TestCabMemberCacheHitAndInvalidation checks that extraction serves a cached
 // member on a hit, and — the correctness-critical property — never serves a stale
 // member once the source cabinet changes.
