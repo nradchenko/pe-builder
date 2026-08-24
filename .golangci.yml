@@ -9,9 +9,28 @@ run:
 linters:
   default: standard
   enable:
+    - depguard
     - misspell
     - revive
     - unconvert
+  settings:
+    depguard:
+      rules:
+        # The regf engine half of hive/ is standard-library only, which is what keeps it
+        # separable. Both halves are package hive, so nothing else marks the boundary.
+        # Production files only — the tests do reach in, and stay behind if it splits out.
+        regf-engine:
+          files:
+            - "**/hive/header.go"
+            - "**/hive/cell.go"
+            - "**/hive/security.go"
+            - "**/hive/values.go"
+            - "**/hive/read.go"
+            - "**/hive/tree.go"
+            - "**/hive/write.go"
+          deny:
+            - pkg: github.com/nradchenko/pe-builder
+              desc: the regf engine must not depend on pe-builder
   exclusions:
     # Standard errcheck exclusions (fmt.Fprint*, Flush, Close, os.Remove): the
     # error that matters on each write path is checked explicitly.
