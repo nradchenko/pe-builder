@@ -39,6 +39,24 @@ hide_recent_docs   = 1, int, 0, 1
 ; Let the taskbar be dragged and resized (1 = unlocked). Locked by default, as XP is; Server
 ; 2003 ships the opposite default, so stating it keeps a build the same on either source.
 unlock_taskbar     = 0, int, 0, 1
+; --- What a folder shows. Each is named for the raw value it writes rather than for a reading
+; of it, because an option substitutes one-to-one and cannot invert: hence hide_file_extensions
+; rather than show_file_extensions. See [Default.AddReg] for what each writes, except
+; show_drive_letters_first, which is machine-wide and so lives in [Software.AddReg]. ---
+; Hidden files and folders: 1 = show, 2 = hide — not a boolean, and the opposite way round
+; from what the value name suggests.
+show_hidden_files        = 1, int, 1, 2
+; File extensions: 0 = show them, 1 = hide them for known types.
+hide_file_extensions     = 0, int, 0, 1
+; The full path in a folder's title bar / address bar rather than just the folder name.
+full_path_in_title       = 1, int, 0, 1
+full_path_in_address_bar = 1, int, 0, 1
+; The folder status bar, which is where a selection's size and free space are shown.
+show_status_bar          = 1, int, 0, 1
+; Where a drive's letter sits in its label: 0 = after the name, 4 = before it. The two
+; remaining values are narrower — 1 puts the letter first for network drives only, and 2
+; shows no letter at all — so 4 is the one that gives "C: Local Disk".
+show_drive_letters_first = 0, int, 0, 1, 2, 4
 
 ; Both binaries are the same source on either architecture; only the toolchain differs, so
 ; the shared [Build] holds the outputs and each [Build.<arch>] names that architecture's
@@ -168,6 +186,9 @@ msgina.dll = 2
 
 [Software.AddReg]
 0x1,"Microsoft\Windows NT\CurrentVersion\Winlogon","Shell","Explorer.exe"
+; Where a drive's letter sits in its label (see [Options]). Machine-wide rather than per-user,
+; which is why it sits here and not with the other folder-view settings in [Default.AddReg].
+0x4,"Microsoft\Windows\CurrentVersion\Explorer","ShowDriveLettersFirst",$(show_drive_letters_first)
 ; Load peshut.dll into shell processes so its ExitWindowsEx hook powers the machine off when the
 ; user picks Turn Off / Restart — /minint has no winlogon to carry out a normal shutdown.
 0x1,"Microsoft\Windows NT\CurrentVersion\Windows","AppInit_DLLs","peshut.dll"
@@ -303,8 +324,7 @@ msgina.dll = 2
 ; Start menu style: 1 = classic, 0 or absent = the modern panel. The NoSimpleStartMenu policy,
 ; which would force classic and hide the choice, stays unset. See README.md § Modern Start menu.
 0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\StartMenu\StartPanel","DefaultStartPanelOff",$(classic_start_menu)
-; NoRecentDocsMenu drops the menu (Start_ShowRecentDocs, the Advanced value one might expect, does
-; not exist — verified against shell32); NoRecentDocsHistory stops the tracking. One option drives
+; NoRecentDocsMenu drops the menu; NoRecentDocsHistory stops the tracking. One option drives
 ; both: tracking without the menu is wasted work, the menu without tracking would sit empty.
 0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoRecentDocsMenu",$(hide_recent_docs)
 0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoRecentDocsHistory",$(hide_recent_docs)
@@ -347,3 +367,36 @@ msgina.dll = 2
 0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","SeparateProcess",0x0
 0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoActiveDesktop",0x1
 0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","ForceActiveDesktopOn",0x0
+
+; --- What a folder shows. The defaults show everything a file has; the options exist to
+; deviate. Each is named for the raw value it writes rather than for a reading of it, because
+; an option substitutes one-to-one and cannot invert: hence hide_file_extensions = 0, not
+; show_file_extensions = 1.
+;
+; XP mirrors these flags in a 36-byte Explorer\ShellState blob as well as in the individual
+; DWORDs here. The DWORDs are what the shell honours, so only they are written; the blob is
+; also the wrong place for them, because its second flags word carries the Start-menu style
+; and would override classic_start_menu without saying so. ---
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","Hidden",$(show_hidden_files)
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","HideFileExt",$(hide_file_extensions)
+; The full path in a folder's title bar and address bar. Each lives in two places and both
+; have to be written: CabinetState is where the shell reads it (shell32 for FullPath, browseui
+; for FullPathAddress), while the Advanced copies are what the Folder Options dialog shows.
+; Writing only Advanced ticks the checkbox and changes nothing on screen.
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\CabinetState","FullPath",$(full_path_in_title)
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\CabinetState","FullPathAddress",$(full_path_in_address_bar)
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","FullPath",$(full_path_in_title)
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","FullPathAddress",$(full_path_in_address_bar)
+; The folder status bar is browseui's setting, so it lives under Internet Explorer\Main rather
+; than Explorer\Advanced. Its sibling StatusBarWeb governs browser windows and is irrelevant
+; here — no IE is staged.
+0x4,"Software\Microsoft\Internet Explorer\Main","StatusBarOther",$(show_status_bar)
+; A stateless boot has no previous session's folder windows to reopen.
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","PersistBrowsers",0x0
+; Do not go looking for network folders and printers: this PE may have no network at all, and
+; the search stalls folder windows when it does not. The name is a negative, so 1 is the value
+; that stops the crawling.
+0x4,"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced","NoNetCrawling",0x1
+; Never autorun anything from an attached disk or inserted medium. 0xFF covers every drive
+; type, so no per-type bit arithmetic is needed.
+0x4,"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer","NoDriveTypeAutoRun",0xFF

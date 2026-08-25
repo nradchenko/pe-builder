@@ -24,6 +24,43 @@ reimplemented independently here.
 | `startmenu.c` / `.h` | (into `peshell.exe`) | Pure Start-menu layout planner (see [Start-menu items](#start-menu-items)); host-tested by `smtest/`. |
 | `peshut.c` | `peshut.dll` | The shutdown power-off hook (see [Shutdown](#shutdown)). |
 
+## Options
+
+What each knob does. Defaults, types and accepted values are declared in `[Options]` and printed
+by `pebuild plugins info explorer-shell` — they are deliberately not repeated here.
+
+| Option | Effect |
+|---|---|
+| `width` / `height` / `bpp` | Desktop display mode — see [Display resolution](#display-resolution). |
+| `classic_start_menu` | The Windows 2000 menu instead of the XP panel — see [Modern Start menu](#modern-start-menu). |
+| `show_version` | Paint the Windows version and build in the desktop corner. |
+| `hide_recent_docs` | Drop My Recent Documents from the Start menu, and stop the tracking behind it. |
+| `unlock_taskbar` | Let the taskbar be dragged and resized. |
+| `show_hidden_files` | List files and folders marked hidden. |
+| `hide_file_extensions` | Hide the extension of a known file type. |
+| `show_status_bar` | The status bar on folder windows, where a selection's size and free space show. |
+| `full_path_in_title` | The full path in a folder's title bar rather than its name alone. |
+| `full_path_in_address_bar` | The full path in a folder's address bar. |
+| `show_drive_letters_first` | Where a drive's letter sits relative to its label. |
+
+Each option is named for the registry value it writes, not for a reading of it — an option
+substitutes one-to-one and cannot invert — so `hide_file_extensions = 0` is what shows
+extensions, and `show_hidden_files` takes `1`/`2` because that is what `Hidden` takes.
+
+Most land in `Explorer\Advanced` in the `DEFAULT` hive. The exceptions: `show_status_bar` writes
+to `Internet Explorer\Main`; `show_drive_letters_first` is machine-wide, in `HKLM\SOFTWARE`; and
+the full-path pair is written **twice**, to `Explorer\CabinetState` where the shell reads it and
+to `Explorer\Advanced` which is what the Folder Options dialog displays — writing only the latter
+ticks the checkbox and changes nothing.
+
+`PersistBrowsers`, `NoNetCrawling` and `NoDriveTypeAutoRun` are fixed rather than options: a
+stateless boot has no windows to restore, a netless PE should not stall folder windows looking
+for one, and nothing should autorun from an attached disk or inserted medium.
+
+XP mirrors these flags in an `Explorer\ShellState` blob as well as in the individual values. The
+plugin writes only the values: they are what the shell honours, and the blob additionally carries
+the Start-menu style, which would override `classic_start_menu` without saying so.
+
 ## Boot sequence (`peshell.exe`)
 
 `peshell` runs as the setup command line and performs, in order:
@@ -442,23 +479,7 @@ The desktop mode is set on the active video device instance,
 `HARDWARE\DEVICEMAP\VIDEO`), not only under `Services\VgaSave\Device0`. Whether a given
 mode actually comes up still depends on the display driver's capabilities.
 
-The mode is **configurable from the manifest**. The plugin declares `width`, `height`, and
-`bpp` options (`[Options]`, defaults 1024×768×32) and templates them into the
-`DefaultSettings.*` values with `$(name)` placeholders. A build overrides them in the
-plugin block:
-
-```hcl
-plugin "explorer-shell" {
-  enabled = true
-  options {
-    width  = 1280
-    height = 1024
-    bpp    = 16
-  }
-}
-```
-
-`bpp` is constrained to the
-colour depths the boot VGA driver plausibly accepts (`8`/`16`/`24`/`32`); `width`/`height`
-are unconstrained, so a mode the boot VGA driver does not support will simply not come up —
-stick to the common 4:3/widescreen modes it honours.
+The `width`, `height` and `bpp` options template into those `DefaultSettings.*` values. `bpp` is
+constrained to the colour depths the boot VGA driver plausibly accepts; `width`/`height` are not,
+so a mode the driver does not support simply will not come up — stick to the common 4:3 and
+widescreen modes it honours.
