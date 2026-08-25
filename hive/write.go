@@ -234,6 +234,32 @@ func (w *regfWriter) writeKey(L *keyLayout, isRoot bool) {
 	binary.LittleEndian.PutUint32(nk[0x28:], L.valueListOff)
 	binary.LittleEndian.PutUint32(nk[0x2C:], w.skOff)
 	binary.LittleEndian.PutUint32(nk[0x30:], none) // class name
+	// 0x34..0x40 cache how large this key's contents are: its longest subkey name, class
+	// name and value name, each counted in UTF-16 bytes, and the size in bytes of its
+	// largest value's data. RegQueryInfoKey reports them unchanged, and a caller sizes the
+	// buffers it passes to RegEnumKeyEx and RegEnumValue from what it reads there, so a
+	// maximum smaller than the key really holds makes those calls fail with
+	// ERROR_MORE_DATA. They are high-water marks rather than exact counts — Windows leaves
+	// them as they are when a value is deleted — so a maximum larger than anything now
+	// present is normal, and only a maximum that is too small does damage.
+	var maxSubkeyName, maxValueName, maxValueData uint32
+	for _, c := range L.children {
+		if n := unicodeNameLen(c.nameBytes, c.nameComp); n > maxSubkeyName {
+			maxSubkeyName = n
+		}
+	}
+	for _, v := range L.values {
+		if n := unicodeNameLen(v.nameBytes, v.nameComp); n > maxValueName {
+			maxValueName = n
+		}
+		if n := uint32(len(v.value.Data)); n > maxValueData {
+			maxValueData = n
+		}
+	}
+	binary.LittleEndian.PutUint32(nk[0x34:], maxSubkeyName)
+	binary.LittleEndian.PutUint32(nk[0x38:], 0) // always zero: this writer emits no class names
+	binary.LittleEndian.PutUint32(nk[0x3C:], maxValueName)
+	binary.LittleEndian.PutUint32(nk[0x40:], maxValueData)
 	binary.LittleEndian.PutUint16(nk[0x48:], uint16(len(L.nameBytes)))
 	binary.LittleEndian.PutUint16(nk[0x4A:], 0) // class length
 	copy(nk[nkFixedLen:], L.nameBytes)

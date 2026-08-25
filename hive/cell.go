@@ -31,6 +31,16 @@ func encodeName(name string) (b []byte, compressed bool) {
 	return out, false
 }
 
+// unicodeNameLen returns how many bytes an encoded name would occupy as UTF-16. The nk
+// maxima count every name that way, including one stored in the compressed one-byte-per-
+// character form, whose stored length is therefore half the number they want.
+func unicodeNameLen(nameBytes []byte, compressed bool) uint32 {
+	if compressed {
+		return uint32(2 * len(nameBytes))
+	}
+	return uint32(len(nameBytes))
+}
+
 // isLatin1 reports whether every rune of s fits in a single byte (≤ 0xFF), so the
 // name can use the compressed one-byte-per-character form.
 func isLatin1(s string) bool {
