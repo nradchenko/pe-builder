@@ -6,10 +6,15 @@ package hive
 import "encoding/binary"
 
 // buildSecurityDescriptor returns a self-relative security descriptor granting
-// full control to LocalSystem, the Administrators group, and Everyone. A single
-// shared instance of this descriptor is referenced by every key in a hive we
-// write — a deliberate simplification that is safe for a RAM-resident PE running
-// as SYSTEM (no per-key ACLs).
+// full control to LocalSystem, the Administrators group, and Everyone, inheritable
+// by subkeys. A single shared instance is referenced by every key in a hive we
+// write: a PE has no per-key policy to express, so one permissive descriptor
+// covers the hive.
+//
+// Permissive it may be; non-inheritable it may not. A PE does not run everything
+// as SYSTEM — the svchost-hosted services a component install brings up run as
+// NetworkService and LocalService — and a key created underneath one of ours at
+// run time is governed by what it inherits from us. See accessAllowedACE.
 func buildSecurityDescriptor() []byte {
 	// Well-known SIDs, in on-disk (little-endian) form.
 	system := encodeSID(5, 18)      // S-1-5-18  LocalSystem
@@ -61,12 +66,27 @@ func encodeSID(authority byte, subAuths ...uint32) []byte {
 	return sid
 }
 
-// accessAllowedACE builds an ACCESS_ALLOWED_ACE granting mask to sid.
+// containerInheritACE marks an ACE as inheritable by subkeys — not INHERITED_ACE (0x10), which
+// is a different flag meaning the ACE arrived by inheritance, and is what the kernel stamps on
+// the child copies this one produces. Registry values are not separately
+// securable objects, so CONTAINER_INHERIT_ACE alone is the whole of what a key needs —
+// OBJECT_INHERIT_ACE is the file-system half and would mean nothing here.
+const containerInheritACE = 0x02
+
+// accessAllowedACE builds an ACCESS_ALLOWED_ACE granting mask to sid, inheritable by subkeys.
+//
+// The inheritance flag is not decoration. Without it these ACEs apply to the key they sit on and
+// to nothing beneath it, so a key created at *run time* underneath one — a service's Parameters
+// written by an installer, say — falls back to the creating token's default DACL: SYSTEM and
+// Administrators, and nobody else. A service running as NetworkService or LocalService then
+// cannot read its own configuration, its host exits before reporting ready, and the SCM reports
+// ERROR_BROKEN_PIPE. Measured: with no flag, a key created under one of ours came back
+// `D:(A;;KA;;;SY)(A;;KR;;;BA)` while its parent read `…(A;;KA;;;WD)`.
 func accessAllowedACE(mask uint32, sid []byte) []byte {
 	size := 8 + len(sid)
 	ace := make([]byte, size)
-	ace[0] = 0 // AceType: ACCESS_ALLOWED_ACE_TYPE
-	ace[1] = 0 // AceFlags
+	ace[0] = 0                   // AceType: ACCESS_ALLOWED_ACE_TYPE
+	ace[1] = containerInheritACE // AceFlags
 	binary.LittleEndian.PutUint16(ace[2:], uint16(size))
 	binary.LittleEndian.PutUint32(ace[4:], mask)
 	copy(ace[8:], sid)

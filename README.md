@@ -16,7 +16,7 @@ menu, About Windows showing Service Pack 3, and the CD drive's properties — al
 - **Boot to a full XP desktop** — the Explorer shell with the **"Luna" visual style**, running
   entirely from the CD with no attached disk.
 - **Self-configuring networking** — a PE installs its own devices and picks up a DHCP address at
-  boot (32-bit XP sources today).
+  boot.
 - **Compact WIM boot** — an optional `wim` layout packs the whole image into a compressed `.wim`
   for a markedly smaller ISO.
 - **Extend it with plugins** — a plugin system in the spirit of BartPE's (a similar, though not

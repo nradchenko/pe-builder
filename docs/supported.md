@@ -149,10 +149,9 @@ icon works — only the dialogs are affected.
   **Properties** — the General/Hardware sheet that opens normally on a 2600 build — does
   nothing. The cause is not yet established.
 - **A connection's Status and Properties dialogs do not open.** The Network Connections folder
-  lists the adapter and the notification-area icon works, but both dialogs fail silently. This
-  follows from the networking gap below rather than being separate: the connection never finishes
-  coming up — it sits at "Acquiring network address" — and the property sheet enumerates installed
-  components through `INetCfg`, which is exactly what an incomplete component install breaks.
+  lists the adapter and the connection enumerates as connected, but both dialogs fail silently.
+  All three gaps here are property sheets, and none of them opens on this codebase. The
+  notification-area icon is a separate and smaller matter: it is not enabled by default.
 
 Because these reproduce on a 32-bit 3790 build, they can now be investigated without 64-bit
 debugging — and any theory resting on something amd64-specific is already falsified.
@@ -258,21 +257,19 @@ takes a DHCP address; without it no network stack is configured at all.
 | Source | Network |
 |---|---|
 | Windows XP Professional SP3 (32-bit) | **verified** — installs TCP/IP, binds it to the adapter, leases an address, answers `ping` |
-| Windows XP x64 / Server 2003 (build 3790, both architectures) | **does not work** — see below |
+| Windows Server 2003 R2 SP2 (32-bit) | **verified** — same |
+| Windows Server 2003 R2 SP2 (x64) | **verified** — same |
+| Windows XP Professional x64 Edition | **verified** — same |
 
 **Verified** on an emulated **RTL8139** (`-device rtl8139`), which is the only adapter
 tested. On amd64 media it is also the only adapter that *can* be tested: XP x64 ships no
 INF for AMD PCnet, NE2000-PCI or e1000, so those emulated adapters have no driver to bind
 whatever else works.
 
-On **build 3790** the component install itself succeeds — the adapter binds and TCP/IP is
-installed — but the win32 co-services that would use it do not start (`Dhcp` and `Dnscache`
-report `ERROR_BROKEN_PIPE`, `Lmhosts` and `Nla` time out), so no address is acquired. It
-tracks the *codebase*, not the architecture: 32-bit Server 2003 fails identically to XP x64,
-which is what rules out an amd64 cause. `plugins/hardware/README.md` records what has been
-measured and what has been ruled out.
+A bare console image starts fewer of the Windows services that sit above TCP/IP than a desktop
+image does; none of them is needed for an address. See `plugins/hardware/README.md`.
 
-No sound is configured on either. UEFI is not supported — the
+No sound is configured on any build. UEFI is not supported — the
 boot chain is XP's own real-mode loader, which is also why it is identical on both
 architectures and why a 64-bit source still keeps that part of itself in `I386`.
 

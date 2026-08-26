@@ -183,13 +183,25 @@ line as the task's `Message` — including, when a run never reached the install
 A co-service the image does not define is reported as `skipped`, not as a failure: build 3790's
 `nettcpip.inf` lists `Smb`, which belongs to a component this does not install.
 
-## Known limitation: no network on build 3790
+Neither is one that is started and does not end up running. A demand-start co-service stays
+stopped until something asks for it — `Nla` does on a console image, and runs on a desktop one,
+from the same key — and an auto-start one the SCM declines to start is the SCM's answer, not
+this pass's. The address does not depend on any of them, so a stack that leases one is not a
+failed install because `Lmhosts` is stopped. The per-service results are in the boot log; the
+task's one-line summary counts components, so read the log rather than the summary when a
+co-service is in question.
 
-Networking works on Windows XP SP3 (32-bit). On **build 3790 — XP x64 and Server 2003, both
-architectures — it does not.** The install half succeeds: the adapter binds and TCP/IP is
-installed. What fails is the win32 co-services above it — `Dhcp` and `Dnscache` exit before
-reporting ready (`ERROR_BROKEN_PIPE`), `Lmhosts` and `Nla` time out — so no address is acquired
-and the image has a bound adapter with no connectivity.
+## Why the co-services need a readable configuration
 
-It tracks the **codebase, not the architecture**: 32-bit Server 2003 fails identically to XP x64.
-Don't re-derive it from amd64.
+The services this pass starts are `svchost`-hosted, and several run as `NetworkService` or
+`LocalService` rather than as `SYSTEM` — decided by the media the component INF came from, not by
+anything here. Such a service reads its own `Parameters\ServiceDll` under its own account, so a
+service key only `SYSTEM` can read makes the host exit before it reports ready and the SCM return
+`ERROR_BROKEN_PIPE`, while the install itself reports success: the adapter binds, TCP/IP is
+installed, and no address arrives.
+
+That is a property of the hive the build wrote rather than of the network stack, and it is why
+the keys a build writes are inheritable — a key this pass creates at run time has to be readable
+by the account that will run the service. Nothing here compensates for it, deliberately: a
+workaround in this plugin would mask the same defect everywhere else it reaches.
+
