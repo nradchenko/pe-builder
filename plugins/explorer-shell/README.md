@@ -232,14 +232,16 @@ touching COM, so a build without such a plugin pays nothing. `Wallpaper` is a `R
 and peshell expands it: **the system drive is not `C:`**.
 
 The apply goes through `IActiveDesktop` — the interface the Display Properties dialog uses —
-rather than `SystemParametersInfo`, for two reasons: the classic path takes bitmaps only, so a
-JPEG could not be shown at all, and `ApplyChanges` also generates the `Desktop.htt` the surface
-needs. It follows that the wallpaper plugin must also stage and register an HTML engine; that is
-its business, not this plugin's, and it declares it through the self-registration contract above.
+rather than `SystemParametersInfo`, because the classic path takes bitmaps only and a JPEG could
+not be shown at all. It follows that the wallpaper plugin must also stage and register an HTML
+engine; that is its business, not this plugin's, and it declares it through the self-registration
+contract above.
 
-**Where it happens matters.** The apply runs after the shell is up — the desktop window has to
-exist for it to stick — but before the splash closes, so the wallpaper arrives together with the
-desktop instead of flipping in over it a moment later.
+**Where it happens matters.** The apply runs once Explorer's desktop *view* exists — not merely
+its taskbar, which comes up about a second earlier and is not something `IActiveDesktop` can
+attach to — and before the splash closes, so the wallpaper arrives with the desktop rather than
+flipping in over it a moment later. The wait is bounded and never withholds the apply; why the
+earlier ordering failed without reporting anything is at `wait_defview` in `peshell.c`.
 
 ## Splash
 

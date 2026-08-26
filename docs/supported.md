@@ -13,9 +13,9 @@ mounted directory or an `.iso`.
 |---|---|---|---|---|---|
 | **Windows XP Professional SP3 (32-bit)** | yes | verified | verified | verified | verified |
 | **Windows XP Home Edition SP3 (32-bit)** | yes | verified | verified | verified | verified |
-| **Windows XP Professional x64 Edition (SP2)** | yes | verified | verified | verified | no — see below |
-| **Windows Server 2003 R2 SP2 (32-bit)** | yes | verified | verified | verified | not at boot — see below |
-| **Windows Server 2003 R2 SP2 (x64)** | yes | verified | verified | verified | no — see below |
+| **Windows XP Professional x64 Edition (SP2)** | yes | verified | verified | verified | no — [x64](#what-differs-on-an-x64-build) |
+| **Windows Server 2003 R2 SP2 (32-bit)** | yes | verified | verified | verified | verified |
+| **Windows Server 2003 R2 SP2 (x64)** | yes | verified | verified | verified | no — [x64](#what-differs-on-an-x64-build) |
 | Windows XP SP0 / SP1 / SP2 | **rejected** | — | — | — | — |
 | Windows 2000 and earlier | **rejected** | — | — | — | — |
 | Windows Fundamentals for Legacy PCs | **out of scope** | — | — | — | — |
@@ -116,6 +116,12 @@ An amd64 source produces the same themed desktop a 32-bit one does. Plugins that
 are compiled for the target architecture, so building one needs the 64-bit cross-compiler
 (`gcc-mingw-w64-x86-64`) rather than the 32-bit one.
 
+**The `wallpaper` plugin does not render**, on either x64 source: the desktop comes up on a flat
+colour, and applying the wallpaper by hand afterwards does not paint it either. Staging and
+registry are not the problem — the image is present, the COM classes register, and
+`IActiveDesktop` accepts the wallpaper and reads it back — the Active Desktop surface is simply
+never composed. The cause is not established. A 32-bit build is unaffected.
+
 ### Known gaps on build 3790
 
 These gaps track the **source's codebase, not its architecture**. Build 3790 is shared by
@@ -127,7 +133,6 @@ product type — so a 32-bit Server 2003 build hits them just as a 64-bit one do
 |---|---|---|---|
 | Folder Options / Taskbar properties | works | fails | fails |
 | A drive's Properties dialog | works | fails | fails |
-| `wallpaper` renders | works | **not at boot**, applies manually | fails |
 | `network-ui` Status/Properties dialogs | work | fail | fail |
 
 `network-ui`'s Status and Properties dialogs also do not open on a **localized** source, which
@@ -148,20 +153,6 @@ icon works — only the dialogs are affected.
   follows from the networking gap below rather than being separate: the connection never finishes
   coming up — it sits at "Acquiring network address" — and the property sheet enumerates installed
   components through `INetCfg`, which is exactly what an incomplete component install breaks.
-- **The `wallpaper` plugin does not render at boot.** The desktop comes up on a flat colour
-  instead of the image. The plugin builds and stages its files, and the wallpaper is
-  configured in the registry — verified in the built hives: `Wallpaper` is a `REG_EXPAND_SZ`
-  pointing at `bliss.jpg`, `mshtml.dll` is queued for self-registration, and the desktop's
-  `NoActiveDesktop` policy is lifted back to `0`.
-
-  Unlike the gaps above, this one does **not** split cleanly along the codebase, and the
-  32-bit 3790 build is what shows why: there, **the wallpaper can be applied by hand after
-  boot and renders correctly**. So the Active Desktop surface, the HTML engine, and the image
-  all work on 3790/x86 — only the applying-at-boot step fails, which is peshell's, not
-  Windows'. On x64 it does not appear at all. Whether those are one fault or two is open: it
-  turns on whether a manual apply also works on x64, which has not been tried. If it does,
-  this is a single boot-time-apply bug; if it does not, the boot-apply failure follows the
-  codebase and a second, rendering failure follows the architecture.
 
 Because these reproduce on a 32-bit 3790 build, they can now be investigated without 64-bit
 debugging — and any theory resting on something amd64-specific is already falsified.

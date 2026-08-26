@@ -621,6 +621,32 @@ static void apply_visual_style(void){
      * long as this process does, and unloading either would tear it down. */
 }
 
+/* Is there a window of this class under Progman? */
+static BOOL desktop_child(const char *cls){
+    HWND pm=FindWindowA("Progman",NULL);
+    return pm && FindWindowExA(pm,NULL,cls,NULL)!=NULL;
+}
+
+/* Wait for the desktop *view*, because the taskbar is not it.
+ *
+ * Explorer creates Shell_TrayWnd well before it creates Progman's SHELLDLL_DefView, and
+ * IActiveDesktop has nothing to attach to until the view exists. Applying in that window is not
+ * an error and does not report as one: ApplyChanges returns S_OK, takes 0 ms, and no Active
+ * Desktop surface is ever created. Measured on 3790/x86 — `defview=no took=0ms` at boot, with
+ * the identical call from a prompt seconds later painting.
+ *
+ * Bounded and non-fatal: a desktop whose view never appears still gets the apply attempted, so
+ * this can only delay the wallpaper, never withhold it. Much shorter than the taskbar wait above
+ * — by the time that one has returned, the view is moments away or is not coming. */
+static BOOL wait_defview(DWORD ms){
+    DWORD t;
+    for(t=0;t<ms;t+=250){
+        if(desktop_child("SHELLDLL_DefView")) return TRUE;
+        Sleep(250);
+    }
+    return desktop_child("SHELLDLL_DefView");
+}
+
 /* Push the wallpaper the registry names onto the desktop — nothing else in a PE reads those
  * values. See README.md § Wallpaper for the contract and why it goes through IActiveDesktop.
  *
@@ -649,6 +675,7 @@ static void apply_wallpaper(void){
     if(FAILED(CoCreateInstance(&CLSID_ActiveDesktop,NULL,CLSCTX_INPROC_SERVER,
                                &IID_IActiveDesktop,(void**)&ad)) || !ad) return;
     WALLPAPEROPT opt; opt.dwSize=sizeof opt; opt.dwStyle=style;
+    wait_defview(30000);
     ad->lpVtbl->SetWallpaper(ad,path,0);
     ad->lpVtbl->SetWallpaperOptions(ad,&opt,0);
     ad->lpVtbl->ApplyChanges(ad,AD_APPLY_ALL);
