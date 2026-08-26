@@ -147,11 +147,17 @@ iterated on without rebooting.
 
     pehw net                install ms_tcpip and start what it declares
     pehw devices            run the device pass, one line per device
+    pehw start <name>..     start one service and print the code the SCM gives back
     pehw status             what is bound, what is running, and the PnP problem code for what is not
     pehw service <name>     an `sc qc` for an image with no sc.exe
     pehw ip                 what the IP layer has: adapters, addresses, the DHCP lease
     pehw netconn            the connection from both ends — see below
     perun --task devices    the same pass, through the run list, recording a verdict
+
+`start` is the one that changes something; the reports below it do not. An image has no `sc.exe`,
+so it is also the only way to ask the SCM for a single service and see the raw error rather than a
+service that is merely observed to be stopped — which is what separates "nothing started it" from
+"it was started and refused".
 
 ## Reading the connection state
 

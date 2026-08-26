@@ -765,7 +765,28 @@ static int lstrchrA_has_sep(const char *s)
     return 0;
 }
 
-static void resolve_image(const char *img, char *out, DWORD cch)
+/* Whether the last path component carries an extension — a directory further up having a dot
+ * says nothing about the file. */
+static int lstrchrA_has_dot_in_tail(const char *s)
+{
+    const char *dot = NULL;
+
+    for (; *s; s++)
+        if (*s == '.')
+            dot = s;
+        else if (*s == '\\' || *s == '/')
+            dot = NULL;
+    return dot != NULL;
+}
+
+/* Where a bare name — one with no directory in it at all — is looked for. It is the only thing
+ * that differs between resolving a driver's ImagePath and a service's ServiceDll, and getting it
+ * wrong is not a near miss: it reports a file that is present as MISSING, under a path nothing
+ * ever used. */
+#define BARE_IN_DRIVERS  1  /* ImagePath=ndis.sys        -> system32\drivers\ndis.sys */
+#define BARE_IN_SYSTEM32 0  /* ServiceDll=dhcpcsvc.dll   -> system32\dhcpcsvc.dll */
+
+static void resolve_image(const char *img, char *out, DWORD cch, int bare)
 {
     char win[MAX_PATH], work[MAX_PATH * 2];
     char *p;
@@ -812,12 +833,27 @@ static void resolve_image(const char *img, char *out, DWORD cch)
         lstrcpynA(out, img, (int)cch);          /* already absolute, or an NT path we cannot fix */
     else if (!lstrchrA_has_sep(img))
         /* A bare file name, which is how the in-box drivers are registered (ImagePath=ndis.sys).
-         * The kernel looks for those in system32\drivers, NOT in %windir% — resolving them the
-         * same way as a path with directories in it reports a loaded driver as MISSING. */
-        _snprintf(out, cch - 1, "%s\\system32\\drivers\\%s", win, img);
+         * Neither kind is looked for in %windir% itself — resolving them the same way as a path
+         * with directories in it reports a loaded driver as MISSING. Which of the two
+         * directories applies is the caller's to say; see BARE_IN_DRIVERS. */
+        _snprintf(out, cch - 1, "%s\\system32\\%s%s", win,
+                  bare == BARE_IN_DRIVERS ? "drivers\\" : "", img);
     else
         _snprintf(out, cch - 1, "%s\\%s", win, img);  /* a relative path, from %windir% */
     out[cch - 1] = 0;
+
+    /* An ImagePath may omit the extension — RpcSs is registered as `svchost -k rpcss` on both
+     * media, and the loader supplies the .exe. Checked literally, the healthiest service in the
+     * image reports its binary MISSING. Only append when the path as written is not there, so a
+     * genuinely absent file still reads as absent. */
+    if (GetFileAttributesA(out) == INVALID_FILE_ATTRIBUTES && !lstrchrA_has_dot_in_tail(out)) {
+        char withext[MAX_PATH * 2];
+
+        _snprintf(withext, sizeof withext - 1, "%s.exe", out);
+        withext[sizeof withext - 1] = 0;
+        if (GetFileAttributesA(withext) != INVALID_FILE_ATTRIBUTES)
+            lstrcpynA(out, withext, (int)cch);
+    }
 }
 
 /* Report a driver service the way `sc qc` would, for an image that has no sc.exe: what the SCM
@@ -829,13 +865,16 @@ static int cmd_service(int argc, char **argv)
     int i;
 
     for (i = 2; i < argc; i++) {
-        char key[512], img[MAX_PATH * 2], grp[128];
+        char key[512], img[MAX_PATH * 2], grp[128], obj[256], dll[MAX_PATH * 2];
         DWORD type = 0, cb, start = 0xFFFFFFFF, styp = 0xFFFFFFFF;
         HKEY k;
 
         say("%s = %s", argv[i], service_state(argv[i]));
 
-        wsprintfA(key, "SYSTEM\\CurrentControlSet\\Services\\%s", argv[i]);
+        /* _snprintf, not wsprintfA: the name comes from the command line and wsprintfA bounds
+         * its own output at 1K rather than the destination. */
+        _snprintf(key, sizeof key - 1, "SYSTEM\\CurrentControlSet\\Services\\%s", argv[i]);
+        key[sizeof key - 1] = 0;
         if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &k) != ERROR_SUCCESS) {
             say("    no service key under CurrentControlSet\\Services");
             continue;
@@ -844,15 +883,47 @@ static int cmd_service(int argc, char **argv)
         cb = sizeof styp;  RegQueryValueExA(k, "Type",  NULL, &type, (BYTE *)&styp,  &cb);
         grp[0] = 0; cb = sizeof grp; RegQueryValueExA(k, "Group", NULL, &type, (BYTE *)grp, &cb);
         img[0] = 0; cb = sizeof img; RegQueryValueExA(k, "ImagePath", NULL, &type, (BYTE *)img, &cb);
+        /* The account, which decides what a win32 service can read once it is running — a
+         * service reads its own configuration under it, so a key it has no access to stops the
+         * host before it reports ready. NetworkService and LocalService are both in use here,
+         * named by the media's own INF rather than by anything this chooses. A service key with
+         * no ObjectName means LocalSystem; reporting "(none)" without saying so would read as a
+         * missing value rather than the default it is. */
+        obj[0] = 0; cb = sizeof obj; RegQueryValueExA(k, "ObjectName", NULL, &type, (BYTE *)obj, &cb);
         RegCloseKey(k);
+
+        /* A shared-process service runs no binary of its own: svchost loads its ServiceDll, and
+         * that is the file whose absence makes the host exit rather than report ready. */
+        dll[0] = 0;
+        _snprintf(key, sizeof key - 1, "SYSTEM\\CurrentControlSet\\Services\\%s\\Parameters", argv[i]);
+        key[sizeof key - 1] = 0;
+        if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &k) == ERROR_SUCCESS) {
+            cb = sizeof dll;
+            RegQueryValueExA(k, "ServiceDll", NULL, &type, (BYTE *)dll, &cb);
+            RegCloseKey(k);
+        }
 
         say("    Start=%lu Type=%lu Group=%s",
             (unsigned long)start, (unsigned long)styp, grp[0] ? grp : "(none)");
+        say("    ObjectName=%s", obj[0] ? obj : "(unset - LocalSystem)");
+        if (dll[0]) {
+            char full[MAX_PATH * 2];
+
+            resolve_image(dll, full, sizeof full, BARE_IN_SYSTEM32);
+            say("    ServiceDll=%s", dll);
+            say("      -> %s (%s)", full,
+                GetFileAttributesA(full) != INVALID_FILE_ATTRIBUTES ? "present" : "MISSING");
+        } else if (styp & SERVICE_WIN32_SHARE_PROCESS) {
+            /* Say so rather than printing nothing. This service runs inside svchost, so a
+             * ServiceDll is what it would run; absent, there is nothing for the host to load,
+             * and silence here is indistinguishable from an ordinary driver service. */
+            say("    ServiceDll=(none) - a shared-process service with nothing to load");
+        }
         {
             char full[MAX_PATH * 2];
 
             if (img[0]) {
-                resolve_image(img, full, sizeof full);
+                resolve_image(img, full, sizeof full, BARE_IN_DRIVERS);
                 say("    ImagePath=%s", img);
             } else {
                 char derived[MAX_PATH * 2];
@@ -861,8 +932,9 @@ static int cmd_service(int argc, char **argv)
                  * system32\drivers\<service>.sys from the service name, which is how the
                  * in-box drivers are registered. Say which file that means, so "no ImagePath"
                  * does not read as "nothing to load". */
-                wsprintfA(derived, "system32\\drivers\\%s.sys", argv[i]);
-                resolve_image(derived, full, sizeof full);
+                _snprintf(derived, sizeof derived - 1, "system32\\drivers\\%s.sys", argv[i]);
+                derived[sizeof derived - 1] = 0;
+                resolve_image(derived, full, sizeof full, BARE_IN_DRIVERS);
                 say("    no ImagePath - the kernel derives it from the service name");
             }
             say("      -> %s (%s)", full,
@@ -1909,9 +1981,10 @@ static void usage(void)
            "                        and start the services they declare\n"
            "  pehw devices [all]    install drivers for devices that need one ('all' = every\n"
            "                        device, including ones already working)\n"
+           "  pehw start <name>..   start one service by hand and print the raw error\n"
            "\n"
            "  pehw status           report what is bound, what is running, and why not\n"
-           "  pehw service <name>.. report a driver service: SCM state, registry, ImagePath\n"
+           "  pehw service <name>.. report a service: SCM state, registry, account, ImagePath\n"
            "  pehw ip               what the IP layer itself has: adapters, addresses, DHCP\n"
            "  pehw netconn          the network connection from both ends: its registry entry\n"
            "                        and what netman enumerates (what the shell's UI talks to)\n"
@@ -1931,9 +2004,9 @@ int main(int argc, char **argv)
             force = 1;
     }
 
-    /* The two passes, then the read-only reports. `start` survives as an internal helper for
-     * `net`, which has to bring up the services it installs, but is not a subcommand: starting a
-     * driver by hand is a debugging act, not something a built PE needs. */
+    /* The two passes, then the read-only reports. `start` is also a subcommand: `net` uses it
+     * internally to bring up what it installs, and by hand it is the only way to ask the SCM
+     * for one named service and read the code it gives back. */
     if (argc >= 2 && lstrcmpiA(argv[1], "net") == 0)
         return cmd_net(argc, argv);
     if (argc >= 2 && lstrcmpiA(argv[1], "devices") == 0)
@@ -1946,6 +2019,8 @@ int main(int argc, char **argv)
         return cmd_netconn();
     if (argc >= 3 && lstrcmpiA(argv[1], "service") == 0)
         return cmd_service(argc, argv);
+    if (argc >= 3 && lstrcmpiA(argv[1], "start") == 0)
+        return cmd_start(argc, argv);
     usage();
     return 2;
 }
