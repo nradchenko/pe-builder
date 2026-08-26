@@ -27,14 +27,15 @@ gets it only by *asking*, through an application manifest naming version 6.0.0.0
 Staging the assembly is therefore not enough. The loader honours an application manifest
 only at resource id 1, and on x86 neither shell host qualifies: `rundll32.exe`, which hosts
 every Control Panel applet, carries no manifest at all, and `explorer.exe` carries one at
-resource id 123. Without an activation context both bind to v5, so their property sheets
-draw a v5 tab control and v5 buttons around themed pages — visibly inconsistent under a
-visual style. The `.manifest` files this plugin ships (attribute 1) are ours, and give each
+resource id 123. Without an activation context both bind to v5, and what that costs depends
+on the build: on 2600 their property sheets open and draw a v5 tab control and v5 buttons
+around themed pages — visibly inconsistent under a visual style — while on 3790 they do not
+open at all. The `.manifest` files this plugin ships (attribute 1) are ours, and give each
 host the context it never asks for.
 
 An assembly reference names an architecture, so these manifests are architecture-specific
-and their entries are scoped. On amd64 only `rundll32.exe` needs one, and it needs it far
-more than x86 does — see below.
+and their entries are scoped. Both hosts need one on both architectures; what differs is the
+price of getting it wrong, which on amd64 is a process that does not start — see below.
 
 The assembly itself is sourced by exact path rather than by name, because `comctl32.dll`
 and the manifest share basenames with other files a name lookup reaches first.
@@ -88,23 +89,34 @@ makes the bind work. A real install ships no catalog beside that copy, so neithe
 
 ### The external manifests, per architecture
 
-Which hosts need a manifest, and how badly, differs between the two:
+The loader takes a process's manifest from resource **id 1** and, finding one, does not look
+beside the binary: an **embedded manifest takes precedence over an external file** here (NT 5.2 —
+the opposite of the widely-repeated XP-era rule). What each host carries at id 1 is therefore the
+whole question:
 
 | | `rundll32.exe` | `explorer.exe` |
 |---|---|---|
-| x86 | no manifest | manifest at id 123 (ignored) |
-| amd64 | **no manifest** | correct manifest at id 1 |
+| 2600 x86 | no manifest | id 123 only — **no id 1** |
+| 3790 x86 | no manifest | id 123, plus **one byte at id 1** |
+| 3790 amd64 | no manifest | id 123, plus **one byte at id 1** |
 
-So on amd64 only `rundll32` is shipped one, from `rundll32.amd64.manifest`, staged under
-the name `rundll32.exe.manifest`. Explorer needs nothing: its own manifest already asks for
-the amd64 assembly, and an **embedded manifest takes precedence over an external file**
-here (NT 5.2 — the opposite of the widely-repeated XP-era rule), so a file we shipped
-beside it would simply be ignored.
+Explorer's real manifest is at id 123 on every source, which the loader does not read. On 2600
+that leaves id 1 empty, so the file beside the binary is used. On 3790 a **one-byte** resource
+sits at id 1: enough to count as an embedded manifest and win, carrying no assembly reference to
+give. Explorer then runs with a v5 default context, and `InitCommonControlsEx` in v5 refuses the
+standard classes a property sheet is built from — so Folder Options, a drive's Properties and a
+connection's Status open nothing at all, rather than opening with v5 controls.
 
-The consequence of getting the architecture wrong is not cosmetic on amd64. Because
-`rundll32` has no embedded manifest, our file is its *only* activation context — a
-reference naming `x86` resolves to nothing, and every Control Panel applet fails to start
-with `14001` rather than merely drawing v5 controls.
+`PreferExternalManifest` reverses that precedence, and the plugin sets it for 3790 only (2600's
+loader does not implement the value and does not need it). With it in force Explorer loads the v6
+comctl32 and no longer maps the v5 one at all, and all three sheets open on both architectures.
+
+Getting the architecture wrong is not cosmetic. Our file is `rundll32`'s *only* activation
+context, and with `PreferExternalManifest` in force it is effectively Explorer's too — a
+reference naming `x86` on an amd64 build resolves to nothing, and a process whose manifest
+resolves to nothing does not start. For `rundll32` that costs every Control Panel applet
+(`14001`); for Explorer it would cost the shell. Hence `explorer.amd64.manifest` beside
+`rundll32.amd64.manifest`, each staged under the name the loader looks for.
 
 ### Catalogs
 

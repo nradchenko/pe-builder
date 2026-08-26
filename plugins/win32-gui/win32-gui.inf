@@ -71,14 +71,39 @@ policies\amd64_policy.6.0.microsoft.windows.common-controls_6595b64144ccf1df_x-w
 ; host the context it never asks for. An assembly reference names an architecture, so which
 ; host needs one differs per architecture — see README.md § The external manifests.
 ;
-; x86: neither host qualifies, so both would otherwise draw v5 controls around themed pages.
+; x86: neither host qualifies. What that costs depends on the build — on 2600 the pages open
+; and draw v5 controls around themed content, on 3790 they do not open at all, because there
+; v5's InitCommonControlsEx refuses the standard classes a property sheet is built from.
 [SourceDisksFiles.i386]
 rundll32.exe.manifest = 2,, 1
 explorer.exe.manifest = 1,, 1
 
-; amd64: explorer already has a correct manifest at id 1, and an embedded one wins over an
-; external file, so it needs nothing. rundll32 still has none, and here that is not cosmetic —
-; with no context its applets do not start at all. Shipped under its own name, staged as
-; rundll32.exe.manifest.
+; amd64: both hosts need one, and an assembly reference names an architecture, so neither can
+; be the x86 file above — a reference naming the wrong one resolves to nothing. Shipped under
+; their own names and staged as the names the loader looks for.
+;
+; Naming x86 would be worse than staging nothing: with PreferExternalManifest below in force
+; the file is what the loader reads, and a reference that resolves to nothing stops the process
+; starting. For rundll32 that costs every Control Panel applet; for explorer it costs the shell.
 [SourceDisksFiles.amd64]
 rundll32.amd64.manifest = 2, rundll32.exe.manifest, 1
+explorer.amd64.manifest = 1, explorer.exe.manifest, 1
+
+; Make the loader read those files at all.
+;
+; It takes an application manifest from resource id 1 and, finding one, does not look beside the
+; binary. On build 3790 explorer's id 1 holds a single byte — a placeholder carrying no assembly
+; reference — so the manifests above are staged and then ignored, explorer runs with no v6
+; context, and shell32 binds the v5 comctl32 in system32. What that costs is every property
+; sheet: Folder Options, a drive's Properties and a connection's Status each post their message
+; and nothing opens. explorer's real manifest is at id 123, which the loader does not read.
+;
+; PreferExternalManifest reverses the precedence, so the file wins over the resource. It is a
+; machine-wide loader setting rather than a per-binary one, which is why the only external
+; manifests this image contains are the two staged above.
+;
+; Scoped to 3790 because 2600 neither implements it — the value's name does not appear in XP's
+; kernel32 — nor needs it: XP's explorer carries no id 1 at all, so the file beside it is read
+; already, which is why the same staging has always worked there.
+[Software.AddReg.3790]
+0x4,"Microsoft\Windows\CurrentVersion\SideBySide","PreferExternalManifest",0x1

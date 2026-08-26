@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Copyright 2026 Nikita Radchenko
+     SPDX-License-Identifier: Apache-2.0
+
+     The amd64 form of explorer.exe.manifest, staged under that name on an amd64 build.
+     Same job as the x86 file beside it — explorer hosts the file, folder and drive property
+     sheets, and without a v6 context their tab control and buttons draw v5 — but the assembly
+     an amd64 explorer binds to is architecture-specific, and a reference naming the wrong
+     architecture resolves to nothing.
+
+     Naming x86 here would be worse than omitting the file. explorer is the shell: a reference
+     that resolves to nothing stops the process starting, and an image whose shell does not
+     start shows a bare desktop with no way to reach anything. That is the same failure
+     rundll32.amd64.manifest exists to avoid, with the whole session behind it rather than one
+     applet. See README.md § The external manifests, per architecture. -->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <!-- Our own identity, deliberately not a Microsoft one — see rundll32.exe.manifest. -->
+  <assemblyIdentity
+      type="win32"
+      name="pe-builder.explorer"
+      version="1.0.0.0"
+      processorArchitecture="amd64"/>
+  <description>Windows Explorer</description>
+  <dependency>
+    <dependentAssembly>
+      <!-- Version 6.0.0.0 as on x86: the amd64 media ship 6.0.3790.3959 and the publisher
+           policy redirects this reference to it. That redirect is why the policy has to be
+           staged into WinSxS\setuppolicies — see README.md § Where the policy has to live. -->
+      <assemblyIdentity
+          type="win32"
+          name="Microsoft.Windows.Common-Controls"
+          version="6.0.0.0"
+          processorArchitecture="amd64"
+          publicKeyToken="6595b64144ccf1df"
+          language="*"/>
+    </dependentAssembly>
+  </dependency>
+</assembly>

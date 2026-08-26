@@ -32,8 +32,7 @@ media has almost no practical use and is not a target.
 
 **Server 2003 reaches the themed Luna desktop on both architectures**, verified from R2 SP2
 volume-licence media — the media ships `luna.msstyles` just as XP does. It shares a codebase
-with XP x64 — both are build 3790 — and shares that codebase's known gaps; see
-[Known gaps on build 3790](#known-gaps-on-build-3790) below.
+with XP x64: both are build 3790.
 
 A build takes its product identity from the source, so a Server 2003 one reports itself as a
 server: it boots under the server splash and names Server 2003 in System Properties, rather
@@ -89,6 +88,11 @@ about them is known to be broken. A language not listed behaves the same way —
 and keyboard layout come from the source automatically, so expect boxes until its fonts and
 console face are added.
 
+On **any** localized source, `network-ui`'s Status and Properties dialogs do not open: such a
+medium carries none of the service-pack resource satellites those dialogs read their templates
+from. Verified on a localized XP SP3 medium, where the network works, the folder lists the
+adapter and the tray icon works — only the dialogs are affected.
+
 The two routes are configured separately, which is why one can work while the other shows
 nothing but boxes:
 
@@ -121,40 +125,6 @@ colour, and applying the wallpaper by hand afterwards does not paint it either. 
 registry are not the problem — the image is present, the COM classes register, and
 `IActiveDesktop` accepts the wallpaper and reads it back — the Active Desktop surface is simply
 never composed. The cause is not established. A 32-bit build is unaffected.
-
-### Known gaps on build 3790
-
-These gaps track the **source's codebase, not its architecture**. Build 3790 is shared by
-Windows Server 2003 and XP Professional x64 — the latter is that codebase with a workstation
-product type — so a 32-bit Server 2003 build hits them just as a 64-bit one does, while a
-32-bit XP build (2600) does not.
-
-| Gap | XP 2600 (x86) | 3790 (x86) | 3790 (x64) |
-|---|---|---|---|
-| Folder Options / Taskbar properties | works | fails | fails |
-| A drive's Properties dialog | works | fails | fails |
-| `network-ui` Status/Properties dialogs | work | fail | fail |
-
-`network-ui`'s Status and Properties dialogs also do not open on a **localized** source, which
-carries none of the service-pack resource satellites the dialogs read their templates from. Verified
-on a localized XP SP3 medium: the network itself works, the folder lists the adapter and the tray
-icon works — only the dialogs are affected.
-
-- **Folder Options and Taskbar properties do nothing.** Both open through the same shell
-  entry point, which posts a message to the shell window; Explorer receives it and does not
-  act on it. Everything upstream is verified — the shell window is registered, the message is
-  delivered, and Explorer has the v6 Common-Controls assembly loaded — so the fault is inside
-  Explorer's own handling of the message. The rest of Control Panel is unaffected.
-- **A drive's Properties dialog does not work.** Right-clicking a drive and choosing
-  **Properties** — the General/Hardware sheet that opens normally on a 2600 build — does
-  nothing. The cause is not yet established.
-- **A connection's Status and Properties dialogs do not open.** The Network Connections folder
-  lists the adapter and the connection enumerates as connected, but both dialogs fail silently.
-  All three gaps here are property sheets, and none of them opens on this codebase. The
-  notification-area icon is a separate and smaller matter: it is not enabled by default.
-
-Because these reproduce on a 32-bit 3790 build, they can now be investigated without 64-bit
-debugging — and any theory resting on something amd64-specific is already falsified.
 
 ## Output
 
@@ -278,8 +248,7 @@ profile.
 
 ## Known limitations
 
-These apply to any build. Gaps specific to the Server 2003 codebase are under
-[Known gaps on build 3790](#known-gaps-on-build-3790) above.
+These apply to any build.
 
 - **No sound.** No audio device is configured, and the Windows Audio service is deliberately
   disabled: with it enabled, a system sound blocks in `waveOut` on a service stuck in

@@ -36,5 +36,5 @@ import "embed"
 //go:embed startup/perun.c startup/perun.h startup/perundll.c startup/perunmain.c startup/Makefile
 //go:embed hardware/pehw.c hardware/Makefile
 //go:embed .shared/version.rc
-//go:embed win32-gui/rundll32.exe.manifest win32-gui/explorer.exe.manifest win32-gui/rundll32.amd64.manifest
+//go:embed win32-gui/rundll32.exe.manifest win32-gui/explorer.exe.manifest win32-gui/rundll32.amd64.manifest win32-gui/explorer.amd64.manifest
 var FS embed.FS

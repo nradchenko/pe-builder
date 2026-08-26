@@ -73,10 +73,6 @@ run time, and the tray only reacts to its own start-up enumeration or a change n
   netman activates, the connection enumerates, and the connection's UI class creates, so the
   failure is at the resource layer. (Where a shipping localized Windows keeps those resources is a
   separate question and is not known; they are not on the medium in any form.)
-- **Server 2003 sources: same symptom.** On build 3790 the connection never finishes coming up, the
-  same limitation that stops DHCP there, and the Properties sheet enumerates components through
-  `INetCfg`. Verified identical on 2003 x86 and x64, so it tracks the codebase, not the
-  architecture.
 - **The Advanced tab reports that WMI may be corrupted.** A PE stages no `wbem` subsystem.
 - **Only what the network pass produced appears** — an empty folder is a faithful report that no
   adapter was bound.
