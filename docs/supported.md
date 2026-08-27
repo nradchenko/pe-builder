@@ -88,11 +88,6 @@ about them is known to be broken. A language not listed behaves the same way —
 and keyboard layout come from the source automatically, so expect boxes until its fonts and
 console face are added.
 
-On **any** localized source, `network-ui`'s Status and Properties dialogs do not open: such a
-medium carries none of the service-pack resource satellites those dialogs read their templates
-from. Verified on a localized XP SP3 medium, where the network works, the folder lists the
-adapter and the tray icon works — only the dialogs are affected.
-
 The two routes are configured separately, which is why one can work while the other shows
 nothing but boxes:
 
@@ -113,6 +108,16 @@ console font; only the keyboard falls back to US-English. Simplified Chinese typ
 input method over the US layout and has no layout DLL of its own, so it uses that fallback by
 design. **No input method is installed** — the handler above is input-context plumbing, not an
 IME — so a Chinese build renders Chinese but cannot type it.
+
+A service pack ships the resources it added to existing binaries in a small DLL of its own —
+`xpsp2res.dll` on XP SP2 — which the shell, the network UI and others load by name. Localized
+media store that DLL under a language-coded name (`sprt0419.dll` for Russian) and declare the
+name it is installed as; a build follows that declaration, so those components find their
+resources in the source's language.
+
+Where several stored files declare the same installed name — Server 2003 does, one per MUI
+language — a build does not pick one. A file reachable only that way is left out and listed
+among the files the build skipped.
 
 ### What differs on an x64 build
 

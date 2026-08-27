@@ -29,8 +29,12 @@ the resource satellites below.
 - **The service-pack resource satellites** — `xpsp1/2/3res` on XP, `ws03res`/`w03a2409`/`xpsp2res`
   on 2003. The dialogs read their templates from these; without them the Properties sheet does not
   open, silently. Scoped by **build number, not architecture** — the split follows the source's
-  codebase — and staged **optional**, because a localized source need not carry them at all and a
-  required entry would fail such a build outright.
+  codebase — and staged **optional**, so a source that genuinely lacks one still builds.
+
+  They are named here the way the dialogs load them, which is not always how the medium stores
+  them: a localized source keeps them language-coded (`sprt0419.dll` on Russian media) and
+  declares the installed name. The engine follows that declaration, so the installed name is the
+  right one to write on every source, and the dialogs come up in the source's own language.
 - **`stobject.dll`** — see below.
 
 `ntmarta.dll` is staged by `explorer-shell` instead, being DCOM infrastructure rather than a
@@ -68,11 +72,6 @@ run time, and the tray only reacts to its own start-up enumeration or a change n
 
 ## Limitations
 
-- **Localized sources: the network works and the folder and tray work, but the dialogs do not** —
-  such a medium carries none of the resource satellites. Everything upstream is healthy there:
-  netman activates, the connection enumerates, and the connection's UI class creates, so the
-  failure is at the resource layer. (Where a shipping localized Windows keeps those resources is a
-  separate question and is not known; they are not on the medium in any form.)
 - **The Advanced tab reports that WMI may be corrupted.** A PE stages no `wbem` subsystem.
 - **Only what the network pass produced appears** — an empty folder is a faithful report that no
   adapter was bound.

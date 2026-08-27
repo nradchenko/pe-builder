@@ -29,6 +29,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/nradchenko/pe-builder/internal/action"
 	"github.com/nradchenko/pe-builder/internal/buildcache"
@@ -78,6 +79,15 @@ func Assemble(ctx context.Context, acts []action.Action, l *layout.Layout, src s
 			continue
 		}
 		want[cabKey(a.Src)] = true
+		// And the name the medium stores it under, when that differs from the name asked
+		// for. The wanted set is fixed before any file is placed and a cabinet yields only
+		// what this set names, so a file addressed by its installed name would otherwise be
+		// unreachable inside a cabinet however well it resolves everywhere else — RU media
+		// keep srgb.icm in DRIVER.CAB and declare it installed as a longer name.
+		// (A plugin-shipped copy never reaches here; the loop skips those above.)
+		if stored, _, ok := sourceEntry(l, a, strings.ToLower(a.Src)); ok && stored != strings.ToLower(a.Src) {
+			want[cabKey(stored)] = true
+		}
 	}
 	cabs := newCabinets(src, roots, want, cache)
 

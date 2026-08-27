@@ -75,6 +75,16 @@ type FileEntry struct {
 	// TargetDir is the [WinntDirectories] directory ID the file is placed in (see
 	// Layout.Dirs). Empty in the metadata is normalized to defaultDir (system32).
 	TargetDir string
+	// DestName is the name setup installs the file under, when the metadata declares one
+	// different from the name it is stored under; empty when the two are the same, which
+	// is the common case. Lowercased.
+	//
+	// It is not a curiosity. A localized medium ships the service-pack resource satellites
+	// under language-coded names — sprt0419.dll on Russian media, 0419 being the LCID —
+	// and declares that each is installed as the canonical name every consumer loads by
+	// (xpsp2res.dll). A build that places them under the stored name leaves that consumer
+	// nothing to find, and the medium looks as though it never carried the file.
+	DestName string
 }
 
 // Layout is the parsed source metadata: the directory-ID table, the per-file
@@ -372,11 +382,30 @@ func (l *Layout) readFiles(f *inf.File, build int, archSuffix string) {
 			continue
 		}
 		dir := strings.TrimSpace(ln.Field(7))
-		if _, ok := l.Files[name]; ok && dir == "" {
-			// Keep the placement we already have rather than blanking it.
+		// Field 10 is the name setup installs the file under, when that differs from the
+		// name it is stored under. Usually empty; see FileEntry.DestName for why it is
+		// not optional to honour.
+		dest := strings.ToLower(strings.TrimSpace(ln.Field(10)))
+		if dest == name {
+			dest = "" // declared, but the same name — nothing to carry
+		}
+		prev, seen := l.Files[name]
+		if seen && dir == "" {
+			// Keep the placement we already have rather than blanking it — but a later
+			// block may still be the one that names the destination.
+			if dest != "" && prev.DestName == "" {
+				prev.DestName = dest
+				l.Files[name] = prev
+			}
 			continue
 		}
-		l.Files[name] = FileEntry{Name: name, TargetDir: dir}
+		// Neither does a later block blank a destination already recorded: the two fields
+		// are independent, and a repeat that carries a directory but no name says nothing
+		// about the name. Dropping it would put the file back under its stored name.
+		if dest == "" && seen {
+			dest = prev.DestName
+		}
+		l.Files[name] = FileEntry{Name: name, TargetDir: dir, DestName: dest}
 	}
 }
 
@@ -398,6 +427,43 @@ func (l *Layout) readLoad(f *inf.File, build int) {
 			l.Load[class] = files
 		}
 	}
+}
+
+// StoredAs returns the name a file is stored under on the medium, given the name it is
+// installed as, and whether the metadata declares such a mapping. For the overwhelming
+// majority of files the two are the same and this reports false — it answers only for the
+// files a source keeps under one name and installs under another.
+//
+// It is the lookup a caller needs when it knows a file by the name things load it by. Ask
+// a localized medium for xpsp2res.dll and nothing matches; the file is there as
+// sprt0419.dll, and only the metadata connects the two.
+//
+// It answers only when the mapping is unambiguous. A name can be claimed by many source
+// files at once — 23 of Server 2003's declare ws03res.dll, one per MUI language, each
+// placed in its own directory — and nothing in the name alone says which was meant.
+// Guessing there would pick by map order, which is to say differently on each run; a
+// caller whose direct lookup already failed is better served by the miss it was going to
+// get anyway.
+func (l *Layout) StoredAs(installed string) (string, bool) {
+	want := strings.ToLower(installed)
+	// No name is not a name. A [SourcePaths] copy addresses the source by an exact path and
+	// carries no file name at all, and asking for "" would match every entry that declares
+	// no rename — which is nearly all of them. The ambiguity rule below happens to catch
+	// that, but only by accident, and one such entry on its own would slip through.
+	if want == "" {
+		return "", false
+	}
+	stored := ""
+	for _, e := range l.Files {
+		if e.DestName != want {
+			continue
+		}
+		if stored != "" {
+			return "", false // claimed more than once; see above
+		}
+		stored = e.Name
+	}
+	return stored, stored != ""
 }
 
 // Resolve returns the placement of the named file (matched case-insensitively), and

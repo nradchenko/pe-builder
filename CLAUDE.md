@@ -77,7 +77,13 @@ PE dependencies.
     Microsoft's, which is what keeps it clean-room.
   - `layout/` — resolve the source's `txtsetup.sif` / `layout.inf` (file → target
     directory, on-disk name, boot-driver lists, and the source's locale from the
-    `[nls]` section). It also settles whether the source is a workstation or a server
+    `[nls]` section). A source may store a file under one name and declare, in the same
+    entry, the name setup installs it as — localized media keep the service-pack resource
+    satellites language-coded, `sprt0419.dll` installed as `xpsp2res.dll` — and `layout`
+    reads that field too, so a file is placed under its installed name and a request by
+    either name resolves (`StoredAs`). A name several files claim is refused rather than
+    picked by map order, and such an alias never shadows a name the media declares in its
+    own right. It also settles whether the source is a workstation or a server
     product — the one thing separating XP Professional x64 Edition from Server 2003 x64,
     which are otherwise the same build number and architecture — from the product type
     the media's own `hivesys.inf` declares, falling back for a source that declares none

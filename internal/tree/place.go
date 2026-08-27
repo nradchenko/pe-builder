@@ -47,7 +47,13 @@ func underRoot(outRoot, full string) (string, error) {
 func placeFile(a action.Action, l *layout.Layout, src source.Backing, roots source.Roots, cabs *cabinets, origins map[string]fs.FS, outRoot string) (written, skipped string, err error) {
 	name := strings.ToLower(a.Src)
 
-	data, compressed, found := readFile(a, origins, src, roots, cabs, name)
+	// readName is what to look for on the medium, which is not always what the caller asked
+	// for: a plugin names a file the way things load it, and a source may keep it under
+	// another name and declare the mapping. Asking a localized medium for xpsp2res.dll
+	// finds nothing until this consults the metadata for sprt0419.dll. `name` stays the
+	// requested name, so a genuine miss is still reported as that.
+	readName, _, _ := sourceEntry(l, a, name)
+	data, compressed, found := readFile(a, origins, src, roots, cabs, readName)
 	if !found {
 		if a.Optional {
 			return "", name, nil
@@ -68,7 +74,7 @@ func placeFile(a action.Action, l *layout.Layout, src source.Backing, roots sour
 	// A compressed archive is decompressed unless the action says to copy it as-is
 	// (attribute 2), in which case the compressed bytes are written under the
 	// compressed name.
-	outName := targetName(a, name)
+	outName := targetName(a, declaredName(l, a, readName))
 	if compressed {
 		if a.NoDecompress {
 			outName = layout.CompressedName(outName)
@@ -184,6 +190,60 @@ func readSource(src source.Backing, roots source.Roots, area source.Area, cabs *
 // stage uppercases the whole tree for the boot reader) unless the copy sets the uppercase
 // attribute — which a file needs when a real-mode reader looks it up by an uppercase name
 // on media the ISO stage does not re-case, as the WIM boot chain's loader config does.
+// sourceEntry resolves the metadata entry that governs a file from the Windows source: the
+// one keyed by the name asked for, or — when the medium declares nothing under that name —
+// the entry declaring it as the name it installs as. It returns the name to read from the
+// medium alongside the entry, so the read, the directory and the output name all come from
+// one decision instead of three that can disagree.
+//
+// The alias half is only consulted for a name the medium does not declare at all. A
+// declared name that is merely absent is a real miss, and following an alias there would be
+// actively dangerous: an amd64 source stores the WOW64 32-bit copies w-prefixed and
+// declares wkernel32.dll installed as kernel32.dll, so a missing 64-bit file would be
+// satisfied with the wrong architecture's binary, silently.
+// A file a plugin ships never came from the Windows source, so the medium's declarations do
+// not describe it — neither the name it installs as nor, and this is the easier half to
+// forget, where it belongs. Such a copy is resolved by name alone, exactly as before.
+func sourceEntry(l *layout.Layout, a action.Action, name string) (string, layout.FileEntry, bool) {
+	if l == nil {
+		return name, layout.FileEntry{}, false
+	}
+	if e, ok := l.Resolve(name); ok {
+		return name, e, true
+	}
+	if a.Origin != "" {
+		return name, layout.FileEntry{}, false
+	}
+	if alt, ok := l.StoredAs(name); ok && alt != name {
+		if e, ok := l.Resolve(alt); ok {
+			return alt, e, true
+		}
+	}
+	return name, layout.FileEntry{}, false
+}
+
+// declaredName is the name the source metadata says a file is installed under, which is not
+// always the name it is stored under. Ignoring it made a medium look as though it did not
+// carry a file at all: localized XP ships the service-pack resource satellites
+// language-coded — sprt0419.dll for Russian — and declares each installed as the name its
+// consumers load by (xpsp2res.dll). Staged under the stored name, netshell finds nothing and
+// the network property sheets do not open, while every search for the canonical name reports
+// the medium as lacking it. English media declare no rename for those three, which is why
+// this went unseen.
+//
+// Two kinds of copy are left alone. One that names its own destination is deliberate and
+// outranks the medium's convention; one shipped by a plugin never came from the source at
+// all, so the source's rename table has no business renaming it.
+func declaredName(l *layout.Layout, a action.Action, name string) string {
+	if a.Rename != "" || a.Origin != "" || l == nil {
+		return name
+	}
+	if _, e, ok := sourceEntry(l, a, name); ok && e.DestName != "" {
+		return e.DestName
+	}
+	return name
+}
+
 func targetName(a action.Action, name string) string {
 	if a.Rename != "" {
 		name = a.Rename
@@ -203,7 +263,8 @@ func OutputPath(a action.Action, l *layout.Layout, roots source.Roots) string {
 	if a.Dest != "" {
 		return a.Dest
 	}
-	return outputPath(a, l, roots, targetName(a, strings.ToLower(a.Src)))
+	name := strings.ToLower(a.Src)
+	return outputPath(a, l, roots, targetName(a, declaredName(l, a, name)))
 }
 
 // outputPath computes the output-relative (forward-slash) path for a placed file:
@@ -215,7 +276,10 @@ func OutputPath(a action.Action, l *layout.Layout, roots source.Roots) string {
 func outputPath(a action.Action, l *layout.Layout, roots source.Roots, outName string) string {
 	dirID := a.DirID
 	if dirID == "" && a.Path == "" {
-		if e, ok := l.Resolve(a.Src); ok {
+		// Through sourceEntry, so a file resolved by its installed name is placed where the
+		// entry that actually declares it says — not in the system32 default that a name
+		// the medium never declares would otherwise fall back to.
+		if _, e, ok := sourceEntry(l, a, strings.ToLower(a.Src)); ok {
 			dirID = e.TargetDir
 		}
 	}
