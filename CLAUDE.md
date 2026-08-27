@@ -245,6 +245,15 @@ PE dependencies.
   rather than an in-tree package or `wimlib`; the build's own policy that library needs — the XP
   security descriptor every file carries and the Windows version stamped into the image — lives in
   `internal/build/wimsecurity.go` and is handed to it as options.
+- `internal/disk/` — create and read raw disk images carrying a single FAT volume: the
+  scratch storage a PE is booted with when the question is how it behaves with a disk
+  attached. A disk only reproduces anything if it is partitioned *and* formatted — a raw
+  unformatted image gets no volume and so no drive letter — so the geometry is fixed and
+  deliberate: one MBR partition at LBA 2048, FAT16 while it fits and FAT32 beyond, labelled
+  so the volume has an identity inside the guest. Everything is done in-process through
+  `go-diskfs`, so making a disk needs no `sfdisk`, no `mkfs.vfat` and no root. The volume is
+  handed out as an `fs.FS`, which is what `source.Backing` already is, so the same helpers
+  that list and extract from a built image read a disk unchanged.
 - `scripts/` — repository tooling. `gen-licenses.sh` (+ its template) regenerates the
   committed `THIRD-PARTY-LICENSES` notice from the binaries' transitive dependency closure
   via `go-licenses`; run it through `make licenses`.
