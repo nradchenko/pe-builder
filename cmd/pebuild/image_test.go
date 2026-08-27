@@ -33,12 +33,12 @@ func TestImageMatch(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			pat, err := normalizeImagePattern(c.pattern)
+			pat, err := normalizePattern(c.pattern)
 			if err != nil {
-				t.Fatalf("normalizeImagePattern(%q): %v", c.pattern, err)
+				t.Fatalf("normalizePattern(%q): %v", c.pattern, err)
 			}
-			if got := imageMatch(c.path, pat); got != c.want {
-				t.Errorf("imageMatch(%q, %q) = %v, want %v", c.path, c.pattern, got, c.want)
+			if got := matchPath(c.path, pat); got != c.want {
+				t.Errorf("matchPath(%q, %q) = %v, want %v", c.path, c.pattern, got, c.want)
 			}
 		})
 	}
@@ -47,15 +47,15 @@ func TestImageMatch(t *testing.T) {
 // A malformed glob must be an error, not a confident "0 file(s) matched" — that reads as
 // an answer about the image when it is really an answer about the typo.
 func TestNormalizeImagePatternRejectsMalformedGlob(t *testing.T) {
-	if _, err := normalizeImagePattern("foo["); err == nil {
-		t.Fatal("normalizeImagePattern(\"foo[\"): want an error, got nil")
+	if _, err := normalizePattern("foo["); err == nil {
+		t.Fatal("normalizePattern(\"foo[\"): want an error, got nil")
 	}
-	pat, err := normalizeImagePattern(`I386\SYSTEM32\*.CMD`)
+	pat, err := normalizePattern(`I386\SYSTEM32\*.CMD`)
 	if err != nil {
-		t.Fatalf("normalizeImagePattern: %v", err)
+		t.Fatalf("normalizePattern: %v", err)
 	}
 	if pat != "i386/system32/*.cmd" {
-		t.Errorf("normalizeImagePattern = %q, want separators unified and lowercased", pat)
+		t.Errorf("normalizePattern = %q, want separators unified and lowercased", pat)
 	}
 }
 
@@ -110,9 +110,9 @@ func TestResolveImageNameIgnoresDirectories(t *testing.T) {
 	fsys := fstest.MapFS{
 		"I386/SYSTEM32/NTDETECT.COM": {Data: []byte("boot")},
 	}
-	paths, err := walkImage(fsys)
+	paths, err := walkFiles(fsys)
 	if err != nil {
-		t.Fatalf("walkImage: %v", err)
+		t.Fatalf("walkFiles: %v", err)
 	}
 	if _, err := resolveImageName(fsys, paths, "I386/SYSTEM32"); err == nil {
 		t.Error("resolveImageName on a directory: want an error, got nil")
@@ -127,9 +127,9 @@ func TestExtractRefusesCollidingOutputNames(t *testing.T) {
 		"I386/SYSTEM32/VGAOEM.FON": {Data: []byte("a")},
 		"I386/FONTS/VGAOEM.FON":    {Data: []byte("b")},
 	}
-	paths, err := walkImage(fsys)
+	paths, err := walkFiles(fsys)
 	if err != nil {
-		t.Fatalf("walkImage: %v", err)
+		t.Fatalf("walkFiles: %v", err)
 	}
 
 	// The resolution both names share is what collides: the same lowercased base name.

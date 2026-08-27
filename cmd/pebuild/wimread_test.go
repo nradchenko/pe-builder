@@ -67,9 +67,9 @@ func TestWIMLayoutBackingReadsThroughPayload(t *testing.T) {
 	}
 
 	// The merged namespace lists both the payload tree and the media-root files.
-	paths, err := walkImage(merged)
+	paths, err := walkFiles(merged)
 	if err != nil {
-		t.Fatalf("walkImage: %v", err)
+		t.Fatalf("walkFiles: %v", err)
 	}
 	for _, want := range []string{"i386/system32/ntoskrnl.exe", "i386/system32/config/software", "grldr", "pebuild.txt", wimImageFile} {
 		if !containsFold(paths, want) {

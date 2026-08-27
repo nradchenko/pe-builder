@@ -67,7 +67,7 @@ func newImageManifestCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			paths, err := walkImage(b)
+			paths, err := walkFiles(b)
 			if err != nil {
 				return err
 			}

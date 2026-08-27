@@ -9,12 +9,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
-	"path"
 	"path/filepath"
-	"sort"
-	"strconv"
-	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
@@ -103,15 +98,19 @@ func newImageExtractCmd() *cobra.Command {
 			// Resolve everything before writing anything: a name that does not resolve, or
 			// two that collide, should leave no half-finished extraction behind. One walk
 			// serves every name rather than one walk each.
-			paths, err := walkImage(b)
+			paths, err := walkFiles(b)
 			if err != nil {
 				return err
 			}
+			// Settled once for the same reason the walk is: deciding whether the WIM hint
+			// applies reads the image's root, and the answer cannot differ between names.
+			// Calling the image's own resolver per name would repeat that read each time.
+			l := imageListing(b)
 			type target struct{ name, from, dest string }
 			var targets []target
 			claimed := make(map[string]string, len(names))
 			for _, name := range names {
-				from, err := resolveImageName(b, paths, name)
+				from, err := resolveName(b, paths, name, l)
 				if err != nil {
 					return err
 				}
@@ -186,143 +185,34 @@ func openImage(target string) (source.Backing, error) {
 	return b, nil
 }
 
-// walkImage collects every file path in the image, in sorted order.
-func walkImage(b source.Backing) ([]string, error) {
-	var out []string
-	err := fs.WalkDir(b, ".", func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() {
-			out = append(out, p)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	sort.Strings(out)
-	return out, nil
-}
-
-// normalizeImagePattern validates a caller's pattern once and returns the form
-// imageMatch expects: separators unified and lowercased. An empty pattern means match
-// everything.
+// imageListing is how the shared file helpers should talk about a built image.
 //
-// Validating up front is what makes a typo distinguishable from an empty image: a
-// malformed glob (`foo[`) would otherwise be swallowed by path.Match's error and
-// reported as "0 file(s) matched", which reads as a confident answer.
-func normalizeImagePattern(pattern string) (string, error) {
-	if pattern == "" {
-		return "", nil
+// The hint is computed per call rather than fixed, because it applies only to a
+// wim-layout image whose payload is sealed inside PE.wim: there the listing shows the
+// media root alone (the WIM, the boot core, the loader) and a bare result would read as
+// "that is all there is".
+func imageListing(b source.Backing) listing {
+	l := listing{noun: "image"}
+	if wimPayloadOpaque(b) {
+		l.hint = wimImageHint
 	}
-	pat := strings.ToLower(strings.ReplaceAll(pattern, `\`, "/"))
-	if _, err := path.Match(pat, "probe"); err != nil {
-		return "", fmt.Errorf("invalid pattern %q: %w", pattern, err)
-	}
-	return pat, nil
-}
-
-// imageMatch reports whether a path satisfies a normalized pattern, which may name the
-// base name or the whole path, as a literal or a glob. Matching is case-insensitive
-// because an image's own case is not stable: the tree writes mixed case and the ISO
-// stage uppercases, so requiring the caller to know which one they have would make
-// the same command work on a work directory and fail on the ISO built from it.
-//
-// The pattern arrives already normalized (see normalizeImagePattern) so it is not
-// re-lowercased for every path in the image.
-func imageMatch(p, pat string) bool {
-	if pat == "" {
-		return true
-	}
-	lp := strings.ToLower(p)
-	base := strings.ToLower(path.Base(p))
-	if ok, _ := path.Match(pat, lp); ok {
-		return true
-	}
-	if ok, _ := path.Match(pat, base); ok {
-		return true
-	}
-	return lp == pat || base == pat
+	return l
 }
 
 func printImageList(w io.Writer, b source.Backing, pattern string, long bool) error {
-	pat, err := normalizeImagePattern(pattern)
-	if err != nil {
-		return err
-	}
-	paths, err := walkImage(b)
-	if err != nil {
-		return err
-	}
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	n := 0
-	for _, p := range paths {
-		if !imageMatch(p, pat) {
-			continue
-		}
-		n++
-		if !long {
-			fmt.Fprintln(tw, p)
-			continue
-		}
-		// A size that cannot be read is reported as unknown rather than as a number:
-		// printing -1 would read as data.
-		size := "?"
-		if fi, err := fs.Stat(b, p); err == nil {
-			size = strconv.FormatInt(fi.Size(), 10)
-		}
-		fmt.Fprintf(tw, "%s\t%s\n", p, size)
-	}
-	if err := tw.Flush(); err != nil {
-		return err
-	}
-	fmt.Fprintf(w, "\n%d file(s) matched.\n", n)
-	// On a wim-layout image the listing shows only the media root (the WIM, the boot core,
-	// the loader) — the Windows payload is inside the WIM. Say so when the caller listed
-	// everything or matched nothing, the two cases where the empty-looking result would
-	// otherwise read as "that is all there is".
-	if (pat == "" || n == 0) && wimPayloadOpaque(b) {
-		fmt.Fprintf(w, "\nNote: %s.\n", wimImageHint)
-	}
-	return nil
+	return printFileList(w, b, pattern, long, imageListing(b))
 }
 
 // resolveImageName resolves a name to exactly one path in the image, against a file
-// list the caller has already walked. An exact path is tried first; failing that the
-// name is matched as a bare name across the image. An ambiguous bare name is an error
-// naming the candidates rather than a silent pick, since choosing one would quietly
-// answer a different question than the one asked.
+// list the caller has already walked.
 func resolveImageName(b source.Backing, paths []string, name string) (string, error) {
-	p := strings.TrimPrefix(strings.ReplaceAll(name, `\`, "/"), "/")
-	if fi, err := fs.Stat(b, p); err == nil && !fi.IsDir() {
-		return p, nil
-	}
-
-	var hits []string
-	for _, c := range paths {
-		if strings.EqualFold(path.Base(c), path.Base(p)) {
-			hits = append(hits, c)
-		}
-	}
-	switch len(hits) {
-	case 0:
-		if wimPayloadOpaque(b) {
-			return "", fmt.Errorf("no file %q in the image; %s", name, wimImageHint)
-		}
-		return "", fmt.Errorf("no file %q in the image", name)
-	case 1:
-		return hits[0], nil
-	default:
-		return "", fmt.Errorf("%q is ambiguous in this image (%s); name the exact path",
-			name, strings.Join(hits, ", "))
-	}
+	return resolveName(b, paths, name, imageListing(b))
 }
 
 // readImageFile resolves a name and reads it, walking the image itself. Callers
 // resolving several names should walk once and use resolveImageName directly.
 func readImageFile(b source.Backing, name string) (data []byte, from string, err error) {
-	paths, err := walkImage(b)
+	paths, err := walkFiles(b)
 	if err != nil {
 		return nil, "", err
 	}

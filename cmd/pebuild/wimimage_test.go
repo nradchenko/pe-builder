@@ -38,9 +38,9 @@ func TestIsWIMLayoutImage(t *testing.T) {
 // rather than reading as a flat "that file is not here".
 func TestResolveImageNamePayloadInWIMHint(t *testing.T) {
 	wim := fstest.MapFS{"PE.wim": {Data: []byte("MSWIM")}}
-	paths, err := walkImage(wim)
+	paths, err := walkFiles(wim)
 	if err != nil {
-		t.Fatalf("walkImage: %v", err)
+		t.Fatalf("walkFiles: %v", err)
 	}
 	_, err = resolveImageName(wim, paths, "ntoskrnl.exe")
 	if err == nil {
