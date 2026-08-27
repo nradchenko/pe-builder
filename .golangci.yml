@@ -36,8 +36,15 @@ linters:
     # error that matters on each write path is checked explicitly.
     presets:
       - std-error-handling
+    # Working notes and throwaway tools, gitignored and not part of the engine. A tree
+    # that has them would otherwise fail every run on code nobody ships.
+    paths:
+      - docs/internal/
 
 formatters:
   enable:
     - gofmt
     - goimports
+  exclusions:
+    paths:
+      - docs/internal/
