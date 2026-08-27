@@ -101,6 +101,27 @@ desktop image also needs the MinGW-w64 cross-compiler.
    `run` boots the image the manifest produced — it never builds one — and reads the image to
    choose the emulator and machine, so the same command works for a 32- or 64-bit image.
 
+   To boot with a hard disk attached — which is what any question about drive letters or the
+   storage stack needs — add `--scratch-disk`:
+
+   ```sh
+   pebuild run luna.hcl --scratch-disk 256M
+   ```
+
+   That creates a formatted disk beside the image and attaches it, reusing the same one on
+   later runs so whatever the PE wrote survives. It is named after the image, so
+   `luna.hcl` (which writes `out/pe-theme.iso`) gets `out/pe-theme-scratch.img` — `run`
+   prints the path it used. Read it back with
+   [`pebuild disk`](docs/inspecting.md#scratch-disks), which needs no mounting and no root:
+
+   ```sh
+   pebuild disk ls out/pe-theme-scratch.img
+   pebuild disk extract out/pe-theme-scratch.img boot.log -o -
+   ```
+
+   Use `--disk` instead to attach an image you already have. Both flags repeat, and the CD
+   always keeps the boot.
+
 This builds the themed XP **"Luna"** desktop. Point `build`/`run` at a different manifest for
 another image:
 

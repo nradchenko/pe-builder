@@ -33,7 +33,17 @@ PE dependencies.
   on, and a debug image booted with no debugger attached suppresses its own output rather than
   producing any. It presents the guest an RTL8139 on user-mode networking, that being the one
   adapter every supported source carries a driver for (`--nic` names another, `--nic none`
-  offers none, and `--pcap` records the traffic). `verify` answers the question an
+  offers none, and `--pcap` records the traffic). It also attaches disks, which is what any
+  question about drive letters, the storage stack, or whether a PE writes somewhere it should
+  not actually needs: `--disk` takes an image that exists, `--scratch-disk <size>` creates a
+  formatted one beside the image (see `internal/disk/`) and reuses it on later runs, so what a
+  guest wrote survives to be read back with the `disk` commands. Both repeat, and are indexed in
+  the order given — every `--disk` before every `--scratch-disk`, a stated rule because two
+  cobra slices cannot recover the command line's own interleaving. An existing scratch disk is
+  reused and never rewritten, a size that disagrees with it being reported and ignored rather
+  than acted on; `-boot d` stays, so no attached disk can take the boot from the CD, and at most
+  three attach at once — the CD occupies one of the IDE controller's four slots. `verify`
+  answers the question an
   image on disk otherwise cannot — what was this built from, and is that still what this
   manifest and this pebuild describe? — by reading the receipt the image carries and
   recomputing the inputs it records from

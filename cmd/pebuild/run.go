@@ -17,6 +17,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nradchenko/pe-builder/internal/disk"
 	"github.com/nradchenko/pe-builder/internal/manifest"
 	"github.com/nradchenko/pe-builder/source"
 )
@@ -55,6 +56,31 @@ const defaultNIC = "rtl8139"
 // left to itself QEMU gives the "pc" machine an adapter whether one is wanted or not.
 const nicNone = "none"
 
+// What the "pc" machine's IDE controller can carry, and where the CD sits on it.
+//
+// The controller has two buses of two units each, so indices 0 to 3 and nothing beyond:
+// index 4 is refused with "machine type does not support if=ide,bus=2,unit=0". The CD is
+// not outside that budget — `-cdrom` is itself shorthand for a drive at index 2 on the
+// same default interface — so it occupies one of the four, and an attached disk numbered
+// straight from zero collides with it on the third disk, QEMU refusing to start at all
+// with "drive with bus=1, unit=0 (index=2) exists".
+//
+// Both facts measured against qemu-system-i386 on -M pc rather than taken from the flag's
+// documentation, which describes -cdrom as its own option and does not say what it costs.
+const (
+	cdromIndex   = 2
+	maxDiskCount = 3
+)
+
+// driveIndex maps the nth attached disk to the IDE slot it takes, stepping over the one
+// the CD already holds.
+func driveIndex(n int) int {
+	if n < cdromIndex {
+		return n
+	}
+	return n + 1
+}
+
 // qemuBinaries lists the QEMU binaries that can boot an image of each architecture,
 // in preference order. The binary follows the *image's* architecture rather than the
 // host's: qemu-system-i386 presents a 32-bit CPU, which an x64 Windows will not boot
@@ -63,6 +89,16 @@ const nicNone = "none"
 var qemuBinaries = map[string][]string{
 	source.ArchAMD64: {"qemu-system-x86_64"},
 	source.ArchI386:  {"qemu-system-i386", "qemu-system-x86_64"},
+}
+
+// Drive is one disk attached to the guest.
+type Drive struct {
+	// Path is the image file on the host.
+	Path string
+	// Format is the QEMU image format, from disk.SniffFormat — stated rather than left
+	// for QEMU to probe, which warns about probed raw images and has changed across
+	// versions.
+	Format string
 }
 
 // machine is everything needed to build a QEMU command line for one image.
@@ -90,6 +126,17 @@ type machine struct {
 	// be removed, so the tablet is added beside it and QEMU routes pointer input to
 	// whichever the guest has enabled, preferring the absolute one.
 	USBTablet bool
+	// Disks are the drives to attach, in the order they will be indexed: every --disk in
+	// the order given, then every --scratch-disk in the order given.
+	//
+	// That is a stated rule rather than the order they appeared on the command line,
+	// which cannot be recovered: the two flags parse into separate slices, so an
+	// interleaved command line arrives here already separated. Better to assert a rule
+	// the implementation keeps than to imply one it cannot.
+	//
+	// The CD keeps the boot either way (-boot d), so an attached disk carrying an active
+	// partition cannot take it.
+	Disks []Drive
 	// Serial is a QEMU -serial specification, e.g. "unix:/tmp/kd.sock,server,nowait".
 	// It exists so an image built with the serialdebug plugin can be booted with this
 	// command rather than a hand-written QEMU line: that plugin turns the kernel
@@ -113,6 +160,7 @@ func newRunCmd() *cobra.Command {
 	var serial string
 	var nic string
 	var pcap string
+	var disks, scratch []string
 
 	cmd := &cobra.Command{
 		Use:   "run [manifest.hcl | image.iso]",
@@ -121,7 +169,14 @@ func newRunCmd() *cobra.Command {
 			"match it. The argument is either a built .iso, or the manifest that\n" +
 			"describes where one was written; with no argument, pebuild.hcl in the\n" +
 			"current directory is used.\n\n" +
-			"This command does not build. Run pebuild build first, then boot the result.",
+			"This command does not build. Run pebuild build first, then boot the result.\n\n" +
+			"Disks can be attached, which is what any question about drive letters or the\n" +
+			"storage stack needs. --disk attaches an image you already have; --scratch-disk\n" +
+			"creates a formatted one beside the image and attaches that, reusing it on\n" +
+			"later runs so what the guest wrote survives — read it back with pebuild disk.\n" +
+			"The size is the whole disk, and the volume inside it is a megabyte smaller.\n\n" +
+			"Both flags repeat. Disks are indexed in the order given, every --disk before\n" +
+			"every --scratch-disk. The CD always keeps the boot.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// QEMU accepts -m 0 and starts a machine that cannot boot, so a
@@ -149,6 +204,16 @@ func newRunCmd() *cobra.Command {
 			if pcap != "" && nicModel(nic) == "" {
 				return fmt.Errorf("--pcap captures the traffic of an adapter, and --nic %s offers none", nicNone)
 			}
+			// Sizes are parsed before the image is resolved so a typo fails on its own
+			// terms rather than after a manifest lookup that had nothing to do with it.
+			sizes := make([]int64, 0, len(scratch))
+			for _, s := range scratch {
+				n, err := disk.ParseSize(s)
+				if err != nil {
+					return fmt.Errorf("--scratch-disk %s: %w", s, err)
+				}
+				sizes = append(sizes, n)
+			}
 			var arg string
 			if len(args) == 1 {
 				arg = args[0]
@@ -175,6 +240,11 @@ func newRunCmd() *cobra.Command {
 				slog.Debug("no hardware acceleration", "device", kvmDevice)
 			}
 
+			drives, err := resolveDrives(cmd.OutOrStdout(), cmd.ErrOrStderr(), iso, disks, sizes)
+			if err != nil {
+				return err
+			}
+
 			return launch(cmd.OutOrStdout(), machine{
 				Binary:    binary,
 				ISO:       iso,
@@ -185,6 +255,7 @@ func newRunCmd() *cobra.Command {
 				Serial:    serial,
 				NIC:       nicModel(nic),
 				Pcap:      pcap,
+				Disks:     drives,
 			})
 		},
 	}
@@ -200,6 +271,13 @@ func newRunCmd() *cobra.Command {
 		"network adapter model to present, on user-mode networking; "+nicNone+" for no adapter")
 	cmd.Flags().StringVar(&pcap, "pcap", "",
 		"write the adapter's traffic to a file, in pcap format")
+	// StringArray rather than StringSlice: the latter splits its value on commas, which
+	// would quietly turn one path containing a comma into two paths that do not exist.
+	cmd.Flags().StringArrayVar(&disks, "disk", nil,
+		"attach an existing disk image, repeatable (see also --scratch-disk)")
+	cmd.Flags().StringArrayVar(&scratch, "scratch-disk", nil,
+		"create and attach a formatted disk of this size beside the image, e.g. 256M, "+
+			"repeatable; an existing one is reused, never rewritten")
 	return cmd
 }
 
@@ -210,6 +288,150 @@ func nicModel(flag string) string {
 		return ""
 	}
 	return flag
+}
+
+// resolveDrives settles the disks to attach and reports each one.
+//
+// Attached disks come first and scratch disks after, which is the rule machine.Disks
+// documents — the two flags arrive in separate slices, so the command line's own
+// interleaving is not available to honour.
+func resolveDrives(out, errOut io.Writer, iso string, disks []string, sizes []int64) ([]Drive, error) {
+	if n := len(disks) + len(sizes); n > maxDiskCount {
+		// Refused here rather than left to QEMU, whose message names an IDE bus and unit
+		// the caller never mentioned. The limit is the machine's, not ours.
+		return nil, fmt.Errorf("%d disks were given; the machine's IDE controller carries at most %d beside the CD",
+			n, maxDiskCount)
+	}
+
+	drives := make([]Drive, 0, len(disks)+len(sizes))
+	// verbs runs alongside drives, saying how each came to be attached. It is reporting
+	// only, which is why it does not live on Drive: that type describes the machine.
+	verbs := make([]string, 0, len(disks)+len(sizes))
+	// Attaching one host file twice gives the guest two independent writable views of it,
+	// which corrupts the volume as surely as two machines sharing a disk would. The paths
+	// are compared resolved, since the same file reached by two spellings is still one
+	// file — and the natural way to hit this is to name the scratch disk with --disk as
+	// well, where the two spellings differ by construction.
+	seen := make(map[string]string, len(disks)+len(sizes))
+	claim := func(flag, p string) error {
+		key, err := filepath.Abs(p)
+		if err != nil {
+			key = p
+		}
+		if prev, ok := seen[key]; ok {
+			return fmt.Errorf("%s %s is the same file as %s; attaching one disk twice lets the guest corrupt it",
+				flag, p, prev)
+		}
+		seen[key] = p
+		return nil
+	}
+
+	for _, p := range disks {
+		if _, err := os.Stat(p); err != nil {
+			return nil, fmt.Errorf("--disk %s: %w", p, err)
+		}
+		if err := claim("--disk", p); err != nil {
+			return nil, err
+		}
+		format, err := disk.SniffFormat(p)
+		if err != nil {
+			return nil, fmt.Errorf("--disk %s: %w", p, err)
+		}
+		drives = append(drives, Drive{Path: p, Format: format})
+		verbs = append(verbs, "attached")
+	}
+
+	for i, size := range sizes {
+		p := scratchPath(iso, i)
+		if err := claim("--scratch-disk", p); err != nil {
+			return nil, err
+		}
+		created, err := ensureScratch(errOut, p, size)
+		if err != nil {
+			return nil, err
+		}
+		drives = append(drives, Drive{Path: p, Format: disk.FormatRaw})
+		if created {
+			verbs = append(verbs, "created")
+		} else {
+			// Worth saying: a reused disk still holds whatever the last boot left on it,
+			// which is either the point or a surprise, and either way should not be
+			// something the user has to remember.
+			verbs = append(verbs, "reusing")
+		}
+	}
+
+	// Printed after everything resolved, so a failure part way leaves no half-report
+	// claiming disks that were never attached.
+	for i, d := range drives {
+		describeDrive(out, i, d, verbs[i])
+	}
+	return drives, nil
+}
+
+// ensureScratch creates the scratch disk at a path if it is absent, and otherwise reuses
+// what is there — a disk is a lasting artifact that may hold whatever a guest last wrote,
+// so this never rewrites one.
+//
+// A size that disagrees with the disk that exists is reported and ignored rather than
+// acted on: refusing would turn a flag typo into a failed boot on a command whose job is
+// to boot quickly, and re-creating would destroy the data the persistence exists to keep.
+func ensureScratch(errOut io.Writer, path string, size int64) (created bool, err error) {
+	if _, statErr := os.Stat(path); statErr != nil {
+		if !errors.Is(statErr, fs.ErrNotExist) {
+			return false, statErr
+		}
+		if err := disk.Create(path, disk.Spec{Size: size}); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+
+	img, err := disk.OpenRead(path)
+	if err != nil {
+		// Something else owns this name. Saying so beats silently replacing it, and
+		// beats a message about the boot that mentions no disk at all.
+		return false, fmt.Errorf("%s exists but is not a disk this tool can read: %w", path, err)
+	}
+	defer img.Close()
+
+	if got := img.Info().DiskSize; got != size {
+		fmt.Fprintf(errOut, "warning: %s already exists at %s, so the requested %s was ignored\n",
+			path, disk.FormatSize(got), disk.FormatSize(size))
+	}
+	return false, nil
+}
+
+// scratchPath derives where the nth scratch disk for an image lives: beside the image,
+// named after it. The image sits where the user can find it, so its disk should too — the
+// same reasoning that kept the built ISO out of a cache directory.
+func scratchPath(iso string, n int) string {
+	base := strings.TrimSuffix(iso, filepath.Ext(iso))
+	if n == 0 {
+		return base + "-scratch.img"
+	}
+	return fmt.Sprintf("%s-scratch%d.img", base, n+1)
+}
+
+// describeDrive reports one attached disk, numbered as the guest will see it.
+//
+// Every disk is described by what it actually holds rather than by what was asked for —
+// the volume is smaller than the disk, and a scratch disk's filesystem may have been
+// chosen rather than given. That applies equally to a disk pebuild did not make: if it
+// can be read, saying what is on it is more use than repeating the path. The format-only
+// line is the fallback for a disk that cannot be opened, which is the ordinary case for a
+// qcow2 or a filesystem this tool does not read, and not a failure worth interrupting a
+// boot for.
+func describeDrive(w io.Writer, index int, d Drive, verb string) {
+	img, err := disk.OpenRead(d.Path)
+	if err != nil {
+		fmt.Fprintf(w, "Disk %d: %s (%s, %s)\n", index, d.Path, verb, d.Format)
+		return
+	}
+	defer img.Close()
+	info := img.Info()
+	fmt.Fprintf(w, "Disk %d: %s (%s, %s, %s %q)\n",
+		index, d.Path, verb, disk.FormatSize(info.VolumeSize), info.FS, info.Label)
 }
 
 // resolveImage returns the image to boot for a command argument, which is either an
@@ -405,6 +627,15 @@ func (m machine) args() []string {
 	}
 	if m.Serial != "" {
 		args = append(args, "-serial", m.Serial)
+	}
+	// Appended after everything above rather than woven into it, so the boot line a
+	// diskless run produces is byte-for-byte what it was before disks existed. Position
+	// in Disks is the order the guest sees them in and the order the status lines number
+	// them by; driveIndex turns that into the IDE slot, which is not the same number once
+	// the CD's slot is stepped over.
+	for i, d := range m.Disks {
+		args = append(args, "-drive",
+			fmt.Sprintf("file=%s,format=%s,index=%d,media=disk", d.Path, d.Format, driveIndex(i)))
 	}
 	return args
 }

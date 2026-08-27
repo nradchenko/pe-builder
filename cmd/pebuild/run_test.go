@@ -112,6 +112,47 @@ func TestMachineArgs(t *testing.T) {
 			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512},
 			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso", "-nic", "none"},
 		},
+		{
+			// -boot d is untouched, so the CD keeps the boot even though the disk is
+			// index 0 and may carry an active partition.
+			name: "one disk",
+			m: machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512,
+				Disks: []Drive{{Path: "scratch.img", Format: "raw"}}},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso",
+				"-nic", "none",
+				"-drive", "file=scratch.img,format=raw,index=0,media=disk"},
+		},
+		{
+			// The third disk steps over index 2, which -cdrom already holds: numbering
+			// straight from zero makes QEMU refuse to start at all ("drive with bus=1,
+			// unit=0 (index=2) exists"). Two disks never reach that slot, which is why
+			// only a three-disk case can catch it.
+			name: "several disks step over the cd's slot",
+			m: machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512,
+				Disks: []Drive{
+					{Path: "a.img", Format: "raw"},
+					{Path: "b.qcow2", Format: "qcow2"},
+					{Path: "c.img", Format: "raw"},
+				}},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso",
+				"-nic", "none",
+				"-drive", "file=a.img,format=raw,index=0,media=disk",
+				"-drive", "file=b.qcow2,format=qcow2,index=1,media=disk",
+				"-drive", "file=c.img,format=raw,index=3,media=disk"},
+		},
+		{
+			// Disks are appended last, after the pointer, the adapter and the serial
+			// port, so adding one cannot disturb the line a diskless boot produces.
+			name: "disks come after everything else",
+			m: machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512, KVM: true, USBTablet: true,
+				Serial: "unix:/tmp/kd.sock,server,nowait",
+				Disks:  []Drive{{Path: "scratch.img", Format: "raw"}}},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso", "-enable-kvm",
+				"-device", "usb-ehci,id=ehci", "-device", "usb-tablet,bus=ehci.0",
+				"-nic", "none",
+				"-serial", "unix:/tmp/kd.sock,server,nowait",
+				"-drive", "file=scratch.img,format=raw,index=0,media=disk"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
