@@ -97,6 +97,13 @@ type Action struct {
 	// 32, a pebuild extension — see inf.AdaptNetworkComponent for what, why, and on which
 	// files it is meaningful).
 	AdaptNetworkINF bool
+	// ToBitmap re-encodes a staged image as a 256-colour BMP (attribute 64, a pebuild
+	// extension). The classic wallpaper path paints bitmaps only, and 64-bit Windows has no
+	// Active Desktop to paint anything else with, so a source's JPEG has to become a BMP
+	// for a wallpaper to appear on every architecture. Windows performs the same conversion
+	// when a user selects a non-BMP image; doing it at build time means nothing in the
+	// image needs a decoder. See tree.ToBitmap.
+	ToBitmap bool
 	// Origin names where a copy's bytes come from: empty means the Windows source
 	// (loose file / archive / driver cabinet); a non-empty key selects a plugin's own
 	// directory (a shipped file) or, later, a plugin's build output — the tree

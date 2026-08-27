@@ -99,6 +99,18 @@ func placeFile(a action.Action, l *layout.Layout, src source.Backing, roots sour
 		data = inf.AdaptNetworkComponent(data)
 	}
 
+	// An image is re-encoded as a bitmap on the way out (attribute 64) so the classic
+	// wallpaper path can paint it — see ToBitmap. Also after decompression, and for the same
+	// reason: there is nothing to decode in an MSCF archive. The output name comes from the
+	// action's own rename, so the INF says what the file is called; this only changes bytes.
+	if a.ToBitmap {
+		converted, err := ToBitmap(data, name)
+		if err != nil {
+			return "", "", err
+		}
+		data = converted
+	}
+
 	// A manifest include/inject override names its target path directly; otherwise the
 	// directory is resolved from the action's ID/path and the source layout.
 	rel := a.Dest

@@ -33,6 +33,14 @@ const (
 	// tool never sets it and is read unchanged, while one that does is not portable back —
 	// the original tool has no component install to adapt an INF for.
 	attrAdaptNetworkINF = 32
+	// attrToBitmap re-encodes a staged image as a 256-colour BMP (see tree.ToBitmap). The
+	// classic wallpaper path paints bitmaps only, and 64-bit Windows has no Active Desktop
+	// to paint anything else, so a source's JPEG has to become a BMP for a wallpaper to
+	// show on every architecture. Windows converts it the same way when a user picks a
+	// non-BMP image; this does it at build time instead, which is why nothing in the image
+	// needs a decoder. A third pebuild extension above the original format's 1–8, for the
+	// same reason as the two above.
+	attrToBitmap = 64
 )
 
 // Target is what an INF is compiled for: the source's build number, which selects
@@ -216,6 +224,7 @@ func copyActions(f *inf.File, t Target, dirs map[string]dirTarget) ([]action.Act
 			Optional:        attr&attrOptional != 0,
 			Uppercase:       attr&attrUppercase != 0,
 			AdaptNetworkINF: attr&attrAdaptNetworkINF != 0,
+			ToBitmap:        attr&attrToBitmap != 0,
 			Area:            bootAreaAttr(attr, attrBootArea),
 		}
 		// Attribute 2 keeps the compressed archive; attribute 32 rewrites the file's text.
@@ -225,6 +234,18 @@ func copyActions(f *inf.File, t Target, dirs map[string]dirTarget) ([]action.Act
 		if a.NoDecompress && a.AdaptNetworkINF {
 			return nil, fmt.Errorf("[SourceDisksFiles]: %q cannot be both kept compressed "+
 				"(attribute 2) and adapted for a PE (attribute 32)", a.Src)
+		}
+		// The same argument for the same reason: re-encoding an image means decoding it
+		// first, and there is nothing to decode in an MSCF archive.
+		if a.NoDecompress && a.ToBitmap {
+			return nil, fmt.Errorf("[SourceDisksFiles]: %q cannot be both kept compressed "+
+				"(attribute 2) and re-encoded as a bitmap (attribute 64)", a.Src)
+		}
+		// Both transforms rewrite the same bytes, and neither is meaningful on the other's
+		// input — an INF is not an image and an image is not text.
+		if a.AdaptNetworkINF && a.ToBitmap {
+			return nil, fmt.Errorf("[SourceDisksFiles]: %q cannot be both adapted for a PE "+
+				"(attribute 32) and re-encoded as a bitmap (attribute 64)", a.Src)
 		}
 		if d, ok := dirs[a.DirID]; ok {
 			a.Path = d.path
