@@ -227,6 +227,7 @@ takes a DHCP address; without it no network stack is configured at all.
 | Source | Network |
 |---|---|
 | Windows XP Professional SP3 (32-bit) | **verified** — installs TCP/IP, binds it to the adapter, leases an address, answers `ping` |
+| Windows XP Home Edition SP3 (32-bit) | **verified** — same |
 | Windows Server 2003 R2 SP2 (32-bit) | **verified** — same |
 | Windows Server 2003 R2 SP2 (x64) | **verified** — same |
 | Windows XP Professional x64 Edition | **verified** — same |

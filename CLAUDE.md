@@ -154,7 +154,10 @@ PE dependencies.
   (static + delay imports, or static-only for a boot-necessary set) of a binary against a
   source, resolving each imported module
   through the `source` and `compress` backings (loose, compressed-loose `.??_`, and
-  cabinet-packed forms) and reporting missing modules as flagged red herrings. Renders
+  cabinet-packed forms) and reporting missing modules as flagged red herrings. A member
+  that several cabinets hold — a slipstreamed source keeps `SP2.CAB` beside `SP3.CAB` — is
+  taken from the newest service pack's, by the one precedence list (`CabinetOrder`) that
+  `internal/tree` also stages from, so the closure is computed from the bytes that ship. Renders
   the closure as text, Graphviz DOT, or JSON. Backs both `cmd/pewalk` and the durable
   import-walk scanners.
 - `internal/buildcache/` — a small, generic on-disk cache (namespace + caller-supplied key →

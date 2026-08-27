@@ -186,8 +186,21 @@ func Open(fsys fs.FS, opts ...Option) (*Source, error) {
 			return nil
 		}
 		name := strings.ToLower(d.Name())
-		// First writer wins, so a top-level copy shadows a nested duplicate
-		// deterministically (walk order is lexical).
+		// First writer wins over a lexical walk, so which copy of a repeated name this
+		// picks is at least deterministic. It is not known to be the right one: two loose
+		// files sharing a name are not always the same file. On XP Home shfolder.dll is
+		// both VALUEADD\MSFT\USMT\ANSI\SHFOLDER.DLL (md5 7c8f371c…) and I386\SHFOLDER.DL_
+		// (md5 c14aa058…) — same size, different bytes — and this index answers with the
+		// first while a build stages the second, since it reads only the area root.
+		//
+		// That is the same index-versus-stage drift indexCabinet was given a precedence
+		// rule to fix, still open on the loose side. It is left alone here rather than
+		// guessed at: the ordering a build actually wants is the one tree.readSource
+		// applies, and lifting that into this package is a change with its own reasoning
+		// to do, not a line to slip into a cabinet fix.
+		//
+		// The practical consequence today is that `source ls` and `source extract` can
+		// name a different copy than a build stages.
 		if _, ok := s.files[name]; !ok {
 			s.files[name] = p
 		}
@@ -251,11 +264,48 @@ func (s *Source) indexCabinet(p string) error {
 	s.cabFP[p] = compress.Fingerprint(dir)
 	for _, f := range c.Files() {
 		name := strings.ToLower(f.Name)
-		if _, ok := s.cab[name]; !ok {
-			s.cab[name] = p
+		// Precedence, not discovery order. A medium may carry the same member in more
+		// than one cabinet — a slipstreamed source keeps both SP2.CAB and SP3.CAB — and
+		// the newest service pack is the copy the system would use. Taking whichever the
+		// walk reached first means taking the oldest, since the walk is lexical.
+		if cur, ok := s.cab[name]; ok && cabRank(cur) <= cabRank(p) {
+			continue
 		}
+		s.cab[name] = p
 	}
 	return nil
+}
+
+// cabPrecedence lists the source's multi-file cabinets in the order a member should be
+// taken from them: a service-pack cabinet supersedes the base DRIVER.CAB, and a later
+// service pack supersedes an earlier one. A cabinet not named here ranks below all of
+// them, and between two equally ranked cabinets the first one walked wins, so the choice
+// stays deterministic either way.
+//
+// ASMS01.CAB holds the side-by-side assemblies and shares no member with the others, so
+// its position only decides anything if that ever changes.
+//
+// This is the whole of the policy, and both halves of the engine read it here: the file
+// set is computed from whichever copy this names, and the same copy has to be the one
+// staged, or a build ships a binary whose dependencies were resolved against a different
+// one — which is a missing-DLL failure at boot, reported against the wrong file.
+var cabPrecedence = []string{"sp3.cab", "sp2.cab", "sp1.cab", "driver.cab", "asms01.cab"}
+
+// CabinetOrder returns the cabinet names in precedence order, highest first. Callers that
+// open the cabinets themselves iterate this so they read a member from the same one the
+// index resolved it to.
+func CabinetOrder() []string { return append([]string(nil), cabPrecedence...) }
+
+// cabRank orders a cabinet path by precedence: lower is stronger. An unlisted cabinet
+// ranks last, below every named one.
+func cabRank(cabPath string) int {
+	base := strings.ToLower(path.Base(cabPath))
+	for i, n := range cabPrecedence {
+		if base == n {
+			return i
+		}
+	}
+	return len(cabPrecedence)
 }
 
 // cabCacheKey returns the extracted-member cache key for name in the cabinet at

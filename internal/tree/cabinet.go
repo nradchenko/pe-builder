@@ -13,21 +13,22 @@ import (
 	"github.com/nradchenko/pe-builder/compress"
 	"github.com/nradchenko/pe-builder/internal/buildcache"
 	"github.com/nradchenko/pe-builder/layout"
+	"github.com/nradchenko/pe-builder/pewalk"
 	"github.com/nradchenko/pe-builder/source"
 )
 
-// cabNames are the source's multi-file cabinets, in precedence order: a service-pack
-// cabinet supersedes the base DRIVER.CAB, so it is consulted first. A file present
-// loosely in the source still wins over all of them (see readSource) — the loose copy
-// is the slipstreamed, current one.
+// cabNames are the source's multi-file cabinets, in the precedence order pewalk resolves
+// them by — deliberately that list and not a second copy of it. The two have to agree:
+// pewalk's index decides which copy of a member the import closure is computed from, and
+// this decides which copy is staged, so a disagreement ships a binary whose dependencies
+// were read off a different one. A file present loosely in the source still wins over all
+// of them (see readSource) — the loose copy is the slipstreamed, current one.
 //
 // ASMS01.CAB holds the side-by-side assemblies. Whether a source packs them here or lays
 // them out loosely under ASMS\ is a property of the product, not the architecture: XP x86
 // keeps them loose, while amd64 media and Server 2003 x86 both pack them, so for those it is
-// the only place the v6 Common-Controls assembly can be read from. It is consulted last: it
-// shares no member with the driver cabinets, so its position only decides which wins if that
-// ever changes.
-var cabNames = []string{"sp3.cab", "sp2.cab", "sp1.cab", "driver.cab", "asms01.cab"}
+// the only place the v6 Common-Controls assembly can be read from.
+var cabNames = pewalk.CabinetOrder()
 
 // cabinets extracts the members named in a wanted set from the source's driver
 // cabinets, for files (many class and HID drivers) that ship only inside
