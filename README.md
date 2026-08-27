@@ -58,8 +58,8 @@ produces, and for the hardware an image expects.
 ## Status
 
 A build runs in a few seconds and produces an ISO of roughly 44 MB for a bare `cmd.exe` image
-up to ~63 MB for the themed desktop. The x64 path is newer and more experimental than the
-well-worn 32-bit one, so expect more rough edges. Images are developed and tested in **QEMU**;
+up to ~63 MB for the themed desktop. A 64-bit source produces the same desktop a 32-bit one
+does, verified the same way. Images are developed and tested in **QEMU**;
 booting on physical hardware is untested.
 
 See [`docs/supported.md`](docs/supported.md) for what each source produces and the hardware it
