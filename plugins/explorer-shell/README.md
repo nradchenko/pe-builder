@@ -218,31 +218,6 @@ apply.
 sit on the boot path, before Explorer: every second waited is a second of no desktop, and a timeout
 costs only the theme. Both have measured 0ms on every boot.
 
-## Wallpaper
-
-`peshell` also applies the wallpaper the registry names, for the same reason it applies the
-visual style: a real Windows applies the per-user desktop settings during logon, and a PE has no
-winlogon to run that. Left alone, the values sit in the hive unread and the desktop comes up on
-a flat colour.
-
-**The contract** is the standard three values under `HKCU\Control Panel\Desktop` — `Wallpaper`,
-`WallpaperStyle`, `TileWallpaper` — written by whichever plugin wants a wallpaper (see
-`wallpaper`). Nothing here is image-specific. With no `Wallpaper` value it returns before
-touching COM, so a build without such a plugin pays nothing. `Wallpaper` is a `REG_EXPAND_SZ`
-and peshell expands it: **the system drive is not `C:`**.
-
-The apply goes through `IActiveDesktop` — the interface the Display Properties dialog uses —
-rather than `SystemParametersInfo`, because the classic path takes bitmaps only and a JPEG could
-not be shown at all. It follows that the wallpaper plugin must also stage and register an HTML
-engine; that is its business, not this plugin's, and it declares it through the self-registration
-contract above.
-
-**Where it happens matters.** The apply runs once Explorer's desktop *view* exists — not merely
-its taskbar, which comes up about a second earlier and is not something `IActiveDesktop` can
-attach to — and before the splash closes, so the wallpaper arrives with the desktop rather than
-flipping in over it a moment later. The wait is bounded and never withholds the apply; why the
-earlier ordering failed without reporting anything is at `wait_defview` in `peshell.c`.
-
 ## Splash
 
 The "Please wait…" window mimics the Windows startup/shutdown status dialog: a title bar,

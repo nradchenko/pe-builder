@@ -7,72 +7,55 @@ SPDX-License-Identifier: Apache-2.0
 A desktop wallpaper for the Explorer desktop, which otherwise renders on a flat background
 colour.
 
-The plugin itself ships no code: it stages an image and the Active Desktop surface that paints
-it, then declares three things in the registry — the wallpaper to use, the COM server to
-register, and the policy to lift. `peshell` (from `explorer-shell`) does the applying.
+The plugin ships no code and applies nothing: it stages the source's own image, re-encoded as a
+bitmap, and declares three registry values. Windows does the rest — `userinit` reads those values
+at logon and paints the desktop before the shell even starts.
 
 ## What it stages
 
-`bliss.jpg` — the XP default wallpaper — plus `mshtml.dll` and `mshtml.tlb`, the HTML engine and
-its type library, which are what the Active Desktop surface is. All three are normal declared
-files on the installation media, stored compressed under 8.3 names (`BLISS.JP_`, `MSHTML.DL_`),
-which the engine resolves from the bare name.
+One file: `bliss.jpg`, the XP default wallpaper, a normal declared file on the installation media
+(stored compressed as `BLISS.JP_`, which the engine resolves from the bare name). It is staged as
+`bliss.bmp` — attribute 64 re-encodes it on the way in; see § Why a bitmap.
 
-That costs about 4.2 MiB on the ISO, which is why this is a separate plugin rather than part of
-the desktop: a build that does not enable it stages none of it and pays nothing.
-
-The set is minimal by test, not by guess — each file was removed in turn and the result booted.
-`mshtml.tlb` is required (without it the desktop comes up bare, so the type library matters even
-though the apply is a direct interface call). IE's image decoder `imgutil.dll` was in the first
-working build but is **not** required — mshtml decodes this wallpaper by itself — so it was
-dropped. If a future image format needs decoding mshtml can't do, that is where to look first.
+About 470 KB, which is the whole cost of the plugin.
 
 ## Why system32 and not Web\Wallpaper
 
 A real XP install keeps wallpapers in `%SystemRoot%\Web\Wallpaper`. A PE has no such directory,
 and creating one would buy nothing: the media's own `layout.inf` already declares `bliss.jpg`'s
 target as system32, which is the flat directory a PE runs from. Staging it where the source says
-it goes keeps the plugin to one `[SourceDisksFiles]` line per file, with no `[WinntDirectories]`
-entry and no rename.
+it goes keeps the plugin to a single `[SourceDisksFiles]` line, with no `[WinntDirectories]`
+entry — the only field it sets beyond the directory is the name, since the staged file is a
+bitmap and should say so.
 
-## Why Active Desktop
+## Why a bitmap
 
-The classic desktop path paints **bitmaps only**. `bliss.jpg` is a JPEG, so it can only be drawn
-by the Active Desktop surface, which decodes it through the imaging codecs.
+The path that paints a desktop wallpaper — `SystemParametersInfo(SPI_SETDESKWALLPAPER)` — draws
+**bitmaps only**, and `bliss.jpg` is a JPEG. That is the whole of it.
 
-That surface is off in a plain desktop build, deliberately: `explorer-shell` sets
-`NoActiveDesktop=1` because the surface needs an HTML engine and folder `.htt` templates a
-minimal PE does not stage. This plugin stages the engine, so it lifts the policy for itself —
-its `[Default.AddReg]` runs after the desktop's, which a deps-first plugin order guarantees.
+Active Desktop decodes a JPEG, but it cannot be used: **XP Professional x64 has no Active Desktop
+at all** — the feature is absent, not disabled. Its registry key is never created and Display
+Properties has no Web tab. Handed a non-BMP image, Windows converts it to a bitmap and applies
+that classically, on every edition.
 
-Two consequences worth knowing:
+Converting at build time is that same conversion, moved earlier — the decoder is Go's rather than
+something the image has to carry, and one path serves both architectures.
 
-- **mshtml has to be registered.** Nothing on the media registers it and the baked hive carries
-  no CLSID for it, so it is staged but inert. The plugin declares it under
-  `pe-builder\SelfRegister` and `peshell` registers it (see that plugin's README §
-  Self-registration). Registration is also why `mshtml.tlb` has to be staged: the type library
-  is registered along with the classes.
-- **The error for an unregistered mshtml names the wrong thing.** The shell reports that it
-  cannot find the *Active Desktop HTML file*, pointing at a missing `.htt` when the real problem
-  is a COM class it could not create. The `.htt` is generated on demand and is not a media file;
-  do not go looking for one.
+The engine converts to a 256-colour bitmap; `internal/tree/bitmap.go` records why that palette
+and not another, with the measurements.
 
-## Why the registry alone is not enough
+## The registry values are the whole contract
 
-Setting `Control Panel\Desktop\Wallpaper` does not produce a wallpaper — nothing in a PE reads
-it. `peshell` is what applies it (see `explorer-shell`'s README § Wallpaper for how and why),
-so this plugin only declares the values.
-
-Verified by ablation: with every other ingredient in place and only that apply removed, the
-desktop comes up on a flat colour.
+`userinit.exe` runs from winlogon before the shell and applies `Control Panel\Desktop` itself, so
+this plugin declares the values and stops there. Nothing applies them on its behalf, and the
+desktop is already painted by the time the shell's splash appears.
 
 ## Fit
 
 `WallpaperStyle = 2` (stretch) with `TileWallpaper = 0`. The desktop resolution is a build-time
 choice made on `explorer-shell`, so the image has no fixed canvas to match; stretching scales it
 to whatever mode is selected rather than leaving a border around it. Centring (`0`) and tiling
-(`1`) are the other two values, and `peshell` maps all three onto the Active Desktop API, whose
-encoding differs from the registry's.
+(`1`) are the other two values, read by the shell straight from the registry.
 
 `Wallpaper` is written as **REG_EXPAND_SZ**: the PE's system drive is `X:`, not `C:`, so an
 absolute path baked in at build time would point nowhere at run time.

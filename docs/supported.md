@@ -9,16 +9,20 @@ than assumed to work.
 You supply the installation source; pe-builder ships no Microsoft files. A source is a
 mounted directory or an `.iso`.
 
-| Source | Builds | Boots to `cmd.exe` | Explorer desktop | Luna theme | Wallpaper |
-|---|---|---|---|---|---|
-| **Windows XP Professional SP3 (32-bit)** | yes | verified | verified | verified | verified |
-| **Windows XP Home Edition SP3 (32-bit)** | yes | verified | verified | verified | verified |
-| **Windows XP Professional x64 Edition (SP2)** | yes | verified | verified | verified | no — [x64](#what-differs-on-an-x64-build) |
-| **Windows Server 2003 R2 SP2 (32-bit)** | yes | verified | verified | verified | verified |
-| **Windows Server 2003 R2 SP2 (x64)** | yes | verified | verified | verified | no — [x64](#what-differs-on-an-x64-build) |
-| Windows XP SP0 / SP1 / SP2 | **rejected** | — | — | — | — |
-| Windows 2000 and earlier | **rejected** | — | — | — | — |
-| Windows Fundamentals for Legacy PCs | **out of scope** | — | — | — | — |
+| Source | Status |
+|---|---|
+| **Windows XP Professional SP3 (32-bit)** | verified |
+| **Windows XP Home Edition SP3 (32-bit)** | verified |
+| **Windows XP Professional x64 Edition (SP2)** | verified |
+| **Windows Server 2003 R2 SP2 (32-bit)** | verified |
+| **Windows Server 2003 R2 SP2 (x64)** | verified |
+| Windows XP SP0 / SP1 / SP2 | **rejected** |
+| Windows 2000 and earlier | **rejected** |
+| Windows Fundamentals for Legacy PCs | **out of scope** |
+
+A verified source has been built and booted all the way to the themed Explorer desktop —
+`cmd.exe`, the shell, the Luna visual style and the wallpaper each confirmed on screen — on
+every architecture the source comes in.
 
 The 32-bit XP path is verified in several languages, which behave identically apart from one
 Active Setup component present only on some locales. A build's language comes from the source;
@@ -124,12 +128,6 @@ among the files the build skipped.
 An amd64 source produces the same themed desktop a 32-bit one does. Plugins that ship code
 are compiled for the target architecture, so building one needs the 64-bit cross-compiler
 (`gcc-mingw-w64-x86-64`) rather than the 32-bit one.
-
-**The `wallpaper` plugin does not render**, on either x64 source: the desktop comes up on a flat
-colour, and applying the wallpaper by hand afterwards does not paint it either. Staging and
-registry are not the problem — the image is present, the COM classes register, and
-`IActiveDesktop` accepts the wallpaper and reads it back — the Active Desktop surface is simply
-never composed. The cause is not established. A 32-bit build is unaffected.
 
 ## Output
 

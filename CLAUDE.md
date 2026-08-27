@@ -194,7 +194,7 @@ PE dependencies.
     `accessories` (optional GUI utilities).
   - *The XP look:* `pesuite` (system-start driver setting the product SuiteMask the session subsystem
     gates on) → `terminal-services` (the session stack) → `luna` (the "Luna" visual style + Themes
-    service); `wallpaper` (the XP wallpaper via Active Desktop). Each depends leftward.
+    service); `wallpaper` (the XP wallpaper, re-encoded to a bitmap at build time so the classic path can paint it). Each depends leftward.
   - *Networking* (each pulls `hardware` in): `hardware` ships `pehw`, the boot-time PnP driver-install
     + `INetCfg` network-config pass; `network-tools` the CLI utilities (`ipconfig`, `ping`, …);
     `network-ui` the Network Connections folder, tray icon and adapter dialogs.

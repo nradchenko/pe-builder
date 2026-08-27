@@ -10,9 +10,6 @@
 #define WINVER 0x0501
 #include <windows.h>
 #include <objbase.h>
-/* Before shlobj.h: it gates IActiveDesktop (and WALLPAPEROPT/AD_APPLY_*) behind _WININET_,
- * which this header defines. Headers only — nothing here links against wininet. */
-#include <wininet.h>
 #include <shlobj.h>
 #include "startmenu.h"
 
@@ -621,77 +618,15 @@ static void apply_visual_style(void){
      * long as this process does, and unloading either would tear it down. */
 }
 
-/* Is there a window of this class under Progman? */
-static BOOL desktop_child(const char *cls){
-    HWND pm=FindWindowA("Progman",NULL);
-    return pm && FindWindowExA(pm,NULL,cls,NULL)!=NULL;
-}
-
-/* Wait for the desktop *view*, because the taskbar is not it.
- *
- * Explorer creates Shell_TrayWnd well before it creates Progman's SHELLDLL_DefView, and
- * IActiveDesktop has nothing to attach to until the view exists. Applying in that window is not
- * an error and does not report as one: ApplyChanges returns S_OK, takes 0 ms, and no Active
- * Desktop surface is ever created. Measured on 3790/x86 — `defview=no took=0ms` at boot, with
- * the identical call from a prompt seconds later painting.
- *
- * Bounded and non-fatal: a desktop whose view never appears still gets the apply attempted, so
- * this can only delay the wallpaper, never withhold it. Much shorter than the taskbar wait above
- * — by the time that one has returned, the view is moments away or is not coming. */
-static BOOL wait_defview(DWORD ms){
-    DWORD t;
-    for(t=0;t<ms;t+=250){
-        if(desktop_child("SHELLDLL_DefView")) return TRUE;
-        Sleep(250);
-    }
-    return desktop_child("SHELLDLL_DefView");
-}
-
-/* Push the wallpaper the registry names onto the desktop — nothing else in a PE reads those
- * values. See README.md § Wallpaper for the contract and why it goes through IActiveDesktop.
- *
- * Best-effort and self-limiting: no wallpaper value means nothing to do, and on a build that
- * stages no HTML engine the CoCreateInstance just fails. COM is already initialized on this
- * thread by self_register_shell's OleInitialize. */
-static void apply_wallpaper(void){
-    HKEY k;
-    if(RegOpenKeyExA(HKEY_CURRENT_USER,"Control Panel\\Desktop",0,KEY_READ,&k)!=ERROR_SUCCESS) return;
-    /* Wallpaper is a REG_EXPAND_SZ (%SystemRoot%\...) for the same reason DllName above is: the
-     * system drive is not C:. reg_string does the expansion and refuses a truncated result. */
-    WCHAR path[MAX_PATH],flag[8];
-    BOOL on = reg_string(k,L"Wallpaper",path,MAX_PATH);
-    /* The registry's encoding is not the API's: TileWallpaper is a flag of its own, and it wins
-     * over WallpaperStyle, whose 2 means stretch. Neither is required — a missing or unreadable
-     * one just leaves the default. */
-    DWORD style=WPSTYLE_CENTER;
-    if(on){
-        if(reg_string(k,L"TileWallpaper",flag,8) && flag[0]=='1') style=WPSTYLE_TILE;
-        else if(reg_string(k,L"WallpaperStyle",flag,8) && flag[0]=='2') style=WPSTYLE_STRETCH;
-    }
-    RegCloseKey(k);
-    if(!on) return;
-
-    IActiveDesktop *ad=NULL;
-    if(FAILED(CoCreateInstance(&CLSID_ActiveDesktop,NULL,CLSCTX_INPROC_SERVER,
-                               &IID_IActiveDesktop,(void**)&ad)) || !ad) return;
-    WALLPAPEROPT opt; opt.dwSize=sizeof opt; opt.dwStyle=style;
-    wait_defview(30000);
-    ad->lpVtbl->SetWallpaper(ad,path,0);
-    ad->lpVtbl->SetWallpaperOptions(ad,&opt,0);
-    ad->lpVtbl->ApplyChanges(ad,AD_APPLY_ALL);
-    ad->lpVtbl->Release(ad);
-}
-
-/* Start Explorer, wait for its taskbar, apply the desktop settings that need a live shell, then
- * block until it exits. Returns FALSE if it could not be started at all. Every launch goes
- * through here, so a desktop that comes back after Explorer dies is set up like the first. */
+/* Start Explorer, wait for its taskbar, run the tasks that need a live shell, then block until
+ * it exits. Returns FALSE if it could not be started at all. Every launch goes through here, so
+ * a desktop that comes back after Explorer dies is set up like the first. */
 static BOOL launch_desktop(BOOL first){
     STARTUPINFOA si; PROCESS_INFORMATION pi;
     ZeroMemory(&si,sizeof si); si.cb=sizeof si; si.lpDesktop=(LPSTR)"WinSta0\\Default";
     char cl[64]; lstrcpynA(cl,"explorer.exe",64);
     if(!CreateProcessA(NULL,cl,NULL,NULL,FALSE,0,NULL,NULL,&si,&pi)) return FALSE;
     for(int k=0;k<600;k++){ if(FindWindowA("Shell_TrayWnd",NULL)) break; Sleep(300); }
-    apply_wallpaper();
     /* post-shell tasks want a live desktop, so they run here rather than after the call — this
      * function blocks until Explorer exits. Gated on having run rather than on `first`: a first
      * launch that fails returns above, and every retry passes first=FALSE, which would skip
