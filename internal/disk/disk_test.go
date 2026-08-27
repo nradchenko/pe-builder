@@ -267,6 +267,106 @@ func TestCaseInsensitive(t *testing.T) {
 	}
 }
 
+// Lookup is what decides whether a name is taken, and it has to answer the way a write
+// will: case-insensitively, since fs.Stat compares FAT names exactly and a guest writes
+// uppercase 8.3 names.
+func TestLookup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "scratch.img")
+	if err := Create(path, Spec{Size: 16 << 20}); err != nil {
+		t.Fatal(err)
+	}
+	img, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := img.WriteFile("HELLO.TXT", []byte("guest")); err != nil {
+		t.Fatal(err)
+	}
+	if err := img.WriteFile("logs/inner.txt", []byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	if err := img.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	img2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer img2.Close()
+
+	tests := []struct {
+		name      string
+		wantFound bool
+		wantDir   bool
+		wantName  string
+	}{
+		{"HELLO.TXT", true, false, "HELLO.TXT"},
+		{"hello.txt", true, false, "HELLO.TXT"},
+		{"/hello.txt", true, false, "HELLO.TXT"},
+		{`\hello.txt`, true, false, "HELLO.TXT"},
+		{"logs", true, true, "logs"},
+		{"LOGS", true, true, "logs"},
+		{"logs/inner.txt", true, false, "inner.txt"},
+		{"logs/INNER.TXT", true, false, "inner.txt"},
+		{"nosuch.txt", false, false, ""},
+		{"logs/nosuch.txt", false, false, ""},
+		{"nosuchdir/file.txt", false, false, ""},
+	}
+	for _, tt := range tests {
+		got, ok := img2.Lookup(tt.name)
+		if ok != tt.wantFound {
+			t.Errorf("Lookup(%q) found = %v, want %v", tt.name, ok, tt.wantFound)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		if got.IsDir != tt.wantDir {
+			t.Errorf("Lookup(%q).IsDir = %v, want %v", tt.name, got.IsDir, tt.wantDir)
+		}
+		// The name comes back as the volume spells it, so a caller's message can show a
+		// case difference rather than echoing what was typed.
+		if !strings.EqualFold(got.Name, tt.wantName) {
+			t.Errorf("Lookup(%q).Name = %q, want %q", tt.name, got.Name, tt.wantName)
+		}
+	}
+}
+
+// Writing over a directory corrupts the volume, so it is refused rather than attempted.
+func TestWriteFileRefusesADirectory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "scratch.img")
+	if err := Create(path, Spec{Size: 16 << 20}); err != nil {
+		t.Fatal(err)
+	}
+	img, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer img.Close()
+
+	if err := img.WriteFile("logs/inner.txt", []byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	err = img.WriteFile("logs", []byte("not a directory"))
+	if err == nil {
+		t.Fatal("writing over a directory: want an error")
+	}
+	if !strings.Contains(err.Error(), "directory") {
+		t.Errorf("error %q does not say the target is a directory", err)
+	}
+
+	// The volume must still walk — a corrupted directory entry shows up as a walk that
+	// never terminates, so reaching this assertion at all is half the check.
+	names, werr := fs.ReadDir(img.FS(), "logs")
+	if werr != nil {
+		t.Fatalf("the directory did not survive: %v", werr)
+	}
+	if len(names) != 1 {
+		t.Errorf("logs holds %d entries, want 1", len(names))
+	}
+}
+
 func TestCreateRefusesExisting(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "scratch.img")
 	if err := os.WriteFile(path, []byte("not a disk"), 0o644); err != nil {

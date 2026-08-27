@@ -44,6 +44,7 @@ func newRootCmd() *cobra.Command {
 		newRunCmd(),
 		newSourceCmd(),
 		newImageCmd(),
+		newDiskCmd(),
 		newHiveCmd(),
 		newPluginsCmd(),
 	)

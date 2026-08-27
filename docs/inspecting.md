@@ -343,3 +343,72 @@ file decodes only that file. If `PE.wim` itself cannot be read (a corrupt or uns
 WIM), the commands fall back to the media root and point you at extracting `PE.wim` to
 inspect with a dedicated WIM tool. `verify` is unaffected either way — it reads the build
 receipt, which the `wim` tail also places on the media root next to `PE.wim`.
+
+## Scratch disks
+
+Every question of the form "how does the PE behave with a disk attached?" — which drive
+letter a volume gets, what the storage stack does, whether the PE writes somewhere it
+should not — needs a formatted disk to boot with. The `disk` commands make one and read
+it, so the answer does not depend on the host being able to mount FAT:
+
+```sh
+# make one, and put something on it the guest will find
+pebuild disk create scratch.img --size 256M
+pebuild disk add scratch.img hello.txt
+pebuild disk add scratch.img boot.log -d logs/boot
+
+# boot with it attached, then read back what the guest wrote
+pebuild disk ls scratch.img
+pebuild disk extract scratch.img world.txt -o -
+```
+
+These are the one group that **writes**. A built image is something pebuild produced and
+only ever reads; a scratch disk is created empty and written from both sides, which is
+why there is an `add` as well as an `extract`.
+
+A disk has to be partitioned *and* formatted to reproduce anything: a raw unformatted
+image gets no volume, so it gets no drive letter and the guest never sees a disk to
+prefer. `create` therefore writes a fixed geometry — one MBR partition a megabyte in,
+FAT16 while it fits and FAT32 beyond, with a volume label so the volume has an identity
+inside the guest. All of it happens in process, so no `sfdisk`, no `mkfs.vfat` and no
+root is involved.
+
+The size given is the **whole disk**; the volume inside is a megabyte smaller, that being
+the partition alignment. What is reported is the volume, since that is the space the guest
+actually gets:
+
+```sh
+$ pebuild disk create scratch.img --size 256M
+Created scratch.img (255 MiB, FAT16 "PE SCRATCH")
+```
+
+Sizes take a `K`, `M` or `G` suffix and are binary, so `256M` is 256 MiB. `--fs` overrides
+the filesystem where the size allows it, and `--label` the volume label.
+
+`ls` and `extract` behave exactly as their `image` counterparts — the same pattern rules,
+the same case-insensitive matching, the same lowercased output names, the same refusal of
+two names that would write one file, and `-o -` to pipe a single file to stdout.
+
+Nothing is overwritten without being asked. `create` refuses an existing path outright,
+and `add` refuses a file already on the disk unless `--replace` is given — the guest may
+have written it. That check folds case, which matters because a guest writes 8.3 short
+names: a host `hello.txt` will not quietly replace a `HELLO.TXT` the PE left behind, and
+the refusal names the file as the disk spells it.
+
+```sh
+$ pebuild disk add scratch.img hello.txt
+pebuild: /HELLO.TXT already exists on the disk; pass --replace to overwrite it
+```
+
+A name already taken by a **directory** is refused whatever `--replace` says; there is no
+reading of that request under which overwriting it is what was meant.
+
+Every host file is read and every destination checked before anything is written, so a
+batch that is going to be refused is refused before the disk is touched. That guarantee
+covers the checking, not the writing: if a write fails part way through a batch — a full
+disk, say — the files already written stay, and only the one that failed is removed, so
+that it is neither reported as added nor left behind to block the retry.
+
+Any raw image with an MBR and a FAT partition can be read, not only the ones this tool
+wrote, so a disk prepared elsewhere works too. A `qcow2` is refused with a pointer at
+`qemu-img convert` rather than a confusing parse failure.

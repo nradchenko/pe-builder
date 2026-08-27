@@ -290,6 +290,10 @@ exactly as a build does, so what they report is what the engine sees.
 | What files are in this built image? | `pebuild image ls <image> [pattern]` |
 | Get me this file out of a built image | `pebuild image extract <image> <file>... [-o dir\|-]` |
 | What manifest does this binary carry, and at which id? | `pebuild source manifest <src> <binary>` |
+| Make a scratch disk to boot a PE with | `pebuild disk create <path> --size 256M` |
+| What is on this scratch disk? | `pebuild disk ls <disk> [pattern]` |
+| Put this file where the guest will find it | `pebuild disk add <disk> <file>... [-d dir]` |
+| Get me back what the guest wrote | `pebuild disk extract <disk> <file>... [-o dir\|-]` |
 | What does this binary import? | `pewalk --iso <src> <binary>` |
 
 `source extract` resolves a bare name against all three forms the media stores files in
@@ -306,6 +310,14 @@ the tree writes mixed case and the ISO stage uppercases. A `wim`-layout image ke
 payload inside `PE.wim`; `image` and `hive` read *through* the WIM (via the `go-wim`
 reader) transparently, so the same commands work on both layouts. Full detail in
 [`docs/inspecting.md`](docs/inspecting.md).
+
+The `disk` commands are the one group that **writes**. A scratch disk is not something a
+build produced — it is storage a PE is booted with, so that questions about drive letters,
+the storage stack, or whether a PE touches a disk it should not can be asked at all. `create`
+makes an empty formatted one, `add` puts a file where the guest will find it, and `ls` and
+`extract` read back what the guest left, all without mounting anything and without root.
+They read any raw image with an MBR and a FAT partition, not only the ones this tool wrote;
+a `qcow2` is refused with a pointer at `qemu-img convert`.
 
 So: do **not** mount the ISO, shell out to `7z`/`xorriso`/`cabextract`, hand-parse
 `txtsetup.sif`, or write a throwaway Go program to read a hive. If an inspection need

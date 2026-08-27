@@ -23,6 +23,7 @@ import (
 	"io/fs"
 	"math"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
@@ -175,12 +176,99 @@ type Image struct {
 // ReadFileFS and StatFS) and is therefore assignable to source.Backing. Reading a
 // scratch disk needs no adapter and no second implementation of path matching.
 //
-// Name lookup is case-insensitive, as FAT itself is, which matches how a built image
-// reads through its own backing.
+// Opening a name is case-insensitive, as FAT itself is. Stat is **not**: the
+// implementation compares the directory entry's name exactly, where OpenFile folds case.
+// Anything deciding whether a name is already taken must therefore go through Lookup
+// rather than fs.Stat — a guest writes 8.3 short names, so the file a Stat misses is
+// precisely the uppercase one a guest left behind.
 func (i *Image) FS() filesystem.FileSystem { return i.fsys }
+
+// Entry is what Lookup found: the name as the volume actually spells it, and whether it
+// is a directory.
+type Entry struct {
+	Name  string
+	IsDir bool
+}
+
+// Lookup reports whether a path is taken on the volume, matching the way FAT does and the
+// way a write will: case-insensitively.
+//
+// It exists because fs.Stat cannot answer this question correctly here (see FS), and
+// because the answer has to distinguish a file from a directory — writing file bytes over
+// a directory entry corrupts the volume rather than failing.
+func (i *Image) Lookup(name string) (Entry, bool) {
+	// ReadDir is the io/fs half of this library's interface and validates its argument
+	// with fs.ValidPath, which rejects a leading slash — while OpenFile and Mkdir are the
+	// native half and want exactly that. Handing ReadDir a rooted path does not error in
+	// any visible way here: it simply returns nothing, so every name looks free and every
+	// overwrite guard silently passes. The relative form is therefore what is used here.
+	rel := strings.Trim(strings.ReplaceAll(name, `\`, "/"), "/")
+	if rel == "" || rel == "." {
+		return Entry{Name: "/", IsDir: true}, true
+	}
+	entries, err := i.fsys.ReadDir(path.Dir(rel))
+	if err != nil {
+		return Entry{}, false
+	}
+	base := path.Base(rel)
+	for _, e := range entries {
+		if strings.EqualFold(e.Name(), base) {
+			return Entry{Name: e.Name(), IsDir: e.IsDir()}, true
+		}
+	}
+	return Entry{}, false
+}
 
 // Info describes the image, for a caller that has to report what it attached.
 func (i *Image) Info() Info { return i.info }
+
+// WriteFile writes a file to the volume, creating its directory if it does not exist and
+// replacing the file if it does.
+//
+// Reading a volume needs nothing beyond fs.FS, but writing to one has no standard
+// interface, so this is where the go-diskfs write calls stay rather than being reached
+// for through a type assertion at the call site. A caller adds a file by naming it.
+//
+// The name is a path on the volume, with either separator; a leading one is optional.
+func (i *Image) WriteFile(name string, data []byte) error {
+	p := "/" + strings.Trim(strings.ReplaceAll(name, `\`, "/"), "/")
+	if p == "/" {
+		return fmt.Errorf("%q does not name a file", name)
+	}
+	// Refused rather than attempted: the directory's entry carries the subdirectory
+	// attribute, so opening it for writing succeeds and file bytes land on the directory's
+	// own cluster. The volume is then structurally broken — a later walk follows the
+	// wreckage and recurses without end — so this cannot be left to the caller to avoid.
+	if e, ok := i.Lookup(p); ok && e.IsDir {
+		return fmt.Errorf("%s is a directory on this disk", p)
+	}
+	if dir := path.Dir(p); dir != "/" && dir != "." {
+		// Mkdir creates intermediates and accepts a directory that already exists, so a
+		// nested destination needs no walk of its own.
+		if err := i.fsys.Mkdir(dir); err != nil {
+			return fmt.Errorf("create %s: %w", dir, err)
+		}
+	}
+	f, err := i.fsys.OpenFile(p, os.O_CREATE|os.O_RDWR|os.O_TRUNC)
+	if err != nil {
+		return err
+	}
+	n, err := f.Write(data)
+	if err == nil && n != len(data) {
+		err = fmt.Errorf("wrote %d of %d bytes", n, len(data))
+	}
+	if err != nil {
+		// The entry exists by now and holds either nothing or part of the file, and
+		// O_TRUNC has already discarded whatever it replaced. Removing it is what keeps a
+		// failed write from being reported as a file the disk does not really have, and
+		// from blocking the retry with an "already exists" refusal.
+		if rmErr := i.fsys.Remove(p); rmErr != nil {
+			return fmt.Errorf("%w (and %s could not be removed afterwards: %v)", err, p, rmErr)
+		}
+		return err
+	}
+	return nil
+}
 
 // Close releases the image. Writes made through FS are flushed to the backing file as
 // they are made, so a caller that has written must still Close before reading the file
@@ -281,7 +369,18 @@ func Create(path string, s Spec) (err error) {
 // It reads any raw image with an MBR and a FAT partition, not only the ones this package
 // wrote — a disk prepared by another tool is exactly as useful to attach, and refusing it
 // would make the reader useless for half the disks a caller has.
-func Open(path string) (*Image, error) {
+func Open(path string) (*Image, error) { return open(path, diskfs.ReadWriteExclusive) }
+
+// OpenRead opens an existing disk image for reading only.
+//
+// A caller that is only listing or extracting should use this: the read-write open takes
+// the file exclusively for writing, so it fails outright on a disk that cannot be written
+// — one on read-only media, copied out of a build with restrictive permissions, or owned
+// by somebody else. Refusing to *read* those would contradict the promise that any raw
+// MBR+FAT image can be read.
+func OpenRead(path string) (*Image, error) { return open(path, diskfs.ReadOnly) }
+
+func open(path string, mode diskfs.OpenModeOption) (*Image, error) {
 	format, err := SniffFormat(path)
 	if err != nil {
 		return nil, err
@@ -296,7 +395,7 @@ func Open(path string) (*Image, error) {
 		return nil, err
 	}
 
-	d, err := diskfs.Open(path)
+	d, err := diskfs.Open(path, diskfs.WithOpenMode(mode))
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
