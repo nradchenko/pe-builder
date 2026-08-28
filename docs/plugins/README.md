@@ -118,6 +118,37 @@ edits go to the SOFTWARE (`[Software.AddReg]`), SYSTEM
 (`[SetupReg.AddReg]`), or default-user (`[Default.AddReg]`) hive; `[WinntDirectories]`
 defines custom target folders.
 
+**Copy attributes.** The last field of a `[SourceDisksFiles]` entry is a combinable
+bitfield. Leave it off (or `0`) for the ordinary case: take the file from the Windows
+source, decompressing it if the media keeps it compressed.
+
+| Value | Meaning |
+|-------|---------|
+| `1` | The file **ships with the plugin** — read it from the plugin's own directory rather than from the Windows source. A plugin naming a file it does not carry is refused, by name. |
+| `2` | **Do not decompress**: stage the compressed archive (`*.??_`) as it is stored. |
+| `4` | **Optional** — copy it if the source has it, and say nothing if not. |
+| `8` | **Uppercase** the target name. |
+| `16` † | The file belongs to the **real-mode boot chain**, which on 64-bit media lives in a different source folder from the OS payload (`I386` rather than `AMD64`). Set it on a file the loader reads before Windows starts. |
+| `32` † | Rewrite a staged **network-component INF** so its install works in a PE. Meaningful only on a network component's own `.inf` — not a general "adapt any INF" flag. |
+| `64` † | Re-encode a staged **image as a 256-colour BMP**. Give the target a `.bmp` name in the rename field — the staged file is a bitmap whatever the source called it, and nothing checks that the two agree. A file already in BMP form is passed through untouched. |
+
+† **pebuild extension.** The original format defines no bit above `8`, so a plugin
+written for the original tool never sets one and is read unchanged — but a plugin that
+does set one is not portable back to it.
+
+Three combinations are refused rather than half-honoured, naming the line and the
+plugin: `2|32` and `2|64` (each would transform a file that was to stay a compressed
+archive), and `32|64` (an INF is not an image).
+
+```ini
+[SourceDisksFiles]
+bliss.jpg = 2,bliss.bmp,64      ; a source JPEG, staged as a bitmap
+```
+
+Reach for `64` when the component that will read the image accepts bitmaps only and the
+source ships something else; converting at build time is what keeps a decoder out of the
+image. `plugins/wallpaper/` is the worked example.
+
 **Ship source, not a binary.** For a plugin that installs a tool you wrote, add a
 `[Build]` section: pebuild compiles the source at build time and places the result,
 so nothing opaque is bundled. See `plugins/poweroff/` for the reference:
