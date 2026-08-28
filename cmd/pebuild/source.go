@@ -37,6 +37,7 @@ func newSourceCmd() *cobra.Command {
 		newSourceListCmd(),
 		newSourceDirsCmd(),
 		newSourceINFCmd(),
+		newSourceManifestCmd(),
 	)
 	return cmd
 }

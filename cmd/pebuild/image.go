@@ -44,7 +44,7 @@ func newImageCmd() *cobra.Command {
 			"build produced (ours or another tool's); use the `source` commands for a\n" +
 			"Windows installation source, which is addressed through its own declarations.",
 	}
-	cmd.AddCommand(newImageListCmd(), newImageExtractCmd())
+	cmd.AddCommand(newImageListCmd(), newImageExtractCmd(), newImageManifestCmd())
 	return cmd
 }
 

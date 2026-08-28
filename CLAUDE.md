@@ -17,11 +17,14 @@ over it. `pewalk` is a second, standalone tool (library + CLI) that inspects a s
 PE dependencies.
 
 - `cmd/pebuild/` — the command-line frontend (cobra). Besides building, it exposes the
-  engine's readers as inspection commands: `source probe|extract|ls|dirs|inf` reads a
+  engine's readers as inspection commands: `source probe|extract|ls|dirs|inf|manifest` reads a
   Windows installation source (identity, a file pulled out and decompressed from
   whichever form the media stores it in, the declared file list with each file's storage
-  form and output path, the directory-ID table, and an INF section as the build's own
-  parser sees it), and `hive dump` prints a key or value from a registry hive in a
+  form and output path, the directory-ID table, an INF section as the build's own
+  parser sees it, and the side-by-side manifests a binary carries with the resource id
+  each sits at — `image manifest` answers the same for a built image, and the id is the
+  answer, since the loader takes a process's manifest from id 1 and then ignores an
+  external one), and `hive dump` prints a key or value from a registry hive in a
   source, a built PE, or a bare hive file. `run` boots an image `build` already produced —
   named directly, or through the manifest that wrote it — in QEMU, reading the image's own
   architecture to pick the emulator and machine; it deliberately does not build, and is a
@@ -275,6 +278,7 @@ exactly as a build does, so what they report is what the engine sees.
 | What was this image built from? | `pebuild verify <image> [manifest]` |
 | What files are in this built image? | `pebuild image ls <image> [pattern]` |
 | Get me this file out of a built image | `pebuild image extract <image> <file>... [-o dir\|-]` |
+| What manifest does this binary carry, and at which id? | `pebuild source manifest <src> <binary>` |
 | What does this binary import? | `pewalk --iso <src> <binary>` |
 
 `source extract` resolves a bare name against all three forms the media stores files in

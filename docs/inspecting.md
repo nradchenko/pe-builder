@@ -100,6 +100,41 @@ Without a section name, the sections the file declares are listed. Sections
 conditioned on a build number resolve against the source's own build unless
 `--build` overrides it.
 
+## The manifests a binary carries
+
+```sh
+pebuild source manifest win.iso explorer.exe
+pebuild image manifest out/pe.iso explorer.exe
+```
+
+```
+explorer.exe (from AMD64/EXPLORER.EX_ (compressed))
+
+  id 1 (CREATEPROCESS_MANIFEST_RESOURCE_ID — the one the loader applies to a process), language 1033, 1 byte
+  not well-formed XML: EOF
+  contents: " "
+
+  id 123, language 1033, 730 bytes
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+...
+```
+
+Prints every side-by-side manifest a Windows binary carries, and **the resource id
+each one sits at**. The id is what makes the answer usable: the loader takes a
+process's manifest from the resource numbered **1** and, having found one, ignores a
+`.manifest` file placed beside the binary. So a binary whose real manifest is at
+another id behaves differently from one that has none, and the two cannot be told
+apart without looking.
+
+The listing above is that case — a one-byte stub at id 1 that carries nothing yet is
+enough to win, with the real manifest at 123. A resource that is not well-formed XML
+is called out and its bytes quoted rather than written through, since whatever is
+there may not be text.
+
+`source manifest` names a binary the way `source extract` does, decompressing it
+first; `image manifest` names one the way `image extract` does.
+
 ## Registry hives
 
 ```sh
