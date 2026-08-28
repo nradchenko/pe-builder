@@ -33,6 +33,28 @@ const kvmDevice = "/dev/kvm"
 // cannot collide with anything.
 const usbBusID = "ehci"
 
+// netdevID names the host network backend the adapter is attached to, and the one the
+// packet capture taps. Fixed for the same reason as usbBusID.
+const netdevID = "net0"
+
+// pcapID names the capture filter object. QEMU requires an id on -object.
+const pcapID = "pcap0"
+
+// defaultNIC is the adapter model presented to the guest.
+//
+// RTL8139 rather than QEMU's own default for the "pc" machine, which is e1000: no
+// supported medium carries an INF claiming e1000's PCI IDs, so that adapter installs
+// no driver and an image with the hardware plugin looks like it cannot configure a
+// network. RTL8139 is the one model every supported source has a driver for on both
+// architectures — on amd64 media it is the only one at all — which is also why it is
+// what the network support is verified against. See plugins/hardware/hardware.inf.
+const defaultNIC = "rtl8139"
+
+// nicNone is the --nic value that offers the guest no adapter. It is spelled as the
+// state it selects rather than as a negated flag, and it also has to be said to QEMU:
+// left to itself QEMU gives the "pc" machine an adapter whether one is wanted or not.
+const nicNone = "none"
+
 // qemuBinaries lists the QEMU binaries that can boot an image of each architecture,
 // in preference order. The binary follows the *image's* architecture rather than the
 // host's: qemu-system-i386 presents a 32-bit CPU, which an x64 Windows will not boot
@@ -75,12 +97,22 @@ type machine struct {
 	// bugcheck waits silently, so a debug image booted without a serial port looks
 	// frozen rather than debuggable. Empty means QEMU's default (no serial port).
 	Serial string
+	// NIC is the network adapter model to present, on a user-mode backend that needs
+	// no host privilege. Empty offers the guest no adapter at all.
+	NIC string
+	// Pcap is a file to write the adapter's traffic to, in pcap format. It taps the
+	// host end of the backend, so it records what the guest actually put on the wire
+	// — which is the only way to tell a stack that never transmits from one whose
+	// replies never arrive. Empty captures nothing.
+	Pcap string
 }
 
 func newRunCmd() *cobra.Command {
 	var ram int
 	var ps2Mouse bool
 	var serial string
+	var nic string
+	var pcap string
 
 	cmd := &cobra.Command{
 		Use:   "run [manifest.hcl | image.iso]",
@@ -96,6 +128,26 @@ func newRunCmd() *cobra.Command {
 			// nonsensical size has to be refused here to be refused at all.
 			if ram < 1 {
 				return fmt.Errorf("--ram %d is not a usable memory size", ram)
+			}
+			// An empty model is a mistake rather than a way of asking for no
+			// adapter — --nic=$MODEL with the variable unset is how it arrives —
+			// so it is refused by the flag it came from. Left to mean "none" it
+			// would quietly produce a machine the caller did not ask for, and
+			// answer a later complaint about --pcap by naming a flag they never
+			// typed.
+			if nic == "" {
+				return fmt.Errorf("--nic names no adapter model; use --nic %s to offer the guest none", nicNone)
+			}
+			// A capture taps the adapter's backend, so with no adapter there is
+			// nothing to tap. QEMU would refuse the filter itself, but only after
+			// starting to build a machine, and its message names the netdev id this
+			// command invented rather than the flag the user set.
+			//
+			// The test is the model this resolves to, not the word the caller
+			// wrote: it is the same question args() asks when it decides whether
+			// there is an adapter to attach the filter to.
+			if pcap != "" && nicModel(nic) == "" {
+				return fmt.Errorf("--pcap captures the traffic of an adapter, and --nic %s offers none", nicNone)
 			}
 			var arg string
 			if len(args) == 1 {
@@ -131,6 +183,8 @@ func newRunCmd() *cobra.Command {
 				KVM:       kvm,
 				USBTablet: !ps2Mouse,
 				Serial:    serial,
+				NIC:       nicModel(nic),
+				Pcap:      pcap,
 			})
 		},
 	}
@@ -142,7 +196,20 @@ func newRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&serial, "serial", "",
 		"attach COM1 to a QEMU chardev, e.g. unix:/tmp/kd.sock,server,nowait "+
 			"(for an image built with the serialdebug plugin)")
+	cmd.Flags().StringVar(&nic, "nic", defaultNIC,
+		"network adapter model to present, on user-mode networking; "+nicNone+" for no adapter")
+	cmd.Flags().StringVar(&pcap, "pcap", "",
+		"write the adapter's traffic to a file, in pcap format")
 	return cmd
+}
+
+// nicModel turns the --nic value into the machine's adapter model, mapping the
+// spelled-out "none" onto the empty model that offers the guest no adapter.
+func nicModel(flag string) string {
+	if flag == nicNone {
+		return ""
+	}
+	return flag
 }
 
 // resolveImage returns the image to boot for a command argument, which is either an
@@ -322,6 +389,19 @@ func (m machine) args() []string {
 		// that does not exist.
 		args = append(args, "-device", "usb-ehci,id="+usbBusID,
 			"-device", "usb-tablet,bus="+usbBusID+".0")
+	}
+	if m.NIC != "" {
+		// The backend is user-mode networking: it needs no host privilege and no
+		// bridge, and gives the guest a DHCP server, which is what an image with the
+		// hardware plugin is waiting for.
+		args = append(args, "-device", m.NIC+",netdev="+netdevID,
+			"-netdev", "user,id="+netdevID)
+		if m.Pcap != "" {
+			args = append(args, "-object",
+				"filter-dump,id="+pcapID+",netdev="+netdevID+",file="+m.Pcap)
+		}
+	} else {
+		args = append(args, "-nic", nicNone)
 	}
 	if m.Serial != "" {
 		args = append(args, "-serial", m.Serial)

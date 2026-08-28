@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -23,6 +24,10 @@ import (
 // appear somewhere in it. A membership check passes on a flag paired with the wrong
 // value — "-m 512 … 128" carries both "-m" and "128" — and on a flag emitted twice,
 // which is most of what can actually go wrong when building a command line.
+//
+// Most cases carry no adapter and so end in "-nic none", which is a positive
+// instruction to QEMU rather than an absence: left to itself it gives the machine an
+// e1000 no supported medium has a driver for.
 func TestMachineArgs(t *testing.T) {
 	cases := []struct {
 		name string
@@ -32,22 +37,25 @@ func TestMachineArgs(t *testing.T) {
 		{
 			name: "i386 with kvm",
 			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512, KVM: true},
-			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso", "-enable-kvm"},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso", "-enable-kvm",
+				"-nic", "none"},
 		},
 		{
 			name: "i386 without kvm needs no cpu model",
 			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512},
-			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso"},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso", "-nic", "none"},
 		},
 		{
 			name: "amd64 without kvm advertises long mode",
 			m:    machine{ISO: "pe.iso", Arch: source.ArchAMD64, RAM: 512},
-			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso", "-cpu", "qemu64"},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso", "-cpu", "qemu64",
+				"-nic", "none"},
 		},
 		{
 			name: "amd64 with kvm takes the host cpu",
 			m:    machine{ISO: "pe.iso", Arch: source.ArchAMD64, RAM: 512, KVM: true},
-			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso", "-enable-kvm"},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso", "-enable-kvm",
+				"-nic", "none"},
 		},
 		{
 			// The tablet brings its own controller: the "pc" machine has no USB bus,
@@ -55,30 +63,54 @@ func TestMachineArgs(t *testing.T) {
 			name: "usb tablet",
 			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512, USBTablet: true},
 			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso",
-				"-device", "usb-ehci,id=ehci", "-device", "usb-tablet,bus=ehci.0"},
+				"-device", "usb-ehci,id=ehci", "-device", "usb-tablet,bus=ehci.0", "-nic", "none"},
 		},
 		{
 			// Declining the tablet adds no pointer device at all — the PS/2 mouse it
 			// falls back to is part of the machine and needs no argument.
 			name: "ps2 mouse adds nothing",
 			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512, USBTablet: false},
-			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso"},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso", "-nic", "none"},
 		},
 		{
 			name: "ram",
 			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 128},
-			want: []string{"-M", "pc", "-m", "128", "-boot", "d", "-cdrom", "pe.iso"},
+			want: []string{"-M", "pc", "-m", "128", "-boot", "d", "-cdrom", "pe.iso", "-nic", "none"},
+		},
+		{
+			// The adapter and its backend are one device, not a model dropped onto
+			// whatever QEMU would have connected: the -device names the netdev by id.
+			name: "adapter on user-mode networking",
+			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512, NIC: "rtl8139"},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso",
+				"-device", "rtl8139,netdev=net0", "-netdev", "user,id=net0"},
+		},
+		{
+			name: "another adapter model",
+			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512, NIC: "pcnet"},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso",
+				"-device", "pcnet,netdev=net0", "-netdev", "user,id=net0"},
+		},
+		{
+			// The capture taps the backend, so it must name the same netdev id the
+			// adapter was attached to — a filter on any other id records nothing.
+			name: "capture taps the adapter's backend",
+			m: machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512, NIC: "rtl8139",
+				Pcap: "/tmp/dhcp.pcap"},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso",
+				"-device", "rtl8139,netdev=net0", "-netdev", "user,id=net0",
+				"-object", "filter-dump,id=pcap0,netdev=net0,file=/tmp/dhcp.pcap"},
 		},
 		{
 			name: "serial attaches com1 for a serialdebug image",
 			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512, Serial: "unix:/tmp/kd.sock,server,nowait"},
-			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso",
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso", "-nic", "none",
 				"-serial", "unix:/tmp/kd.sock,server,nowait"},
 		},
 		{
 			name: "no serial port unless asked for",
 			m:    machine{ISO: "pe.iso", Arch: source.ArchI386, RAM: 512},
-			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso"},
+			want: []string{"-M", "pc", "-m", "512", "-boot", "d", "-cdrom", "pe.iso", "-nic", "none"},
 		},
 	}
 	for _, tc := range cases {
@@ -108,6 +140,102 @@ func TestPointerFlagDefault(t *testing.T) {
 	}
 	if got := newRunCmd().Flags().Lookup("usb-tablet"); got != nil {
 		t.Error("--usb-tablet still registered; the tablet is the default and --ps2-mouse opts out")
+	}
+}
+
+// TestNICFlagDefault pins the adapter the command offers when asked for nothing in
+// particular. The default is the point of the flag rather than a convenience: QEMU's
+// own default for this machine is an e1000, which no supported medium carries a driver
+// for, so an image that configures networking at boot finds no adapter it can bind and
+// the feature looks broken. RTL8139 is the model every supported source drives.
+func TestNICFlagDefault(t *testing.T) {
+	f := newRunCmd().Flags().Lookup("nic")
+	if f == nil {
+		t.Fatal("no --nic flag")
+	}
+	if f.DefValue != "rtl8139" {
+		t.Errorf("--nic defaults to %q, want %q (the one model every supported source drives)",
+			f.DefValue, "rtl8139")
+	}
+}
+
+// TestNICModel covers the one value --nic reads rather than passes through: "none"
+// selects the machine's empty model, which is what emits -nic none. Spelling the
+// opt-out as a value keeps it out of a negated flag name.
+func TestNICModel(t *testing.T) {
+	if got := nicModel("none"); got != "" {
+		t.Errorf("nicModel(none) = %q, want the empty model", got)
+	}
+	for _, model := range []string{"rtl8139", "pcnet", "ne2k_pci", "e1000"} {
+		if got := nicModel(model); got != model {
+			t.Errorf("nicModel(%q) = %q, want it passed through", model, got)
+		}
+	}
+}
+
+// runFlagError runs the command with the given flags against an image path that does
+// not exist, and returns whatever it refused with. Every flag check runs before the
+// image is resolved, so a check that fires is the error and one that does not lets
+// the missing image be the error — which is what keeps these tests from passing on
+// the wrong refusal.
+func runFlagError(t *testing.T, args ...string) error {
+	t.Helper()
+	cmd := newRunCmd()
+	cmd.SetArgs(append(args, "pe.iso"))
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("run %v was accepted", args)
+	}
+	return err
+}
+
+// TestPcapWithoutAdapterIsRefused covers the one combination of the two network flags
+// that cannot produce a machine. QEMU refuses it too, but only after it has started
+// building one, and it names the netdev id this command invented rather than the flag
+// the user set.
+func TestPcapWithoutAdapterIsRefused(t *testing.T) {
+	err := runFlagError(t, "--nic", "none", "--pcap", "/tmp/x.pcap")
+	// The message has to name both flags: which of the two to change is the whole
+	// question, and neither answer is obviously right.
+	for _, want := range []string{"--pcap", "--nic none"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q should name %q", err, want)
+		}
+	}
+}
+
+// TestEmptyNICIsRefused covers --nic with nothing after it, which is how an unset
+// variable arrives (--nic=$MODEL). It must not be read as a way of asking for no
+// adapter: that would hand back a machine the caller did not ask for, and would make
+// the --pcap refusal above name a flag they never typed.
+// The message is matched rather than the mere presence of an error, and rather than
+// the substring "--nic": the --pcap refusal names "--nic none" too, so a looser check
+// would pass on the wrong refusal in the second case below and hold whether or not
+// the empty model is caught at all.
+func TestEmptyNICIsRefused(t *testing.T) {
+	const want = "names no adapter model"
+	for _, args := range [][]string{
+		{"--nic", ""},
+		// Refused on its own account, not by falling into the --pcap check — which
+		// would report a --nic none the caller never wrote.
+		{"--nic", "", "--pcap", "/tmp/x.pcap"},
+	} {
+		err := runFlagError(t, args...)
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("run %v refused with %q, want it to name %q", args, err, want)
+		}
+	}
+}
+
+// TestNICIsPassedThroughToTheImageLookup guards the refusals above against becoming
+// over-broad: an ordinary model must get past them and fail on the missing image
+// instead. Without this, a check that refused everything would pass every test here.
+func TestNICIsPassedThroughToTheImageLookup(t *testing.T) {
+	err := runFlagError(t, "--nic", "rtl8139", "--pcap", "/tmp/x.pcap")
+	if strings.Contains(err.Error(), "--nic") || strings.Contains(err.Error(), "--pcap") {
+		t.Errorf("error %q rejected a usable pair of flags", err)
 	}
 }
 

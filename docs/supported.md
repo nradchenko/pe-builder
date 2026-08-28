@@ -176,11 +176,17 @@ else about the machine is the same for both.
 
 ```sh
 # a 32-bit image
-qemu-system-i386   -enable-kvm -M pc -m 512 -cdrom out/pe.iso -boot d
+qemu-system-i386   -enable-kvm -M pc -m 512 -cdrom out/pe.iso -boot d \
+  -device rtl8139,netdev=net0 -netdev user,id=net0
 
 # a 64-bit image — same machine, 64-bit binary and CPU
-qemu-system-x86_64 -enable-kvm -M pc -m 512 -cdrom out/pe-x64.iso -boot d
+qemu-system-x86_64 -enable-kvm -M pc -m 512 -cdrom out/pe-x64.iso -boot d \
+  -device rtl8139,netdev=net0 -netdev user,id=net0
 ```
+
+The adapter has to be named. QEMU's own default for this machine is an e1000, which no
+supported source carries a driver for, so an image left to that default finds no adapter it
+can bind — see the network note under [Guest requirements](#guest-requirements) below.
 
 Use `-enable-kvm` where the host supports it. It is dramatically faster than emulation, and
 it is the configuration timings in this project are quoted for. Without KVM, add `-cpu qemu64`
@@ -235,10 +241,13 @@ takes a DHCP address; without it no network stack is configured at all.
 | Windows Server 2003 R2 SP2 (x64) | **verified** — same |
 | Windows XP Professional x64 Edition | **verified** — same |
 
-**Verified** on an emulated **RTL8139** (`-device rtl8139`), which is the only adapter
-tested. On amd64 media it is also the only adapter that *can* be tested: XP x64 ships no
-INF for AMD PCnet, NE2000-PCI or e1000, so those emulated adapters have no driver to bind
-whatever else works.
+**Verified** on an emulated **RTL8139**, which is the only adapter tested. On amd64 media
+it is also the only adapter that *can* be tested: XP x64 ships no INF for AMD PCnet,
+NE2000-PCI or e1000, so those emulated adapters have no driver to bind whatever else works.
+
+`run` presents an RTL8139 for that reason — `--nic <model>` names another, and `--nic none`
+offers the guest no adapter. `--pcap <file>` records what the adapter sends and receives,
+which is how to tell a stack that never transmits from one whose replies never arrive.
 
 A bare console image starts fewer of the Windows services that sit above TCP/IP than a desktop
 image does; none of them is needed for an address. See `plugins/hardware/README.md`.

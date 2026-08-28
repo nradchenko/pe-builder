@@ -28,7 +28,9 @@ PE dependencies.
   plain launcher. Its `--serial` attaches COM1 to a QEMU chardev, which is what an image built
   with the `serialdebug` plugin needs to be debuggable — that plugin turns the kernel debugger
   on, and a debug image booted with no debugger attached suppresses its own output rather than
-  producing any. `verify` answers the question an
+  producing any. It presents the guest an RTL8139 on user-mode networking, that being the one
+  adapter every supported source carries a driver for (`--nic` names another, `--nic none`
+  offers none, and `--pcap` records the traffic). `verify` answers the question an
   image on disk otherwise cannot — what was this built from, and is that still what this
   manifest and this pebuild describe? — by reading the receipt the image carries and
   recomputing the inputs it records from
