@@ -228,7 +228,12 @@ PE dependencies.
   `enginehash` (a
   deterministic content hash over the file trees pebuild embeds — the base layer and the
   built-in plugins — which is what a build receipt records in place of a hash of the
-  executable), and `coreimg`, which the WIM layout's media tail uses (master the pre-wimmf boot
+  executable), `peresource` (reads a PE's resource directory — the three-level type →
+  id-or-name → language tree — returning each leaf with the id it sits at, which for a
+  manifest is what decides whether the loader honours it; every reader of a resource goes
+  through it rather than walking the directory by hand, an approach that has already
+  returned an empty answer for a binary carrying two manifests), and `coreimg`, which the
+  WIM layout's media tail uses (master the pre-wimmf boot
   closure — a subset of the assembled tree plus the source's own CDBOOT — into a minimal bootable
   cdfs image and gzip it, the boot core the pre-loader maps into RAM as a CD; reuses the classic
   `iso` target's mastering recipe). The `.wim` itself is written by the external `go-wim` library

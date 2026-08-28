@@ -47,23 +47,6 @@ func TestParseFixedFileInfoMissing(t *testing.T) {
 	}
 }
 
-func TestFindVersionBlob(t *testing.T) {
-	const base = 0x2000
-	rsrc := buildRsrc(base, versionBlob(fileVersion{6, 0, 3790, 42}))
-	blob, err := findVersionBlob(rsrc, base)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := parseFixedFileInfo(blob)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := fileVersion{6, 0, 3790, 42}
-	if got != want {
-		t.Errorf("version = %s, want %s", got, want)
-	}
-}
-
 // versionBlob builds a minimal blob carrying a VS_FIXEDFILEINFO with the given
 // FileVersion, prefixed by a few bytes so the signature is not at offset 0.
 func versionBlob(v fileVersion) []byte {
@@ -75,33 +58,4 @@ func versionBlob(v fileVersion) []byte {
 	binary.LittleEndian.PutUint32(b[off+8:], uint32(v.Major)<<16|uint32(v.Minor))
 	binary.LittleEndian.PutUint32(b[off+12:], uint32(v.Build)<<16|uint32(v.Revision))
 	return b
-}
-
-// buildRsrc assembles a three-level resource directory holding one RT_VERSION
-// resource whose data is blob, laid out at section RVA base.
-func buildRsrc(base uint32, blob []byte) []byte {
-	// Fixed layout: dir(16+8) x3 = 72, data entry 16, then the blob.
-	const dirSize = 16 + 8
-	l1 := 0
-	l2 := l1 + dirSize
-	l3 := l2 + dirSize
-	dataEntry := l3 + dirSize
-	blobOff := dataEntry + 16
-
-	buf := make([]byte, blobOff+len(blob))
-
-	writeDir := func(off, id int, target uint32) {
-		binary.LittleEndian.PutUint16(buf[off+12:], 0) // named entries
-		binary.LittleEndian.PutUint16(buf[off+14:], 1) // id entries
-		binary.LittleEndian.PutUint32(buf[off+16:], uint32(id))
-		binary.LittleEndian.PutUint32(buf[off+20:], target)
-	}
-	writeDir(l1, rtVersion, subdirBit|uint32(l2))
-	writeDir(l2, 1, subdirBit|uint32(l3))
-	writeDir(l3, 0, uint32(dataEntry)) // leaf: no subdir bit
-
-	binary.LittleEndian.PutUint32(buf[dataEntry:], base+uint32(blobOff)) // RVA
-	binary.LittleEndian.PutUint32(buf[dataEntry+4:], uint32(len(blob)))  // size
-	copy(buf[blobOff:], blob)
-	return buf
 }
