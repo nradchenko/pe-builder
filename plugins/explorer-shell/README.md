@@ -93,15 +93,34 @@ so in a message box and exits rather than redo the sequence on a live session.
 
 ## The profile volume
 
-The profile, `All Users` and `TEMP`/`TMP` all go on one volume, chosen in two passes: the
-`ramdrive` volume first, then any writable volume.
+The profile, `All Users` and `TEMP`/`TMP` all go on one volume, chosen in three passes, ordered
+by how far the evidence can be trusted: the `ramdrive` **device**, then a volume *claiming* to
+be it, then any writable volume.
 
 Drive type can't find the ramdisk — a WDM disk reports `DRIVE_FIXED` exactly like an attached
 one — so taking the first writable letter put the profile on a scratch HDD whenever one sorted
-ahead of the RAM volume, persisting user data to a disk nobody asked us to write to. The first
-pass therefore matches the volume label `PE RAMDISK` (or `DRIVE_RAMDISK`, for a ramdisk that
-does report it); the second is the old any-writable scan, so a build without `ramdrive` still
-boots.
+ahead of the RAM volume, persisting user data to a disk nobody asked us to write to.
+
+The first pass resolves the drive letter with `QueryDosDevice` and takes the volume only if it
+points at `\Device\RamDrive`. That is the one identity an attached disk cannot present: the
+object manager's name for a device is a driver's to claim, where a volume label is ordinary
+data in a boot sector. Matching the label alone would mean `pebuild disk create --label
+"PE RAMDISK"` produced a disk that wins the scan — and at `C:` it sorts ahead of the RAM volume
+at `R:`, which is the original bug returning by another route.
+
+The second pass is that label match (or `DRIVE_RAMDISK`, for a ramdisk that does report it),
+kept so the RAM volume is still found if the device query ever fails — a driver that stops
+answering the mount manager, or a letter attached some other way. The third is the old
+any-writable scan, so a build without `ramdrive` still boots.
+
+`peshell` reports which one decided, on the kernel debugger:
+
+    peshell: profile volume R: (ramdisk)            <- by device, the expected line
+    peshell: profile volume R: (ramdisk by label)   <- device query failed; still correct
+    peshell: profile volume C: (fallback)           <- no ramdisk found at all
+
+The middle line is worth noticing: nothing is wrong yet, but it is the condition under which a
+mislabelled disk could win, so it should not pass unremarked.
 
 ## Startup tasks
 

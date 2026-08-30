@@ -35,13 +35,35 @@ static const char *kProfileDirs[] = {
  * WinMain. */
 #define SHELL_MUTEX "pe-builder.peshell"
 
-/* The volume label the ramdrive plugin's FAT16 formatter writes. This is the contract that
- * identifies the RAM volume to us — see README.md § The profile volume for why we match on the
- * label rather than on DRIVE_RAMDISK. */
-#define RAMDISK_LABEL "PE RAMDISK"
+/* The NT device the ramdrive driver creates, and the volume label its FAT16 formatter writes.
+ * Both identify the RAM volume; they are not equally trustworthy, which is why there are two.
+ *
+ * The device name is the object manager's, and only a driver can put a name there — so nothing
+ * written to a disk can claim it. The label is ordinary data in the volume's boot sector, so
+ * anything able to format a disk can wear it: `pebuild disk create --label "PE RAMDISK"` would
+ * be enough, and an attached disk at C: sorts ahead of the RAM volume at R:. That is exactly
+ * the failure the two-pass scan below exists to prevent, so the label alone cannot be what
+ * decides it. See README.md § The profile volume. */
+#define RAMDISK_DEVICE "\\Device\\RamDrive"
+#define RAMDISK_LABEL  "PE RAMDISK"
 
-/* Is this the ramdrive volume? DRIVE_RAMDISK first for any ramdisk that does report it (ours,
- * a WDM disk through the storage stack, comes back DRIVE_FIXED like a real disk would). */
+/* Does this letter resolve to the ramdrive driver's own device? The identity nothing on a disk
+ * can forge: QueryDosDevice reports what the object manager has the letter pointing at, and our
+ * driver creates \Device\RamDrive (mountmgr attaches the letter to it — see ramdrive.c's
+ * IOCTL_MOUNTDEV_QUERY_SUGGESTED_LINK_NAME). A real volume answers \Device\HarddiskVolumeN. */
+static BOOL is_ramdisk_device(char d){
+    const char name[3]={d,':',0}; /* no trailing backslash: QueryDosDevice wants "R:", not "R:\" */
+    char target[MAX_PATH];
+    if(!QueryDosDeviceA(name,target,sizeof(target))) return FALSE;
+    return lstrcmpiA(target,RAMDISK_DEVICE)==0;
+}
+
+/* Is this the ramdrive volume, judged by what it says about itself? DRIVE_RAMDISK first for any
+ * ramdisk that does report it (ours, a WDM disk through the storage stack, comes back
+ * DRIVE_FIXED like a real disk would), then the volume label.
+ *
+ * Kept as a second opinion rather than the first: both signals here are ones a disk can present,
+ * so this runs only after the device check has failed to find the RAM volume at all. */
 static BOOL is_ramdisk(char d){
     char root[4]={d,':','\\',0};
     if(GetDriveTypeA(root)==DRIVE_RAMDISK) return TRUE;
@@ -63,10 +85,17 @@ static BOOL drive_writable(char d){
     CloseHandle(h); return TRUE;
 }
 
-/* Pick the volume the user profile lives on. Two passes: the ramdisk first, then any writable
- * volume. Taking the first writable drive letter instead would hand the profile to an attached
- * scratch disk whenever one sorts ahead of the RAM volume — writing user data to a disk the
- * user never asked us to touch. The second pass keeps a boot with no ramdrive working. */
+/* Pick the volume the user profile lives on. Three passes, in order of how much the evidence
+ * can be trusted: the ramdrive's own device, then a volume claiming to be it, then any writable
+ * volume at all. Taking the first writable drive letter instead would hand the profile to an
+ * attached scratch disk whenever one sorts ahead of the RAM volume — writing user data to a
+ * disk the user never asked us to touch. The last pass keeps a boot with no ramdrive working.
+ *
+ * The device pass leads because it is the only one an attached disk cannot satisfy. The label
+ * pass below it is what this scan used to open with, and it stays: if the device query ever
+ * fails — a driver that stops answering mountmgr, a letter attached some other way — the RAM
+ * volume is still found, and the debug line says which evidence decided it, so a boot that
+ * quietly changed its mind is visible rather than silent. */
 static char find_writable_drive(void){
     /* Suppress the hard-error dialogs the scan can raise, and restore the mode after: a drive
      * with no media or an unformatted one answers a probe with "There is no disk in drive X:",
@@ -78,20 +107,38 @@ static char find_writable_drive(void){
     UINT prev=SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOOPENFILEERRORBOX);
     char found=0;
     DWORD mask=GetLogicalDrives();
-    for(int pass=0;pass<2 && !found;pass++){
+    for(int pass=0;pass<3 && !found;pass++){
         for(char d='C';d<='Z';d++){
             if(!(mask&(1u<<(d-'A')))) continue;
             char root[4]={d,':','\\',0}; UINT t=GetDriveTypeA(root);
             if(t!=DRIVE_FIXED && t!=DRIVE_REMOVABLE && t!=DRIVE_RAMDISK) continue;
-            if(pass==0 && !is_ramdisk(d)) continue;
+            if(pass==0 && !is_ramdisk_device(d)) continue;
+            if(pass==1 && !is_ramdisk(d)) continue;
             if(!drive_writable(d)) continue;
-            /* Say which volume, and which pass found it. Falling through to the fallback is
-             * the failure this scan exists to prevent, and from inside a booted PE there is
-             * no other sign of it — the profile simply is not where it should be. Goes to the
+            /* Say which volume, and what identified it. Falling past the device pass is not
+             * a failure on its own, but it is the condition under which a mislabelled disk
+             * could win, so it must be visible; falling all the way to the last pass is the
+             * failure this scan exists to prevent, and from inside a booted PE there is no
+             * other sign of it — the profile simply is not where it should be. Goes to the
              * kernel debugger; see README.md § Diagnosing a boot that stops partway. */
-            char msg[64];
-            wsprintfA(msg,"peshell: profile volume %c: (%s)\n",d,pass?"fallback":"ramdisk");
+            static const char *const by[]={"ramdisk","ramdisk by label","fallback"};
+            char msg[80];
+            wsprintfA(msg,"peshell: profile volume %c: (%s)\n",d,by[pass]);
             OutputDebugStringA(msg);
+            if(pass==1){
+                /* The RAM volume was found, but not by the evidence that should have found
+                 * it. Say what the letter actually resolves to: without it this line reports
+                 * a surprise and explains nothing, and diagnosing it costs another boot of a
+                 * desktop image. Only ever printed on the path that is already unexpected. */
+                const char dev[3]={d,':',0};
+                char target[MAX_PATH], why[MAX_PATH+80];
+                if(QueryDosDeviceA(dev,target,sizeof(target)))
+                    wsprintfA(why,"peshell: %c: resolves to %s, not %s\n",d,target,RAMDISK_DEVICE);
+                else
+                    wsprintfA(why,"peshell: %c: has no NT device mapping (error %lu)\n",
+                              d,GetLastError());
+                OutputDebugStringA(why);
+            }
             found=d; break;
         }
     }
