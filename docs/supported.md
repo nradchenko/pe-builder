@@ -269,16 +269,15 @@ These apply to any build.
   *Not Responding*. Anything that would play audio runs silently instead — the bundled games
   are playable but mute, and this is why Pinball is not among them.
 - **My Documents has no desktop icon** — it is hidden deliberately, because the icon does not
-  work: double-clicking it does nothing. **The folder itself is fine and still reachable from
-  the Start menu**, which is why only the icon is removed.
+  work: in Explorer's own views, on the desktop or inside a folder window, it neither opens nor
+  shows a menu. **The folder itself is fine and still reachable from the Start menu**, which is
+  why only the icon is removed.
 
-  The split is the useful clue: the Start-menu entry opens a filesystem path, while the desktop
-  icon is a namespace object (`{450D8FBA-AD25-11D0-98A8-0800361B1103}`) that must be
-  instantiated through COM. So the profile directory and the `Personal` path are both good, and
-  it is the shell folder object that does not come up. Consistent with the built `SOFTWARE`
-  hive carrying no `Classes\CLSID` entry for it on any source — though that alone proves
-  little, since peshell's self-registration creates shell classes at run time and only the
-  *runtime* hive would settle it.
+  What has been established narrows it to Explorer alone: the namespace object behind the icon
+  is registered and creatable, the profile folder it points at exists and resolves, and from any
+  other program the same item opens, lists its context menu and launches — through Explorer,
+  which creates the window. Only Explorer's handling of a click on the item fails, silently, and
+  identically on every source.
 
 ## Build host
 
