@@ -29,7 +29,8 @@ const bitmapColors = 256
 // anything else with. XP itself does this conversion whenever a user picks a non-BMP
 // wallpaper, writing a BMP beside the profile and pointing the registry at that; doing it
 // at build time is the same transformation moved earlier, and it means nothing in the image
-// needs an image decoder at run time. A PE has none to offer: gdiplus is on no XP medium,
+// needs an image decoder at run time. A PE as built has none to offer: GDI+ ships on XP
+// media only as a side-by-side assembly the layout never declares, so nothing stages it —
 // and the only JPEG decoder otherwise reachable is inside the Active Desktop machinery this
 // removes.
 //
