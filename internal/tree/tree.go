@@ -41,7 +41,9 @@ import (
 type Result struct {
 	// Written holds the output-relative (forward-slash) paths of files written.
 	Written []string
-	// Skipped holds the canonical names of optional files absent from the source.
+	// Skipped holds the canonical names of optional files the stager found no copy of —
+	// absent from the source, or carried somewhere its declarations never name (a
+	// side-by-side assembly under ASMS); the lookup cannot tell the two apart.
 	Skipped []string
 }
 

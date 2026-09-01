@@ -80,10 +80,14 @@ func printReport(w io.Writer, rep *build.Report) error {
 	fmt.Fprintf(w, "Source:  %s\n", rep.Identity)
 	fmt.Fprintf(w, "Files:   %d written, %d skipped\n", rep.Written, len(rep.Skipped))
 	// Name them, because the count alone cannot be acted on. A skip is an optional file the
-	// source does not have, which is ordinary — and is also what a file resolved from the
-	// wrong place looks like, so which files they are is the whole of the signal.
+	// stager found no copy of, which is ordinary — and is also what a file resolved from the
+	// wrong place looks like, so which files they are is the whole of the signal. The line
+	// claims only the check that failed: the lookup covers the loose, compressed and cabinet
+	// forms under the source's declared names, so a file the medium carries somewhere the
+	// layout never declares — a side-by-side assembly — skips exactly like one the medium
+	// lacks. `source extract` searches the whole medium and tells the two apart.
 	for _, name := range rep.Skipped {
-		fmt.Fprintf(w, "         - %s (not on this source)\n", name)
+		fmt.Fprintf(w, "         - %s (no stageable copy found)\n", name)
 	}
 	fmt.Fprintf(w, "Hives:   %d written\n", len(rep.Hives))
 	if rep.Tainted {

@@ -41,7 +41,8 @@ type Report struct {
 	OutDir string
 	// Written is the number of files placed in the tree.
 	Written int
-	// Skipped names optional files absent from the source (e.g. cabinet-only drivers).
+	// Skipped names optional files the stager found no copy of — a driver this medium
+	// does not carry, or a file it keeps where the layout declares nothing.
 	Skipped []string
 	// Hives lists the output-relative paths of the registry hives written.
 	Hives []string
