@@ -84,9 +84,9 @@ the Start-menu style, which would override `classic_start_menu` without saying s
 8. **Visual style** — apply the style the registry selects, if any (see
    [Visual style](#visual-style)). Before Explorer, so the desktop paints themed from its
    first frame; a no-op when no visual-style plugin is enabled.
-9. **Launch Explorer** — start `explorer.exe` as the shell; once the taskbar paints, run the
-   `post-shell` startup tasks, then close the splash. Relaunch Explorer if it dies, and
-   finally fall back to `cmd.exe` so the machine is never headless.
+9. **Launch Explorer** — start `explorer.exe` as the shell; once the taskbar paints, close the
+   splash and run the `post-shell` startup tasks behind the finished desktop. Relaunch Explorer
+   if it dies, and finally fall back to `cmd.exe` so the machine is never headless.
 
 A named mutex keeps that to one instance: run again on the desktop it produced, `peshell` says
 so in a message box and exits rather than redo the sequence on a live session.
@@ -125,9 +125,11 @@ mislabelled disk could win, so it should not pass unremarked.
 ## Startup tasks
 
 When the `startup` plugin is enabled, `peshell` walks its task list: the `pre-shell` stage
-before the shell comes up, `post-shell` once the desktop is there. Each task's label shows on
-the splash while it runs, and a task that fails is named there rather than failing silently —
-the boot continues either way.
+before the shell comes up, `post-shell` once the desktop is there. A `pre-shell` task's label
+shows on the splash while it runs, and one that fails is named there rather than failing
+silently. `post-shell` runs after the splash has closed and so has no on-screen surface at all:
+its labels and failures go to the debug channel and to the run list's status keys, which is
+where to look for them. The boot continues either way.
 
 Nothing here requires it. `explorer-shell` does not depend on `startup`, so a build that
 declares no tasks carries no runner at all. The contract, and what a task may declare, belong to

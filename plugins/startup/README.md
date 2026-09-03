@@ -117,7 +117,13 @@ When a stage runs:
 | Stage | Desktop build | Console build |
 |---|---|---|
 | `pre-shell` | before the shell is brought up | from `startnet.cmd` |
-| `post-shell` | once the desktop is up | not run — "after the shell" means nothing without one |
+| `post-shell` | once the desktop is up, behind it | not run — "after the shell" means nothing without one |
+
+`post-shell` runs after the shell has taken the screen, so a task there has **no on-screen
+progress surface**: nothing it reports is drawn anywhere. That is deliberate. Holding a "please
+wait" window over a working desktop so a task can report into it shows a boot that has not
+finished when it has. Labels and output still reach the debug channel, and every verdict still
+reaches the status key.
 
 Both front ends guard on the runner being staged rather than depending on it, so an image that
 declares no tasks carries neither the runner nor a broken reference to one. Enabling this plugin

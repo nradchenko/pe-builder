@@ -495,8 +495,10 @@ typedef void (*PERUN_PROGRESS)(void *ctx,const WCHAR *task,const WCHAR *label,
                                int index,int count,int state,DWORD err);
 typedef DWORD (*PERUN_RUNSTAGE)(const WCHAR *stage,PERUN_PROGRESS cb,void *ctx,int *failedRequired);
 
-/* Put each task's label on the splash as it starts, so the wait is accounted for rather than
- * silent — the reason the walk is in-process at all. */
+/* Put each task's label where the boot can account for the wait rather than leaving it silent —
+ * which is the reason the walk is in-process at all. splash_status writes to the debug channel
+ * always and to the splash while there is one, so pre-shell gets both and post-shell, running
+ * after the splash has closed, keeps the debug half. */
 static void perun_progress(void *ctx,const WCHAR *task,const WCHAR *label,
                            int index,int count,int state,DWORD err){
     /* Sized against the contract, not against what a task is likely to be called: a task key
@@ -512,8 +514,9 @@ static void perun_progress(void *ctx,const WCHAR *task,const WCHAR *label,
     if(state!=PERUN_OK){
         char name[256];
         /* A failed task never costs the boot; it is reported here and in its status key. Fall
-         * back rather than return: the splash is the only surface this failure has, so losing
-         * the name must not cost the whole notice. */
+         * back rather than return: this notice is the whole of what a watching user is told —
+         * on the splash pre-shell, on the debug channel after it has closed — so losing the
+         * name must not cost the notice with it. */
         if(!WideCharToMultiByte(CP_ACP,0,task,-1,name,sizeof name,NULL,NULL))
             lstrcpynA(name,"(unnamed)",sizeof name);
         wsprintfA(msg,"Startup task '%s' did not complete",name);
@@ -674,13 +677,22 @@ static BOOL launch_desktop(BOOL first){
     char cl[64]; lstrcpynA(cl,"explorer.exe",64);
     if(!CreateProcessA(NULL,cl,NULL,NULL,FALSE,0,NULL,NULL,&si,&pi)) return FALSE;
     for(int k=0;k<600;k++){ if(FindWindowA("Shell_TrayWnd",NULL)) break; Sleep(300); }
-    /* post-shell tasks want a live desktop, so they run here rather than after the call — this
-     * function blocks until Explorer exits. Gated on having run rather than on `first`: a first
-     * launch that fails returns above, and every retry passes first=FALSE, which would skip
-     * these one-shot tasks for the whole boot on a desktop that came up on the second try.
-     * Before splash_close, so their progress still has somewhere to show. */
-    if(!g_postShellDone){ g_postShellDone=TRUE; run_startup_stage(L"post-shell"); }
+    /* The splash goes first, and post-shell runs behind the finished desktop.
+     *
+     * A stage defined as running once the desktop is up has a desktop to run behind, and holding
+     * a "please wait" window over a live taskbar so a task can report progress into it shows a
+     * boot that has not finished when it has — the icons are already appearing underneath it.
+     * So post-shell tasks get no progress surface, which is the honest position rather than a
+     * missing feature: by then the desktop owns the screen, and a task with something to say to
+     * the user should say it there. Their output still reaches the debug channel and their
+     * verdicts still reach the run list's status keys.
+     *
+     * post-shell runs here rather than after the call because this function blocks until
+     * Explorer exits. Gated on having run rather than on `first`: a first launch that fails
+     * returns above, and every retry passes first=FALSE, which would skip these one-shot tasks
+     * for the whole boot on a desktop that came up on the second try. */
     if(first) splash_close();
+    if(!g_postShellDone){ g_postShellDone=TRUE; run_startup_stage(L"post-shell"); }
     WaitForSingleObject(pi.hProcess,INFINITE);
     CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
     return TRUE;
