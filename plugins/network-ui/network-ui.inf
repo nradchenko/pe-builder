@@ -82,6 +82,19 @@ netmsg.dll = 2,, 4
 0x1,"Classes\CLSID\{35CEC8A3-2BE6-11D2-8773-92E220524153}\InprocServer32","ThreadingModel","Both"
 0x1,"Microsoft\Windows\CurrentVersion\ShellServiceObjectDelayLoad","SysTray","{35CEC8A3-2BE6-11D2-8773-92E220524153}"
 
+; Turn the icon on. Stock XP leaves it to a checkbox in the connection's Properties, which a PE
+; has nobody to tick and nowhere to remember: the setting lives on a connection minted at boot.
+;
+; post-shell, and the first task to use that stage: nothing earlier has a connection to write
+; against or a connection manager to tell. pehw.exe belongs to hardware, which this plugin depends
+; on, so the binary is always present; the policy is stated here because the icon is what this
+; plugin is for. See README.md § The tray icon.
+0x1,"pe-builder\Startup\network-tray","Stage","post-shell"
+0x4,"pe-builder\Startup\network-tray","Order","0x10"
+0x1,"pe-builder\Startup\network-tray","Label","Showing the network icon..."
+0x2,"pe-builder\Startup\network-tray","Command","%SystemRoot%\system32\pehw.exe trayicon"
+0x4,"pe-builder\Startup\network-tray","Timeout","0x3c"
+
 ; No entry is contributed to the Start-menu contract: Control Panel is where this belongs, and
 ; netshell's own registrar puts it there.
 

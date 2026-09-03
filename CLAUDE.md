@@ -217,7 +217,10 @@ PE dependencies.
     gates on) → `terminal-services` (the session stack) → `luna` (the "Luna" visual style + Themes
     service); `wallpaper` (the XP wallpaper, re-encoded to a bitmap at build time so the classic path can paint it). Each depends leftward.
   - *Networking* (each pulls `hardware` in): `hardware` ships `pehw`, the boot-time PnP driver-install
-    + `INetCfg` network-config pass; `network-tools` the CLI utilities (`ipconfig`, `ping`, …);
+    + `INetCfg` network-config pass, and the post-shell pass that turns the connection's
+    notification-area icon on (the setting belongs to a connection minted at boot, so it is set
+    through the connection manager rather than written by the build); `network-tools` the CLI
+    utilities (`ipconfig`, `ping`, …);
     `network-ui` the Network Connections folder, tray icon and adapter dialogs.
   - *Infrastructure:* `startup` — the `HKLM\SOFTWARE\pe-builder\Startup` one-shot-task contract + the
     `perun` runner that walks it (from `peshell` on a desktop build, `startnet.cmd` on a console one);

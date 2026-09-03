@@ -134,6 +134,25 @@ Absences that look like omissions and are not:
 - **QEMU's `e1000` is covered by no bundled XP INF**, and there is nothing for `virtio`. RTL8139
   is not merely conventional here — it is the only emulated NIC the media can drive.
 
+## The notification-area icon — `pehw trayicon`
+
+Stock XP shows a connection's icon only if someone ticks "Show icon in notification area when
+connected" in its Properties. A PE has nobody to tick it and nowhere to keep the answer: the
+setting belongs to a connection minted at boot. `pehw trayicon` sets it for every connection the
+Net class installer has written a key for by the time it runs.
+
+Setting the value is a registry write and needs nothing else. The difficulty is that the
+notification area builds its icons once and then waits to be told, and a notification is
+delivered to whoever is listening at that instant — nobody retries it. So the pass writes, waits
+for the notification area's own network object to exist, and only then tells the connection
+manager the connection changed. `pehw.c` carries the timing, the bounds and what each of them is
+worth; the interface it calls is declared there too, no SDK header having it.
+
+It runs post-shell because nothing earlier has a connection to write against or a connection
+manager to tell. `network-ui` declares the task — the icon is what that plugin is for; this
+plugin only ships the binary. An image with no adapter bound reports that, and it is not a
+failure.
+
 ## Build
 
 `pehw.exe` is cross-compiled with **MinGW-w64** — no MSVC, no SDK. It is a plain user-mode binary, so
@@ -152,9 +171,10 @@ iterated on without rebooting.
     pehw service <name>     an `sc qc` for an image with no sc.exe
     pehw ip                 what the IP layer has: adapters, addresses, the DHCP lease
     pehw netconn            the connection from both ends — see below
+    pehw trayicon           show the notification-area icon for every connection
     perun --task devices    the same pass, through the run list, recording a verdict
 
-`start` is the one that changes something; the reports below it do not. An image has no `sc.exe`,
+`start` and `trayicon` are the ones that change something; the reports below them do not. An image has no `sc.exe`,
 so it is also the only way to ask the SCM for a single service and see the raw error rather than a
 service that is merely observed to be stopped — which is what separates "nothing started it" from
 "it was started and refused".

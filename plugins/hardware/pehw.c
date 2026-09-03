@@ -45,6 +45,47 @@ DEFINE_GUID(pehw_IID_IUnknown,
 DEFINE_GUID(pehw_GUID_NULL,
             0x00000000, 0x0000, 0x0000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
 
+/* INetConnectionRefresh — how a change to a connection is announced to whoever is already
+ * displaying it. netman keeps no cached copy of the per-connection settings (each
+ * GetProperties re-reads them), so a value written behind its back is reported correctly on the
+ * next call; what a plain write does not do is tell a component that has *already* asked. The
+ * notification-area icon is built at the tray's own start-up enumeration or when this interface
+ * fires, and nothing else. See README.md § The notification-area icon.
+ *
+ * No SDK header declares it and no import library defines the IID, so both are stated here. The
+ * slot order was read out of `netman.dll` on XP SP3, Server 2003 and XP x64 — the same eight
+ * methods in the same order on all three — and the signature out of the NDR format strings in
+ * `netshell.dll`, which carries the marshalling for this interface: procedure 6 takes one [in]
+ * parameter described as `FC_IP` with a constant IID of `IID_INetConnection`, and returns
+ * HRESULT.
+ *
+ * That the parameter is the *connection object* and not its id is the trap here, and counting
+ * arguments does not reveal it: netman's own call site pushes one pointer, and reading that as
+ * "a GUID by reference" type-checks, builds, and marshals — the failure lands in netman, which
+ * dereferences it as an interface and faults. The proxy hands that back as HRESULT 0xC0000005,
+ * which reads like a crash in the caller and is not. So: only ConnectionModified is given a
+ * signature, because it is the only one whose parameters were read from the format string; the
+ * rest are named placeholders that exist to put it at the right offset. Do not call through a
+ * placeholder, and do not infer a parameter's type from the number of arguments pushed. */
+DEFINE_GUID(pehw_IID_INetConnectionRefresh,
+            0xFAEDCF5F, 0x31FE, 0x11D1, 0xAA, 0xD2, 0x00, 0x80, 0x5F, 0xC1, 0x27, 0x0E);
+
+typedef struct pehw_INetConnectionRefresh pehw_INetConnectionRefresh;
+typedef struct pehw_INetConnectionRefreshVtbl {
+    HRESULT (STDMETHODCALLTYPE *QueryInterface)(pehw_INetConnectionRefresh *, REFIID, void **);
+    ULONG   (STDMETHODCALLTYPE *AddRef)(pehw_INetConnectionRefresh *);
+    ULONG   (STDMETHODCALLTYPE *Release)(pehw_INetConnectionRefresh *);
+    void *RefreshAll;
+    void *ConnectionAdded;
+    void *ConnectionDeleted;
+    HRESULT (STDMETHODCALLTYPE *ConnectionModified)(pehw_INetConnectionRefresh *, INetConnection *);
+    void *ConnectionRenamed;
+    void *ConnectionStatusChanged;
+    void *ShowBalloon;
+    void *DisableEvents;
+} pehw_INetConnectionRefreshVtbl;
+struct pehw_INetConnectionRefresh { const pehw_INetConnectionRefreshVtbl *lpVtbl; };
+
 /* Not in every MinGW-w64 setupapi.h, and cheap to state. */
 #ifndef DI_QUIETINSTALL
 #define DI_QUIETINSTALL 0x00000800
@@ -1695,6 +1736,17 @@ static const char *reg_string(HKEY k, const WCHAR *value, char *buf, DWORD cap)
 }
 
 
+/* The per-connection key the Net class installer writes, and that netman reads its settings back
+ * from. The shape is netman's, not ours: {4D36E972-...} is the Net device class and the leaf name
+ * is fixed. Shared by the report and by the tray-icon pass so the two cannot drift apart. */
+static void connection_key_path(const char *guid, char *out, DWORD cap)
+{
+    _snprintf(out, cap - 1,
+              "SYSTEM\\CurrentControlSet\\Control\\Network"
+              "\\{4D36E972-E325-11CE-BFC1-08002BE10318}\\%s\\Connection", guid);
+    out[cap - 1] = 0;
+}
+
 /* One connection's persisted registry entry. A missing entry is said out loud: it is a finding,
  * not an absence of output. */
 static void report_connection_key(const char *guid)
@@ -1704,10 +1756,7 @@ static void report_connection_key(const char *guid)
     char buf[256];
     DWORD sz, type, d;
 
-    _snprintf(sub, sizeof sub - 1,
-              "SYSTEM\\CurrentControlSet\\Control\\Network"
-              "\\{4D36E972-E325-11CE-BFC1-08002BE10318}\\%s\\Connection", guid);
-    sub[sizeof sub - 1] = 0;
+    connection_key_path(guid, sub, sizeof sub);
     if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, sub, 0, KEY_READ, &k) != ERROR_SUCCESS) {
         say("  %s", guid);
         say("    NO Connection subkey - the Net class installer did not write one");
@@ -1908,6 +1957,340 @@ static int cmd_netconn(void)
     return 0;
 }
 
+/* How long to wait for the Net class installer to write a connection's key, and how often to
+ * look. The wait exists because it creates that key well after the install call that produced it
+ * has returned — measured at more than ten seconds, which is why the network pass cannot simply
+ * do this at its own end. Running post-shell spends far more than that budget before this starts,
+ * so the wait is insurance for a slow machine rather than the mechanism, and on a normal boot the
+ * key is already there on the first look.
+ *
+ * Kept short even so: an image with no adapter bound has no key to wait for and would spend all
+ * of it, every boot. Fifteen seconds buys the slow case without making the empty case cost real
+ * time; losing that bet costs the icon, which the connection's Properties can still turn on by
+ * hand. */
+#define TRAYICON_WAIT_MS   15000
+#define TRAYICON_POLL_MS   1000
+
+/* How long to wait for the notification area's own network object, and how often to look.
+ * Short poll: it normally arrives a second or two after the shell paints, and every millisecond
+ * of this is spent on the shell's splash. */
+#define TRAYWND_WAIT_MS    20000
+#define TRAYWND_POLL_MS    250
+
+/* Wait until the component that would draw the icon exists.
+ *
+ * Telling netman a connection changed only reaches whoever has registered to hear it, and the
+ * listener here is netshell's tray object, which the shell brings up a little after its taskbar
+ * appears — after the point the run list calls "the desktop is up". Notifying before then is
+ * delivered to nobody and reported as success, which is the whole reason this wait exists.
+ * Measured on x86: without it the icon came up on two boots in ten, with it on every one.
+ *
+ * `Connections Tray` is the window class netshell registers for that object, and it creates the
+ * window in the same routine, so the window existing is the closest observable stand-in for "the
+ * listener is there". Chosen over the notification area's other start-up signals deliberately:
+ * `stobject.dll` creates a named event when its hot-plug module starts, which is tempting and
+ * wrong, because that module is one bit of a mask a build may legitimately clear, and the network
+ * object is created whatever that mask says.
+ *
+ * Returns non-zero if the window appeared. A miss is not fatal: the notification is best effort. */
+static const wchar_t kTrayClass[] = L"Connections Tray";
+
+static BOOL CALLBACK tray_class_cb(HWND h, LPARAM p)
+{
+    wchar_t cls[32];
+
+    if (GetClassNameW(h, cls, sizeof cls / sizeof cls[0]) && lstrcmpiW(cls, kTrayClass) == 0) {
+        *(int *)p = 1;
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/* Two places, because a window is only visible to a process on the same desktop, and the run
+ * list's tasks are not on the shell's: they keep the desktop they inherit, deliberately — the
+ * network pass installs nothing when started on any other, so the runner must not move them. On
+ * the boot path it is therefore the by-name enumeration of the shell's desktop that answers; the
+ * plain FindWindow answers when this is run by hand from that desktop, and costs nothing to try
+ * first.
+ *
+ * *seen_on names which one answered, and it is printed rather than dropped: which desktop this
+ * ran on is a property of the runner, and a boot whose answer changes is telling you the runner
+ * moved. */
+static int tray_window_present(const char **seen_on)
+{
+    HDESK d;
+    int found = 0;
+
+    if (FindWindowW(kTrayClass, NULL)) {
+        *seen_on = "this desktop";
+        return 1;
+    }
+    d = OpenDesktopW(L"Default", 0, FALSE, DESKTOP_ENUMERATE | DESKTOP_READOBJECTS);
+    if (d) {
+        EnumDesktopWindows(d, tray_class_cb, (LPARAM)&found);
+        CloseDesktop(d);
+    }
+    if (found)
+        *seen_on = "the shell's desktop";
+    return found;
+}
+
+/* Returns non-zero if the window appeared. A miss is not fatal: the notification is best effort. */
+static int wait_for_tray_window(const char **seen_on)
+{
+    DWORD waited = 0;
+
+    for (;;) {
+        if (tray_window_present(seen_on))
+            return 1;
+        if (waited >= TRAYWND_WAIT_MS)
+            return 0;
+        Sleep(TRAYWND_POLL_MS);
+        waited += TRAYWND_POLL_MS;
+    }
+}
+
+/* Write the setting for one connection, by its id. Registry only, and deliberately so: nothing
+ * about the value needs netman running or reachable. It is the connection's own setting, and
+ * netman re-reads it on every GetProperties rather than caching it, so the write is complete on
+ * its own and the notification below is a separate half that can fail without costing it. */
+static int write_show_icon(const char *guid)
+{
+    char sub[256];
+    HKEY k;
+    DWORD one = 1;
+    LONG r;
+
+    connection_key_path(guid, sub, sizeof sub);
+    /* Opened, never created. An absent key means the class installer has not finished with this
+     * connection, and writing our own would put the value somewhere netman does not read. */
+    r = RegOpenKeyExA(HKEY_LOCAL_MACHINE, sub, 0, KEY_SET_VALUE, &k);
+    if (r != ERROR_SUCCESS) {
+        say("  %s: no Connection subkey (%ld) - the class installer has not written one",
+            guid, (long)r);
+        return 1;
+    }
+    r = RegSetValueExA(k, "ShowIcon", 0, REG_DWORD, (const BYTE *)&one, sizeof one);
+    RegCloseKey(k);
+    if (r != ERROR_SUCCESS) {
+        say("  %s: ShowIcon could not be written (%ld)", guid, (long)r);
+        return 1;
+    }
+    say("  %s: ShowIcon = 1", guid);
+    return 0;
+}
+
+/* Every connection the Net class installer has written a key for, with the setting applied.
+ * Returns how many were written; *failed is set if any candidate could not be. */
+static int set_all_show_icons(int *failed)
+{
+    static const char *kConnClass =
+        "SYSTEM\\CurrentControlSet\\Control\\Network"
+        "\\{4D36E972-E325-11CE-BFC1-08002BE10318}";
+    HKEY cls;
+    DWORD i;
+    int n = 0;
+
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, kConnClass, 0, KEY_READ, &cls) != ERROR_SUCCESS)
+        return 0;
+    for (i = 0;; i++) {
+        char guid[64];
+        DWORD len = sizeof guid;
+        LONG r = RegEnumKeyExA(cls, i, guid, &len, NULL, NULL, NULL, NULL);
+
+        /* ERROR_MORE_DATA is about this one index — a name too long for the buffer — so the walk
+         * goes on; anything else is about the key or the handle and would repeat forever. */
+        if (r == ERROR_MORE_DATA)
+            continue;
+        if (r != ERROR_SUCCESS)
+            break;
+        /* Descriptions and other bookkeeping live here too; only a GUID-shaped name is a
+         * candidate connection. */
+        if (guid[0] != '{')
+            continue;
+        if (write_show_icon(guid) == 0)
+            n++;
+        else
+            *failed = 1;
+    }
+    RegCloseKey(cls);
+    return n;
+}
+
+/* Tell whoever is already displaying a connection that it changed, and report what netman now
+ * says about it. Returns non-zero if the notification was actually delivered.
+ *
+ * This is the half that needs netman, and it is best effort: a notification delivered before the
+ * notification area's own object exists reaches nobody, and nothing retries it. That is not a
+ * failure of the setting, which is already written by the time this runs — it costs the icon
+ * until something else makes the tray look again.
+ *
+ * The re-read is not decoration. NCCF_SHOW_ICON is netman's own view of the value, so printing
+ * it turns "we wrote something" into "netman agrees" — a distinction a boot has to be able to
+ * make on its own, since the icon appearing is the only other evidence and it is a photograph
+ * away. */
+static int notify_one(pehw_INetConnectionRefresh *refresh, INetConnection *c)
+{
+    NETCON_PROPERTIES *p = NULL;
+    HRESULT hr;
+    char nbuf[256];
+    int told = 0;
+
+    /* The connection object itself, not its id — see the interface declaration above. */
+    if (refresh) {
+        hr = refresh->lpVtbl->ConnectionModified(refresh, c);
+        if (FAILED(hr))
+            say("  ConnectionModified failed 0x%08lX %s", (unsigned long)hr, hresult_name(hr));
+        else
+            told = 1;
+    }
+    hr = INetConnection_GetProperties(c, &p);
+    if (!p) {
+        /* The same three cases report_netman keeps apart, and for the same reason:
+         * S_OBJECT_NO_LONGER_VALID is a *success* code (0x00000002) meaning the connection went
+         * away mid-walk, so printing it as a failure names an HRESULT hresult_name cannot look
+         * up, for something that is not a fault. */
+        if (hr == S_OBJECT_NO_LONGER_VALID)
+            say("  (a connection that went away during the walk)");
+        else if (SUCCEEDED(hr))
+            say("  (a connection whose GetProperties returned nothing, 0x%08lX %s)",
+                (unsigned long)hr, hresult_name(hr));
+        else
+            say("  (a connection whose GetProperties failed 0x%08lX %s)",
+                (unsigned long)hr, hresult_name(hr));
+        return told;
+    }
+    say("  \"%s\": character 0x%08lX%s", wide_str(p->pszwName, nbuf, sizeof nbuf),
+        (unsigned long)p->dwCharacter,
+        (p->dwCharacter & NCCF_SHOW_ICON) ? "  (NCCF_SHOW_ICON set)"
+                                          : "  (NCCF_SHOW_ICON CLEAR)");
+    CoTaskMemFree(p->pszwName);
+    CoTaskMemFree(p->pszwDeviceName);
+    CoTaskMemFree(p);
+    return told;
+}
+
+/* Show the notification-area icon for every connection the machine has.
+ *
+ * Declared post-shell, because nothing earlier has either of the two things it needs: the Net
+ * class installer creates the connection well after the call that produced it returns — measured
+ * as still absent fifteen seconds into a pre-shell task ordered after the device pass — and
+ * netman is not a registered class until the shell's self-registration pass, which runs after
+ * that stage. So the pass is in two halves that fail independently: the registry write, which
+ * needs only the key, and the notification, which needs netman and the notification area.
+ *
+ * Its own task rather than a step of `net` because the key it writes appears well after that pass
+ * ends, and its own subcommand rather than part of `netconn` because `netconn` is a by-hand
+ * report that instantiates third-party UI classes and must stay off the run list. */
+static int cmd_trayicon(void)
+{
+    INetConnectionManager *mgr = NULL;
+    pehw_INetConnectionRefresh *refresh = NULL;
+    IEnumNetConnection *e = NULL;
+    INetConnection *c = NULL;
+    HRESULT hr;
+    ULONG got = 0;
+    DWORD waited = 0;
+    const char *seen_on = "?";
+    int n = 0, failed = 0, tray = 0, told = 0;
+
+    SetUnhandledExceptionFilter(crash_filter);
+
+    /* Wait for the class installer to write a connection's key, then set every one it wrote.
+     * Polling the registry rather than asking netman, because netman is not reachable this early
+     * and the key is the thing the setting belongs to either way.
+     *
+     * `failed` is cleared per attempt, not accumulated: the class installer creates a
+     * connection's `{guid}` key before its `Connection` leaf, so an early poll legitimately finds
+     * one it cannot write yet. Carrying that verdict forward would report the run as failed for
+     * having been early — on exactly the boot the wait exists to serve. */
+    for (;;) {
+        failed = 0;
+        n = set_all_show_icons(&failed);
+        if (n)
+            break;
+        if (waited >= TRAYICON_WAIT_MS) {
+            /* Not a failure of this pass: an image with no adapter bound has nothing to show an
+             * icon for, and saying so is the whole report. */
+            say("trayicon: no connection key after %lu s - nothing to show",
+                (unsigned long)(TRAYICON_WAIT_MS / 1000));
+            return 0;
+        }
+        Sleep(TRAYICON_POLL_MS);
+        waited += TRAYICON_POLL_MS;
+    }
+    if (waited)
+        say("trayicon: waited %lu s for a connection key", (unsigned long)(waited / 1000));
+
+    /* The notification half. Everything below is best effort and reported as such rather than
+     * returned as failure: the value is already written, so what is at stake is only whether the
+     * icon appears now or at the tray's next look. Run by hand from a console this half is the
+     * whole point — it is what makes the icon appear at once.
+     *
+     * The wait comes before the notification and not after, because a notification sent early is
+     * not retried by anyone — it is delivered to whoever is listening at that instant and
+     * reported as success either way. */
+    tray = wait_for_tray_window(&seen_on);
+    if (!tray)
+        say("trayicon: no \"Connections Tray\" window on this or the shell's desktop after"
+            " %lu s - notifying anyway", (unsigned long)(TRAYWND_WAIT_MS / 1000));
+
+    /* Set them again before notifying. The loop above stops at the first connection with a key,
+     * which is right — waiting out the whole budget on every boot to catch a second adapter that
+     * usually is not there would cost every boot for a rare case. But a second adapter's key may
+     * well have appeared during the tray wait, and re-walking costs one registry enumeration
+     * with no added delay. Writes are idempotent, so this re-states the first as well and
+     * returns the full count rather than a delta. */
+    failed = 0;
+    n = set_all_show_icons(&failed);
+
+    hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    if (FAILED(hr)) {
+        say("trayicon: %d written; CoInitializeEx 0x%08lX %s", n,
+            (unsigned long)hr, hresult_name(hr));
+        return failed;
+    }
+    hr = CoCreateInstance(&pehw_CLSID_ConnectionManager, NULL, CLSCTX_ALL,
+                          &pehw_IID_INetConnectionManager, (void **)&mgr);
+    if (FAILED(hr)) {
+        CoUninitialize();
+        say("trayicon: %d written, no notification (netman 0x%08lX %s) - the shell reads the"
+            " value when it starts", n, (unsigned long)hr, hresult_name(hr));
+        return failed;
+    }
+    hr = CoCreateInstance(&pehw_CLSID_ConnectionManager, NULL, CLSCTX_ALL,
+                          &pehw_IID_INetConnectionRefresh, (void **)&refresh);
+    if (FAILED(hr))
+        refresh = NULL;
+
+    hr = INetConnectionManager_EnumConnections(mgr, NCME_DEFAULT, &e);
+    if (FAILED(hr) || !e) {
+        say("trayicon: EnumConnections failed 0x%08lX %s", (unsigned long)hr, hresult_name(hr));
+    } else {
+        /* Same contract as report_netman's walk: test the pointer the call fills, not the
+         * count, which an enumerator asked for one item may leave untouched. */
+        for (;;) {
+            c = NULL;
+            if (IEnumNetConnection_Next(e, 1, &c, &got) != S_OK || !c)
+                break;
+            told += notify_one(refresh, c);
+            INetConnection_Release(c);
+        }
+        IEnumNetConnection_Release(e);
+    }
+
+    if (refresh)
+        refresh->lpVtbl->Release(refresh);
+    INetConnectionManager_Release(mgr);
+    CoUninitialize();
+    /* Counted, not assumed: the summary says how many connections were actually told, because
+     * having created the interface says nothing about a walk that enumerated none or a call that
+     * failed — and this line is the whole of what the run list keeps. */
+    say("trayicon: %d written, tray window %s%s, %d notified", n, tray ? "up on " : "NOT seen",
+        tray ? seen_on : "", told);
+    return failed;
+}
+
 static int cmd_ip(void)
 {
     GETADAPTERSINFO get;
@@ -1982,6 +2365,7 @@ static void usage(void)
            "  pehw devices [all]    install drivers for devices that need one ('all' = every\n"
            "                        device, including ones already working)\n"
            "  pehw start <name>..   start one service by hand and print the raw error\n"
+           "  pehw trayicon         show the notification-area icon for every connection\n"
            "\n"
            "  pehw status           report what is bound, what is running, and why not\n"
            "  pehw service <name>.. report a service: SCM state, registry, account, ImagePath\n"
@@ -2011,6 +2395,8 @@ int main(int argc, char **argv)
         return cmd_net(argc, argv);
     if (argc >= 2 && lstrcmpiA(argv[1], "devices") == 0)
         return cmd_devices(force);
+    if (argc >= 2 && lstrcmpiA(argv[1], "trayicon") == 0)
+        return cmd_trayicon();
     if (argc >= 2 && lstrcmpiA(argv[1], "status") == 0)
         return cmd_status();
     if (argc >= 2 && lstrcmpiA(argv[1], "ip") == 0)

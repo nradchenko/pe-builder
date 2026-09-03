@@ -66,9 +66,12 @@ naming it appears anywhere in the file. Nothing else on the image instantiates i
 network — so this plugin stages `stobject.dll` and puts the entry back. Deps-first plugin order is
 what makes that work.
 
-The icon is **off by default**; the user ticks "Show icon in notification area when connected", as
-on stock XP. Setting it at build time is not currently possible — the connection's key is minted at
-run time, and the tray only reacts to its own start-up enumeration or a change notification.
+The icon is **on**, without anyone ticking "Show icon in notification area when connected" — a
+deviation from stock XP, where that checkbox is how it is turned on. The setting belongs to a
+connection minted at boot, so there is nothing a build can write and nobody to tick it; this
+plugin declares a post-shell startup task instead, and `pehw trayicon` sets it once the connection
+and the notification area both exist. The mechanism is `hardware`'s — see that plugin's README
+§ The notification-area icon.
 
 ## Limitations
 
