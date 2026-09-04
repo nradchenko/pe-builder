@@ -416,11 +416,16 @@ vga64k.dll   =
 0x1,"Setup\AllowStart\Seclogon"
 0x1,"Setup\AllowStart\WS2IFSL"
 
-; ProtectedStorage — the LSA secret/credential store, hosted in lsass; the piece
-; msprivs's privilege init needs. Depends on RpcSs.
-0x2,"ControlSet001\Services\ProtectedStorage","ImagePath","%SystemRoot%\system32\lsass.exe"
+; ProtectedStorage — the LSA secret/credential store, the piece msprivs's privilege init
+; needs. Depends on RpcSs. How the service is hosted is the source's to state, not ours:
+; ImagePath names the host binary — XP and Server 2003 run the service inside lsass, Windows
+; 2000 inside services.exe — and Type carries whether that host shares its process, which is
+; the same fact from the other side and the second way the SCM answers
+; ERROR_SERVICE_NOT_IN_EXE. Both come from the source's own hivesys.inf, which every medium
+; here declares them in (2000, XP SP3, XP x64, XP Home, XP ja, 2003 x86/x64 EN and cn: only
+; ImagePath varies, Type is 0x120 throughout). What stays below is this build's policy — that
+; a PE starts the service at all — which is ours to set.
 0x4,"ControlSet001\Services\ProtectedStorage","Start",0x2
-0x4,"ControlSet001\Services\ProtectedStorage","Type",0x120
 0x4,"ControlSet001\Services\ProtectedStorage","ErrorControl",0x1
 0x1,"ControlSet001\Services\ProtectedStorage","ObjectName","LocalSystem"
 0x7,"ControlSet001\Services\ProtectedStorage","DependOnService","RpcSs"
