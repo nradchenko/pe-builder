@@ -35,7 +35,13 @@ var (
 	sigNK   = []byte("nk")
 	sigVK   = []byte("vk")
 	sigSK   = []byte("sk")
-	sigLH   = []byte("lh")
+	// lf is the fast leaf: the subkey index every 1.3 hive Microsoft ships uses (the
+	// setupreg.hiv of Windows 2000, XP and Server 2003 alike), and the only leaf form
+	// Windows 2000 reads. The hash leaf (lh) that XP introduced is read by XP and later
+	// but rejected outright by 2000's loader — "\WINNT\SYSTEM32\CONFIG\SYSTEM is missing
+	// or corrupt" — so this writer emits lf, which every NT reads and which is what the
+	// minor version it declares implies.
+	sigLF = []byte("lf")
 )
 
 // buildBaseBlock returns the 4096-byte file header for a clean primary hive whose
@@ -48,7 +54,7 @@ func buildBaseBlock(rootOffset, binsLen uint32) []byte {
 	binary.LittleEndian.PutUint32(b[0x08:], 1) // secondary sequence (== primary: clean)
 	binary.LittleEndian.PutUint64(b[0x0C:], fixedFiletime)
 	binary.LittleEndian.PutUint32(b[0x14:], 1) // major version
-	binary.LittleEndian.PutUint32(b[0x18:], 3) // minor version (XP)
+	binary.LittleEndian.PutUint32(b[0x18:], 3) // minor version: what every NT 5.x writes
 	binary.LittleEndian.PutUint32(b[0x1C:], 0) // file type: primary
 	binary.LittleEndian.PutUint32(b[0x20:], 1) // file format: direct memory load
 	binary.LittleEndian.PutUint32(b[0x24:], rootOffset)
@@ -77,13 +83,26 @@ func headerChecksum(b []byte) uint32 {
 	}
 }
 
-// nameHash computes the leaf-index (lh) name hash: for each character of the
-// upper-cased name, hash = 37*hash + char. The kernel recomputes this on lookup,
-// so it must match exactly for case-insensitive subkey lookups to succeed.
-func nameHash(name string) uint32 {
-	var h uint32
-	for _, r := range upperASCII(name) {
-		h = h*37 + uint32(r)
+// nameHint computes a fast-leaf (lf) element's name hint: the first four characters
+// of the key name as stored, one byte each, zero-padded when the name is shorter. The
+// kernel uses it to skip subkeys whose hint cannot match before comparing full names,
+// so a wrong byte hides a subkey; a zero byte is "no hint" and always matches. A
+// character above 0xFF has no byte form, and it and everything after it are left
+// zero, which is what Windows writes for such names. Case is kept as stored — the
+// kernel's hint comparison is case-insensitive, and Microsoft's own hives carry the
+// name's case in the hint ("Allo" for Allocation, "{4D3" for a class GUID).
+func nameHint(nameBytes []byte, compressed bool) [4]byte {
+	var hint [4]byte
+	if compressed {
+		copy(hint[:], nameBytes)
+		return hint
 	}
-	return h
+	for i := 0; i < 4 && 2*i+1 < len(nameBytes); i++ {
+		c := binary.LittleEndian.Uint16(nameBytes[2*i:])
+		if c > 0xFF {
+			break
+		}
+		hint[i] = byte(c)
+	}
+	return hint
 }

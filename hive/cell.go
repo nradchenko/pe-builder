@@ -53,11 +53,22 @@ func isLatin1(s string) bool {
 }
 
 // upperASCII upper-cases the ASCII letters of s and leaves other bytes untouched.
-// It backs both the subkey ordering and the leaf-index hash, so the two agree and
-// lookups resolve. Registry key and value names are ASCII in the hives handled
-// here; a name with non-ASCII letters would be folded differently from the
-// kernel's full-Unicode collation and could fail lookup — add a Unicode upcase
-// table if such names ever appear.
+// It backs the subkey ordering, and that ordering is load-bearing: the kernel binary-searches
+// a leaf, so a sibling the writer sorted into the wrong place cannot be found at all.
+//
+// Non-ASCII key names do occur — localized media declare a few under
+// Software\Microsoft\Windows NT\CurrentVersion\Network: four CJK names on Simplified Chinese
+// Server 2003, one Arabic on Arabic XP, one Cyrillic ("Просмотр событий") on Russian XP. The
+// first two scripts are uncased, so this fold and the kernel's upcase agree on them, and for
+// BMP characters UTF-8 byte order matches the UTF-16 code-unit order the kernel compares in.
+// The Cyrillic one is cased and is folded differently here than the kernel folds it, but it is
+// the only non-ASCII name among its siblings and every ASCII sibling sorts below U+0400 under
+// either fold, so the order still agrees.
+//
+// What that leaves is a narrow gap rather than a live fault: two or more *cased* non-ASCII
+// siblings under one key could be ordered differently from the kernel's collation, and the
+// second one would be unfindable. Closing it needs the kernel's upcase table, not Go's
+// unicode.ToUpper, which disagrees with it in places — measure before reaching for either.
 func upperASCII(s string) string {
 	var changed bool
 	b := []byte(s)

@@ -13,8 +13,8 @@ const (
 	nkFixedLen  = 0x4C // CM_KEY_NODE up to the name
 	vkFixedLen  = 0x14 // CM_KEY_VALUE up to the name
 	skFixedLen  = 0x14 // CM_KEY_SECURITY up to the descriptor
-	lhHeaderLen = 4    // leaf-index signature + count
-	lhElemLen   = 8    // per subkey: node offset + name hash
+	lfHeaderLen = 4    // fast-leaf signature + count
+	lfElemLen   = 8    // per subkey: node offset + 4-byte name hint
 )
 
 // nk flag bits.
@@ -184,7 +184,7 @@ func (w *regfWriter) planKey(k *Key, parentOff uint32) (*keyLayout, error) {
 			return nil, fmt.Errorf("hive: subkey-list root (ri) not yet implemented for key %q (%d subkeys)", k.Name, len(k.Subkeys))
 		}
 		children := sortedChildren(k.Subkeys)
-		L.subkeyOff = w.alloc(lhHeaderLen + lhElemLen*len(children))
+		L.subkeyOff = w.alloc(lfHeaderLen + lfElemLen*len(children))
 		for _, c := range children {
 			cl, err := w.planKey(c, L.nkOff)
 			if err != nil {
@@ -273,13 +273,14 @@ func (w *regfWriter) writeKey(L *keyLayout, isRoot bool) {
 	}
 
 	if L.subkeyOff != none {
-		lh := w.at(L.subkeyOff)
-		copy(lh[0:], sigLH)
-		binary.LittleEndian.PutUint16(lh[0x02:], uint16(len(L.children)))
+		lf := w.at(L.subkeyOff)
+		copy(lf[0:], sigLF)
+		binary.LittleEndian.PutUint16(lf[0x02:], uint16(len(L.children)))
 		for i, c := range L.children {
-			el := lh[lhHeaderLen+lhElemLen*i:]
+			el := lf[lfHeaderLen+lfElemLen*i:]
 			binary.LittleEndian.PutUint32(el[0:], c.nkOff)
-			binary.LittleEndian.PutUint32(el[4:], nameHash(c.key.Name))
+			hint := nameHint(c.nameBytes, c.nameComp)
+			copy(el[4:], hint[:])
 		}
 		for _, c := range L.children {
 			w.writeKey(c, false)

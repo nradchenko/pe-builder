@@ -11,6 +11,15 @@
 // key and value names are matched case-insensitively (the canonical casing is
 // preserved), and setting a value replaces any existing value of the same name.
 //
+// The structures a hive may contain follow the version it declares, not the
+// newest form a reader might accept. These hives declare 1.3, so subkey indexes
+// are written as fast leaves (lf), the form every 1.3 hive Microsoft ships uses
+// and every NT reads; the hash leaf (lh) belongs to what XP's kernel writes, and
+// a 1.3 hive carrying one is rejected outright by Windows 2000. A writer for a
+// later version would choose lh there for the same reason — the rule is that the
+// form follows the declared version, not that older is safer. Subkey count is the
+// other axis: index roots (ri) are refused rather than approximated.
+//
 // Deliberate simplifications (safe for a RAM-resident, SYSTEM-run PE): a single
 // shared permissive security descriptor is used for every key rather than
 // per-key ACLs; and per-key class names, timestamps, and volatile flags are
