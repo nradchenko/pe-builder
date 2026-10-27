@@ -1,4 +1,4 @@
-# 07 — Engine Internals (from binary analysis)
+# 07 — PE Builder: Engine Internals (from binary analysis)
 
 The other documents describe PE Builder from its own help and data files. This
 one records what was learned from **static analysis of the binaries themselves** —

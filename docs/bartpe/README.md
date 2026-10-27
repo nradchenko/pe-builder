@@ -1,11 +1,10 @@
-# Bart's PE Builder — Reference Documentation
+# Bart's PE Builder — reference implementation documentation
 
-A clean-room reference description of **Bart's PE Builder** (the original,
-discontinued freeware tool) and the plugin ecosystem built around it — most
-notably Sherpya's Windows XPE plugin.
-
-Its purpose is to record everything known about how the original project works,
-derived from primary sources. These documents describe the original tool only.
+These documents describe **Bart's PE Builder**, the original, discontinued
+freeware tool that pe-builder follows, and the plugin ecosystem built around it —
+most notably Sherpya's Windows XPE plugin. They record how *those* tools work,
+derived from primary sources. pe-builder's own behaviour is documented in the rest
+of [`docs/`](../README.md), which says where it departs from the original.
 
 ## Documents
 

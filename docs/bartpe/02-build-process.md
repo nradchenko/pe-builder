@@ -1,4 +1,4 @@
-# 02 — The Build Process
+# 02 — PE Builder: The Build Process
 
 This document describes how `pebuilder.exe` turns a Windows installation source
 into a bootable BartPE environment, and how that environment boots.

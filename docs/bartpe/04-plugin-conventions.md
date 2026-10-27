@@ -1,4 +1,4 @@
-# 04 — Plugin Conventions, Packaging & Extensions
+# 04 — PE Builder: Plugin Conventions, Packaging & Extensions
 
 The [format reference](03-plugin-format.md) covers the `.inf` grammar. This
 document covers everything *around* it: how plugins are laid out on disk,

@@ -15,10 +15,10 @@
   open-source Windows PE from a WIM, how the chain works, and a build walkthrough.
 - [`plugins/`](plugins/) — using and writing plugins: a short guide, and
   the policy for what may be bundled with pe-builder.
-- [`reference/`](reference/) — a detailed, primary-source reference for
-  the original Bart's PE Builder: its build process, the complete plugin `.inf`
-  format, conventions, and internals. This is the foundation the implementation is
-  built on.
+- [`bartpe/`](bartpe/) — reference implementation documentation: a detailed,
+  primary-source description of the original Bart's PE Builder, which pe-builder
+  follows — its build process, the complete plugin `.inf` format, conventions, and
+  internals.
 
 The project's own policies:
 

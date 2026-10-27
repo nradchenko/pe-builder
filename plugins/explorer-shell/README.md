@@ -11,9 +11,10 @@ writable lettered volume exists for the user profile).
 
 A `/minint` PE has no Winlogon or user session, so the desktop can't just be switched on
 with a registry value — the shell has to be brought up by hand. This plugin does that. The
-bring-up follows the behavior of the *XPE* plugin for Bart's PE Builder (by Sherpya),
-documented under [`docs/reference/`](../../docs/reference); the mechanisms below are
-reimplemented independently here.
+bring-up follows the behavior of the *XPE* plugin for Bart's PE Builder (by Gianluigi
+Tiesi, "Sherpya"), described in the reference implementation documentation under
+[`docs/bartpe/`](../../docs/bartpe); the mechanisms below are reimplemented
+independently here.
 
 ## Pieces
 

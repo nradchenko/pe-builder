@@ -283,10 +283,12 @@ PE dependencies.
     source, target, or environment changes status — it is where "does X work?" is answered,
     and it distinguishes **verified** from **untested** deliberately.
   - `docs/plugins/` — the plugin bundling/inclusion policy (what may ship built-in).
-  - `docs/reference/` — a primary-source reference describing the **original**
-    Bart's PE Builder: its build process, the plugin `.inf` format, conventions,
-    and internals. Treat these as the authoritative model of how the original tool
-    behaves, and consult them before implementing anything format-related.
+  - `docs/bartpe/` — the reference implementation documentation: a primary-source
+    description of the **original** Bart's PE Builder (and Sherpya's XPE plugin) — its build
+    process, the plugin `.inf` format, conventions, and internals.
+    Treat these as the authoritative model of how the original tool behaves, and consult
+    them before implementing anything format-related. Where pe-builder departs from them,
+    pe-builder's own docs say so.
 
 ## Inspecting a source or a build
 

@@ -14,7 +14,7 @@ import (
 )
 
 // SourceDisksFiles attribute bits. 1–8 are the original format's
-// (see docs/reference/03-plugin-format.md); 16 is a pebuild extension.
+// (see docs/bartpe/03-plugin-format.md); 16 is a pebuild extension.
 const (
 	attrShipWithPlugin = 1 // file ships with the plugin; must be present
 	attrNoDecompress   = 2 // copy the compressed archive as-is

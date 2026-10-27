@@ -5,8 +5,9 @@ a driver, a shell, a config change. pe-builder uses the classic Bart's PE Builde
 plugin format (an `.inf` describing the changes), so existing community plugins work,
 and writing your own is a small text file.
 
-This guide gets you started, and the full `.inf` format is in
-[`docs/reference/03-plugin-format.md`](../reference/03-plugin-format.md).
+This guide gets you started and covers what pe-builder adds to the format. The original
+tool's `.inf` format, which pe-builder follows, is described in full in the reference
+implementation documentation: [`docs/bartpe/03-plugin-format.md`](../bartpe/03-plugin-format.md).
 
 **Before you write a plugin, read the [inclusion policy](inclusion-policy.md) and the
 [conventions](conventions.md), and make sure yours meets every requirement and rule in them** —

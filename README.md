@@ -180,8 +180,8 @@ reports where each module lives, flagging any the source lacks. See
 ## Documentation
 
 See [`docs/`](docs/README.md) for the full index — installation, supported sources, the
-build manifest, the inspection tools, the WIM layout, plugins, and the Bart's PE Builder
-reference.
+build manifest, the inspection tools, the WIM layout, plugins, and the reference implementation
+documentation for the original Bart's PE Builder.
 
 ## Contributing
 

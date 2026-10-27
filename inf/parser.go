@@ -5,7 +5,8 @@
 // format PE Builder plugins and the base manifest are written in. It handles
 // section headers, comments, backslash line continuation, [Strings] %TOKEN%
 // substitution, comma-separated double-quoted fields, and .BuildNo conditional
-// sections. See docs/reference/03-plugin-format.md for the format.
+// sections. The original tool's format is described in
+// docs/bartpe/03-plugin-format.md.
 package inf
 
 import (

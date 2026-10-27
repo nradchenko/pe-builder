@@ -1,4 +1,4 @@
-# 03 — Plugin `.inf` File Format
+# 03 — PE Builder: Plugin `.inf` File Format
 
 A plugin is described by one (or more) `.inf` files that instruct PE Builder to
 copy files, create directories, add registry entries, and patch text/INI files

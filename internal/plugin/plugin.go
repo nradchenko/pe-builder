@@ -3,9 +3,9 @@
 
 // Package plugin turns a parsed INF (see package inf) into a typed plugin
 // descriptor and compiles its copy/registry/text sections into the action IR
-// (package action). It models the format documented in
-// docs/reference/03-plugin-format.md and the vendor [Update] extension in
-// docs/reference/04-plugin-conventions.md. Actions are produced but not executed
+// (package action). It models the original tool's format, described in
+// docs/bartpe/03-plugin-format.md, and the vendor [Update] extension in
+// docs/bartpe/04-plugin-conventions.md. Actions are produced but not executed
 // here.
 package plugin
 
