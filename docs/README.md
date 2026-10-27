@@ -18,7 +18,7 @@
 - [`bartpe/`](bartpe/) — reference implementation documentation: a detailed,
   primary-source description of the original Bart's PE Builder, which pe-builder
   follows — its build process, the complete plugin `.inf` format, conventions, and
-  internals.
+  internals — with credit to its authors.
 
 The project's own policies:
 

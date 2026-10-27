@@ -6,6 +6,20 @@ most notably Sherpya's Windows XPE plugin. They record how *those* tools work,
 derived from primary sources. pe-builder's own behaviour is documented in the rest
 of [`docs/`](../README.md), which says where it departs from the original.
 
+## Authors
+
+- **PE Builder** and **BartPE** are the work of **Bart Lagerweij**
+  ([@bartpe](https://github.com/bartpe)), 2002–2006, published as freeware from
+  nu2.nu. Its plugin `.inf` format ([`03-plugin-format.md`](03-plugin-format.md))
+  is the format pe-builder's plugins follow.
+- **Windows XPE** is the work of **Gianluigi Tiesi**, "Sherpya"
+  ([@sherpya](https://github.com/sherpya)), 2003–2007. It brought the Explorer
+  desktop to BartPE, and the bring-up it established
+  ([`05-case-study-xpe.md`](05-case-study-xpe.md)) is the one pe-builder's
+  `explorer-shell` plugin follows.
+
+The designs described here are theirs; any mistake in describing them is ours.
+
 ## Documents
 
 | File | Topic |

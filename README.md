@@ -189,6 +189,22 @@ Contributions are welcome — see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for ho
 conventions, and how AI-assisted contributions are handled. To report a security problem, follow
 [SECURITY.md](docs/SECURITY.md) rather than filing a public issue.
 
+## Acknowledgements
+
+pe-builder owes its design to Bart's PE Builder and to the community that grew around it: plugin
+authors, forum regulars, and the sites that documented and hosted their work. In particular:
+
+- **Bart Lagerweij** ([@bartpe](https://github.com/bartpe)) created *PE Builder* and
+  [BartPE](https://en.wikipedia.org/wiki/BartPE): a freeware tool that turned your own Windows
+  XP or Server 2003 installation media into a bootable live environment. Its plugin format let a
+  whole community extend that environment, and it is the format pe-builder's plugins follow.
+- **Gianluigi Tiesi, "Sherpya"** ([@sherpya](https://github.com/sherpya)) created *Windows XPE*,
+  the plugin that brought the real Explorer desktop to BartPE. pe-builder brings its desktop up the
+  way XPE established.
+
+Their tools are described, with credit, in the
+[reference implementation documentation](docs/bartpe/README.md).
+
 ## License
 
 Copyright © 2026 Nikita Radchenko
