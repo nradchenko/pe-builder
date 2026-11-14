@@ -2,10 +2,286 @@
 
 All notable changes to pe-builder are documented in this file.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
+The format follows [Keep a Changelog](https://keepachangelog.com/en/2.0.0/), and the
 project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [0.8.0] - 2026-11-14
+
+The build 3790 release. **Server 2003 and XP Professional x64** now reach the same networked,
+wallpapered desktop as 32-bit XP, and open the dialogs they could not. `pebuild run` boots with
+**disks attached** and an adapter the media can drive, `pebuild disk` makes and reads those disks
+without root, and new commands show the **manifests a binary carries**. Plugins build on **any
+MinGW-w64 toolchain**, MSYS2 included.
+
+### Added
+
+- **`explorer-shell` exposes what a folder shows as manifest options.** The defaults show
+  everything a file has — hidden files listed, extensions shown, a status bar and the full path on
+  folder windows — and six options (`show_hidden_files`, `hide_file_extensions`, `full_path_in_title`,
+  `full_path_in_address_bar`, `show_status_bar`, `show_drive_letters_first`) let a build ask for
+  XP's own behaviour back instead. Each is named for the raw registry value it writes rather than
+  for a reading of it, since an option substitutes one-to-one and cannot invert: it is
+  `hide_file_extensions = 0` that shows extensions. Three related values are set unconditionally
+  rather than exposed — no restoring of a previous session's folder windows, no crawling for
+  network folders on a PE that may have no network, and no autorun from an attached disk or
+  inserted medium.
+- **`pebuild source manifest` and `pebuild image manifest` print the side-by-side manifests a
+  Windows binary carries, and the resource id each one sits at.** The id decides which manifest
+  applies: the Windows loader takes a process's manifest from the resource numbered 1 and,
+  having found one, ignores a `.manifest` file placed beside the binary — so a binary whose
+  real manifest is at another id behaves differently from one that has none, and the two
+  cannot be told apart without looking. A resource that is not well-formed XML is called out
+  and its bytes quoted rather than written through. `source manifest` names a binary the way
+  `source extract` does, decompressing whichever form the media stores it in; `image manifest`
+  names one the way `image extract` does.
+- **`run` boots a networked image.** It presents the guest an **RTL8139**, the one model every
+  supported source drives and, on 64-bit media, the only one of QEMU's emulated adapters with a
+  driver, on networking that needs no privileged host setup. `--nic <model>` names another and
+  `--nic none` offers the guest no adapter; `--pcap <file>` records the adapter's traffic, which
+  is what distinguishes a network stack that never transmits from one whose replies never arrive.
+- **Scratch disks, made and read by pebuild itself.** `pebuild disk create` writes a
+  partitioned, formatted FAT image ready to attach to a boot; `disk add` puts a file where a
+  booted PE will find it; `disk ls` and `disk extract` read back what the PE wrote. This is
+  what makes "how does the image behave with a disk attached?" a question the tool can answer —
+  drive letters, the storage stack, whether a PE writes somewhere it should not — instead of
+  one needing a hand-written `sfdisk` and `mkfs.vfat` pipeline beside a hand-copied QEMU line.
+  A disk has to be partitioned *and* formatted to reproduce anything, an unformatted image
+  getting no volume and so no drive letter, so the geometry is fixed and deliberate: one MBR
+  partition a megabyte in, FAT16 while it fits and FAT32 beyond, labelled so the volume has an
+  identity inside the guest. All of it happens in process, needing no `sfdisk`, no `mkfs.vfat`
+  and no root, and it reads any raw MBR+FAT image rather than only the ones it wrote. Nothing
+  is overwritten unasked: `create` refuses an existing path, `add` refuses a file already on
+  the disk without `--replace`, and every file and destination is checked before anything is
+  written, so a name that cannot be added leaves the disk untouched.
+  Documented in [`docs/inspecting.md`](docs/inspecting.md).
+- **`pebuild run` can boot with disks attached.** `--scratch-disk 256M` creates a formatted
+  disk beside the image and attaches it, reusing the same one on later runs so what the PE
+  wrote survives to be read back with `pebuild disk`; `--disk` attaches an image you already
+  have, in whatever format its own bytes say it is. Both repeat and are indexed in the order
+  given — every `--disk` before every `--scratch-disk` — and the CD keeps the boot, so no
+  attached disk can take it. An existing scratch disk is reused and **never** rewritten: a
+  size that disagrees with what is there is reported and ignored rather than acted on, since
+  the file may hold whatever the last boot left.
+- **A build names the files it skipped.** It reported how many optional files the source did
+  not have, which cannot be acted on: the line reads the same whether the absence is ordinary
+  or the first sign that something resolved to the wrong place. Each name is now printed under
+  the count, marked "no stageable copy found". The lookup
+  covers the loose, compressed and cabinet forms under the source's declared names, so a file
+  the medium carries as an undeclared side-by-side assembly, as XP CDs carry `gdiplus.dll` under
+  `ASMS`, skips the same way as one the medium lacks; `source extract`, which searches the whole
+  medium, tells the two apart.
+- **`pehw` answers more of what a service is doing inside a booted PE.** `pehw start <name>...`
+  asks the Service Control Manager to start each named service and prints the code it gives back,
+  which separates "nothing started it" from "it was started and refused" on an image with no
+  `sc.exe`. `pehw service` now reports the account a service runs as and, for a shared-process
+  service, the DLL it actually loads. A service registered without an extension, as `RpcSs` is
+  (`svchost -k rpcss`), is no longer reported as having a missing binary.
+- **A network build shows its connection icon in the notification area**, without anyone opening
+  the connection's Properties to tick "Show icon in notification area when connected". Stock XP
+  keeps that setting on the connection, and a PE mints its connection at boot — so there was
+  nothing a build could write and nobody to tick it. `network-ui` now declares a startup task
+  that runs once the desktop is up, and `pehw trayicon` waits for the connection's key and writes
+  the setting, waits for the notification area's own network object, and then tells the
+  connection manager the connection changed. The wait is the part that makes it reliable: a
+  notification is delivered to whoever is
+  listening at that instant and reported as success either way, so one sent a moment too early
+  reaches nobody and says nothing about it. Both waits are bounded and both report what they
+  found, so a boot log tells "no adapter" from "no notification area" from "written and told"
+  without anyone looking at the screen.
+- **A plugin can have an image file re-encoded as a bitmap at build time,** by setting copy
+  attribute `64` on it in `[SourceDisksFiles]` — for a component that reads bitmaps only where
+  the source ships something else; `wallpaper` is the worked example. The plugin guide now
+  documents every copy attribute, including the three pebuild adds above the original format's
+  `1`–`8` and the combinations it refuses.
+
+### Fixed
+
+- **Task Manager shows the account a process runs as.** Its User Name column showed unreadable
+  characters — a `0`, or whatever happened to be in the buffer — for every process it looked up.
+  Task Manager does not resolve the name through the account database at all; it loads
+  `utildll.dll` by name for the lookup, and nothing staged that file, since a library loaded by
+  name is invisible to the dependency scan that decides what ships. `system-tools` now stages it,
+  and the column reads `SYSTEM`, `LOCAL SERVICE` and `NETWORK SERVICE` as it does on a full
+  Windows.
+- **The RAM volume is identified by its device rather than its volume label.** `peshell` picks
+  the volume the user profile and `TEMP` live on, and matched the RAM disk by the label
+  `PE RAMDISK`. A label is ordinary data in a boot sector, so any disk can wear one — and a disk
+  wearing it mounts ahead of the RAM volume at `C:`, taking the profile with it while the boot
+  reports nothing amiss. The drive letter is now resolved with `QueryDosDevice` and accepted only
+  if it points at the ramdrive driver's own `\Device\RamDrive`, which nothing writing a disk from
+  user mode can claim. The label match remains as a fallback, so a build still boots if that
+  query ever fails, and the debug line says which of the two identified the volume.
+- **The desktop wallpaper appears on every build, and each image is about 4 MB smaller.** It
+  came up on a flat colour on x64, and on 32-bit Server 2003 it appeared only when applied by
+  hand after boot. The wallpaper was applied through Active Desktop. **XP Professional x64 has
+  no Active Desktop** — the feature is absent, not disabled, so its registry key is never
+  created and Display Properties has no Web tab — and on Server 2003 the apply ran before
+  Explorer had created the desktop view it attaches to, returning success having painted
+  nothing. That path was taken because the source ships its wallpaper as a JPEG, and the
+  ordinary way Windows paints a desktop takes bitmaps only.
+
+  A build now re-encodes the image to a 256-colour bitmap, which is the same conversion Windows
+  itself performs when a non-BMP image is chosen, done at build time instead. One path serves
+  both architectures, and the HTML engine that only Active Desktop needed — `mshtml.dll` and its
+  type library, 4.5 MB on amd64 — is no longer staged at all, along with its COM registration and
+  the policy exception it required.
+
+  Nothing applies the wallpaper any more either: `userinit` reads `Control Panel\Desktop` at logon
+  and paints the desktop before the shell starts, so the plugin declares three registry values and
+  stops. The desktop is already wallpapered when the startup splash appears.
+- **A file is staged under the name it is installed as.** A Windows source may keep a file under
+  one name and declare in its own metadata that setup installs it under another. pe-builder read
+  the placement those entries give but not the name, so such a file landed under the name it is
+  stored under — where nothing that loads it by its usual name can find it, and where every search
+  for it reports the medium as never having carried it.
+
+  It showed on localized sources, which keep the service-pack resource satellites language-coded:
+  `sprt0419.dll` on Russian media is installed as `xpsp2res.dll`, the name the network dialogs
+  load. A localized image's Network Connections could not open a connection's Status or Properties
+  and could not turn on its notification-area icon, which is enabled from those dialogs. Both now
+  open, in the source's own language, and the file staged is byte-for-byte the one Windows setup
+  installs from the same medium. English media declare no such rename, so English builds were
+  unaffected. A build also resolves a file asked for by its installed name, so a plugin
+  names what it loads rather than what a particular medium happens to call it.
+- **A build reads every file from the same copy the system would use.** A source may hold the
+  same file in more than one cabinet — a slipstreamed medium keeps `SP2.CAB` beside `SP3.CAB` —
+  and the two halves of the engine disagreed about which one that meant. The tree staged the
+  newest, as intended; the index that computes the file set took whichever the directory walk
+  reached first, which is the oldest. So a build could ship a binary whose dependencies had been
+  worked out from a different, older build of it, and anything those dependencies gained since
+  was never staged. It surfaced at boot as a missing DLL, named against a file that was present
+  and healthy. Both now read one precedence order, in one place. Windows XP Home Edition is
+  where this showed: 236 of its files were being examined as their SP2 versions, `ipconfig`
+  could not start, and no network configured at all.
+- **Folder Options, a drive's and a folder's Properties, the taskbar applet, and a network
+  connection's Status and Properties open on a Server 2003 build.** None of them opened at all.
+  The Windows loader takes a process's manifest from
+  resource id 1 and, finding one, ignores the file beside the binary; Explorer's real manifest is
+  at id 123, so pe-builder ships an external one to supply the Common-Controls v6 context. On
+  build 3790 a **one-byte** resource sits at id 1 — enough to count as a manifest and win,
+  carrying nothing to give — so the shipped file was staged and never read, Explorer ran with a
+  v5 context, and v5 refuses to register the window classes a property sheet is built from.
+  Windows XP has no id 1 at all, which is why the same arrangement always worked there. The
+  loader is now told to prefer the external file on 3790, and an amd64 build gets its own
+  correctly-architected Explorer manifest, which it never had.
+- **Networking works on a Server 2003 build, and two more services start on Windows XP.** An
+  image acquired no DHCP address on build 3790: the adapter bound and TCP/IP installed, but the
+  services above it exited before reporting ready. Every
+  key pe-builder writes into a hive granted full control to LocalSystem, Administrators and
+  Everyone — but the grant was not marked inheritable, so a key created at *run time* underneath
+  one of them, such as the `Parameters` a component install writes, fell back to a default that
+  named only `SYSTEM` and Administrators. A service running as `NetworkService` or `LocalService`
+  could not read its own configuration, and its host exited.
+
+  Those grants are now inheritable. Every build-3790 source — Server 2003 on both architectures
+  and XP Professional x64 — leases an address and answers `ping` exactly as XP does, with the
+  services running under the accounts their own media name for them. The same fix starts
+  `Dnscache` and `Lmhosts` on a 32-bit XP image, where both had always failed silently — the
+  address arrived regardless, because XP runs the DHCP client as `SYSTEM`, so nothing pointed
+  at it.
+- **Registry keys pebuild writes can be enumerated from inside the PE.** Every key carries four
+  high-water marks — its longest subkey name, class, value name and value data — which Windows
+  reports through `RegQueryInfoKey`, and the hive writer left all four at zero. A caller that
+  sizes its enumeration buffers from them therefore asked for nothing and got `ERROR_MORE_DATA`
+  back from `RegEnumValue`: `reg query` on any key of a built hive printed "Error: More data is
+  available" instead of its values, while a targeted `reg query /v <name>` — which does not
+  consult the maxima — worked, so the two disagreed on hives that were otherwise sound. Keys the
+  running system creates were never affected, since the kernel maintains their maxima itself.
+  Hives now carry the real maxima, counted in UTF-16 bytes as Windows counts them.
+- **The plugin build recipes no longer assume a Debian cross-toolchain.** Two separate
+  assumptions made them Debian-only, and MSYS2 on Windows, which arranges things differently,
+  could satisfy them only by faking Debian's layout: a "symlink" that is really a few-hundred-megabyte
+  copy of the toolchain, going stale at its next update.
+
+  The **DDK headers** the driver plugins compile against were named as `/usr/<triple>/include/ddk`;
+  MSYS2 keeps them at `/mingw32/include/ddk`. `ramdrive` and `pesuite` now derive the directory
+  from the compiler itself and match on `ntddk.h` rather than on a directory name, so an empty
+  leftover one is not selected. `DDK_INCLUDE=<dir>` overrides the search, and may contain spaces.
+
+  The **toolchain programs** were named as `<triple>-gcc`, `<triple>-windres`, `<triple>-objdump`.
+  A native toolchain installs them under plain names, and MSYS2 prefixes some but not others —
+  `/mingw32/bin` has a prefixed `gcc` beside a `windres` that exists under no other name — so no
+  single convention describes them all. All six build-capable plugins now resolve each program on
+  its own, preferring the prefixed name and falling back to the plain one only when the compiler
+  on `PATH` targets the architecture being built, so a build from the wrong environment stops
+  instead of quietly producing a wrong-architecture binary. A plugin's `[Build] Requires`
+  correspondingly lists only tools whose name is the same everywhere — `make` — because a literal
+  compiler name there is checked before the recipe runs and would refuse a build that works.
+
+  The **version-resource values** — the company name, the copyright, each binary's description —
+  were passed to `windres` as `-D` defines, and a value containing a space does not survive one:
+  `windres` builds its preprocessor command as a string, escaping spaces for a POSIX shell, then
+  runs it through `popen`. On Windows that is `cmd.exe`, which splits on the raw space and hands
+  the trailing words to the compiler as file names. The values now reach the resource template in
+  a generated header, keeping them off the command line entirely. Output on a Debian toolchain is
+  byte-for-byte unchanged across all six plugins and both architectures.
+
+  A desktop image now builds under MSYS2 with nothing configured but `PATH`, and the Windows setup
+  notes lose the workaround accordingly.
+
+### Changed
+
+- **Breaking:** **The engine packages are no longer part of the public API.** Eleven packages —
+  `action`, `base`, `boot`, `build`, `buildcache`, `inifile`, `manifest`, `plugin`, `receipt`,
+  `target` and `tree` — moved under `internal/`, so they can no longer be imported from outside
+  the module. They were importable because of where they sat, not because anything promised they
+  would be: the README has only ever documented `pewalk` as a command, and nothing described
+  them as a library. Retracting that now costs nothing and would be a breaking change after
+  1.0. The packages that read or describe Windows installation media — `source`, `layout`,
+  `compress`, `inf`, `hive` and `pewalk` — stay where they are.
+- **`pewalk.WithCache` takes an interface.** It named the engine's concrete cache type, which
+  made it uncallable by anything that could not import that package; it now accepts any type
+  with the two methods `pewalk` uses. Anything passing the engine's cache is unaffected. Note
+  that an unattached cache and one passed as a nil pointer behave differently: the first leaves
+  caching off, while the second is attached and called, so an implementation handed over that
+  way has to tolerate a nil receiver.
+- **`CONTRIBUTING.md`, `SECURITY.md` and `DISCLAIMER.md` moved to `docs/`**, with the rest of
+  the project's documentation. GitHub reads community health files from `docs/`, so reporting a
+  vulnerability and the contribution prompts work exactly as before.
+- **Breaking:** **The documentation of the original Bart's PE Builder moved from `docs/reference/`
+  to [`docs/bartpe/`](docs/bartpe/README.md)** and is titled as the reference implementation
+  documentation of the tool pe-builder follows. Links to the old path no longer resolve. The
+  README gains an **Acknowledgements** section crediting Bart Lagerweij, the author of PE Builder
+  and BartPE, and Gianluigi Tiesi ("Sherpya"), the author of the Windows XPE plugin.
+- **`pebuild source probe` reports what the media say they are, not what their build number
+  implies.** It now prints the **product type** — workstation or server — read from the source's
+  own setup metadata, together with the answer that produced it (`hivesys.inf declares WinNt`, or
+  `[SetupData] ProductType = 1`). This is the one thing separating XP Professional x64 Edition
+  from Server 2003 x64, which share both a build number and an architecture. Where the media
+  declare no product type, the fallback SKU is read against values measured on real media, and one
+  nobody has measured is named as a fallback rather than passing for a stated answer.
+- **The boot splash closes before post-shell tasks run**, instead of staying up until they
+  finish. That stage is defined as running once the desktop is up, so holding a "please wait"
+  window over a working taskbar — icons already appearing underneath it — reported a boot that
+  had not finished when it had. Tasks in that stage no longer show a label; their output still
+  reaches the debug channel and their verdicts still reach the run list.
+- **Hives use the subkey index Microsoft's own hives use, and a service's host process comes from
+  the source.** A key's subkeys are now indexed in the fast-leaf form every hive Microsoft ships in
+  this format uses, and Protected Storage runs in the process the source's own `hivesys.inf` names
+  rather than one the base layer wrote over it. An image built from XP or Server 2003 behaves as
+  before: their loaders read either index form, and their media name `lsass.exe`.
+
+### Removed
+
+- **Breaking:** **The `source.type` manifest field is gone.** It accepted `auto | winxp | win2003`
+  and was documented as an override for a misdetected source, but no build stage ever read it: it
+  was validated, printed back, and dropped. A manifest that still sets it now fails to load, naming
+  the attribute — the setting never did anything, and silently accepting it would keep promising
+  that it did. Delete the line; nothing replaces it, because what the media are is read from the
+  media.
+- **Breaking:** **`source.Identity` no longer carries a `Flavor`.** It was looked up from the build
+  number alone, so it could only restate it — and it labelled XP Professional x64 Edition
+  `win2003`, since that edition shares Server 2003's build number. Build and architecture stay on
+  the identity; which product the media are is `layout`'s answer, read from the media themselves.
+  `pebuild source probe` drops its `Flavor:` line accordingly, and prints `Product:` in its place.
+
+  **This changes how an identity renders**, and a build receipt stores that rendering: images
+  built by 0.7.1 or earlier record `winxp build 2600 (i386)` where this version recomputes
+  `build 2600 (i386)`. `pebuild verify` will therefore report their `source` field as `CHANGED`
+  and exit non-zero, with every other field matching. Only the recorded text differs. Rebuild to
+  get a receipt this version agrees with.
 
 ## [0.7.1] - 2026-08-23
 
@@ -614,7 +890,8 @@ build runs in about 4 seconds and produces a roughly 45 MB ISO.
 - Targets Windows XP sources; other source flavors and output targets are planned.
 - No plugin system yet — a build is the base layer only.
 
-[Unreleased]: https://github.com/nradchenko/pe-builder/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/nradchenko/pe-builder/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.8.0
 [0.7.1]: https://github.com/nradchenko/pe-builder/releases/tag/v0.7.1
 [0.7.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.7.0
 [0.6.0]: https://github.com/nradchenko/pe-builder/releases/tag/v0.6.0
