@@ -1410,9 +1410,9 @@ THE SOFTWARE.
 
 
 ================================================================================
-github.com/nradchenko/go-wim  v0.2.0
+github.com/nradchenko/go-wim  v0.3.0
 License: MIT
-Source:  https://github.com/nradchenko/go-wim/blob/v0.2.0/LICENSE
+Source:  https://github.com/nradchenko/go-wim/blob/v0.3.0/LICENSE
 ================================================================================
 
 MIT License
@@ -1987,7 +1987,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
 www.velocidex.com/golang/regparser  v0.0.0-20250203141505-31e704a67ef7
 License: Apache-2.0
-Source:  Unknown
+Source:  https://github.com/Velocidex/regparser/blob/31e704a67ef7/LICENSE
 ================================================================================
 
                                  Apache License

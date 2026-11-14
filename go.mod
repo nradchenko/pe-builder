@@ -7,7 +7,7 @@ require (
 	github.com/ericpauley/go-quantize v0.0.0-20200331213906-ae555eb2afa4
 	github.com/google/go-cmp v0.7.0
 	github.com/hashicorp/hcl/v2 v2.24.0
-	github.com/nradchenko/go-wim v0.2.0
+	github.com/nradchenko/go-wim v0.3.0
 	github.com/saferwall/pe v1.6.5
 	github.com/spf13/cobra v1.10.2
 	github.com/zclconf/go-cty v1.16.3
